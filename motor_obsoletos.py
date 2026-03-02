@@ -3,20 +3,12 @@ import zipfile
 import io
 
 
-# ============================================================
-# FILIAIS QUE CALCULAM MOV (SOMENTE CSV)
-# ============================================================
-
 EMPRESAS_FILIAL_CONSIDERADAS = {
     "Service / Filial",
     "Robotica / Matriz",
     "Robotica / Filial Jaragua"
 }
 
-
-# ============================================================
-# NORMALIZAÇÃO EMPRESA
-# ============================================================
 
 def normalizar_empresa(nome):
     nome = str(nome).upper()
@@ -30,10 +22,6 @@ def normalizar_empresa(nome):
         return "Robotica"
     return nome
 
-
-# ============================================================
-# MOTOR PRINCIPAL
-# ============================================================
 
 def executar_motor(uploaded_file):
 
@@ -56,7 +44,8 @@ def executar_motor(uploaded_file):
             df_estoque = pd.read_excel(
                 f,
                 sheet_name="Detalhado",
-                dtype={"Código": str}
+                dtype={"Código": str},
+                engine="openpyxl"
             )
 
         df_estoque = df_estoque.rename(columns={
@@ -92,11 +81,11 @@ def executar_motor(uploaded_file):
 
         df_estoque["Data_Base"] = data_base
 
-        # =====================================================
-        # 2️⃣ MOVIMENTAÇÕES CSV
-        # =====================================================
-
         lista_mov = []
+
+        # =====================================================
+        # 2️⃣ MOVIMENTOS CSV
+        # =====================================================
 
         arquivos_csv = [
             n for n in z.namelist()
@@ -120,14 +109,9 @@ def executar_motor(uploaded_file):
                 continue
 
             df_temp["Quantidade"] = pd.to_numeric(df_temp["Quantidade"], errors="coerce")
-            df_temp["DT Emissao"] = pd.to_datetime(
-                df_temp["DT Emissao"], dayfirst=True, errors="coerce"
-            )
+            df_temp["DT Emissao"] = pd.to_datetime(df_temp["DT Emissao"], dayfirst=True, errors="coerce")
 
-            df_temp = df_temp[
-                (df_temp["Quantidade"] != 0) &
-                (df_temp["DT Emissao"].notna())
-            ]
+            df_temp = df_temp[(df_temp["Quantidade"] != 0) & (df_temp["DT Emissao"].notna())]
 
             if df_temp.empty:
                 continue
@@ -135,36 +119,21 @@ def executar_motor(uploaded_file):
             empresa_arquivo = arq.split("_")[1]
             empresa_normalizada = normalizar_empresa(empresa_arquivo)
 
-            df_temp["Empresa"] = empresa_normalizada
             df_temp["Filial"] = df_temp["Filial"].astype(str).str.title()
+            df_temp["Empresa / Filial"] = empresa_normalizada + " / " + df_temp["Filial"]
 
-            df_temp["Empresa / Filial"] = (
-                df_temp["Empresa"] + " / " + df_temp["Filial"]
-            )
-
-            df_temp = df_temp[
-                df_temp["Empresa / Filial"]
-                .isin(EMPRESAS_FILIAL_CONSIDERADAS)
-            ]
+            df_temp = df_temp[df_temp["Empresa / Filial"].isin(EMPRESAS_FILIAL_CONSIDERADAS)]
 
             if df_temp.empty:
                 continue
 
-            df_temp["Produto"] = (
-                df_temp["Produto"]
-                .astype(str)
-                .str.strip()
-                .str.upper()
-            )
-
-            df_temp["ID_UNICO"] = (
-                df_temp["Empresa / Filial"] + "|" + df_temp["Produto"]
-            )
+            df_temp["Produto"] = df_temp["Produto"].astype(str).str.strip().str.upper()
+            df_temp["ID_UNICO"] = df_temp["Empresa / Filial"] + "|" + df_temp["Produto"]
 
             lista_mov.append(df_temp[["ID_UNICO", "DT Emissao"]])
 
         # =====================================================
-        # 3️⃣ ENTRADAS / SAÍDAS
+        # 3️⃣ ENTRADAS / SAÍDAS (OTIMIZADO)
         # =====================================================
 
         arquivos_excel = [
@@ -178,15 +147,15 @@ def executar_motor(uploaded_file):
             empresa_normalizada = normalizar_empresa(empresa_arquivo)
 
             with z.open(arq) as f:
-                xls = pd.ExcelFile(f)
+                xls = pd.ExcelFile(f, engine="openpyxl")
 
                 for aba in xls.sheet_names:
 
-                    df_temp = pd.read_excel(xls, sheet_name=aba, header=None)
-
-                    df_temp = df_temp.iloc[1:].reset_index(drop=True)
-                    df_temp.columns = df_temp.iloc[0]
-                    df_temp = df_temp.iloc[1:].reset_index(drop=True)
+                    df_temp = pd.read_excel(
+                        xls,
+                        sheet_name=aba,
+                        engine="openpyxl"
+                    )
 
                     df_temp.columns = df_temp.columns.str.strip()
 
@@ -198,74 +167,32 @@ def executar_motor(uploaded_file):
                     if df_temp.empty:
                         continue
 
-                    df_temp["Produto"] = (
-                        df_temp["PRODUTO"]
-                        .astype(str)
-                        .str.strip()
-                        .str.upper()
-                    )
-
-                    df_temp["DT Emissao"] = pd.to_datetime(
-                        df_temp["DIGITACAO"],
-                        errors="coerce"
-                    )
+                    df_temp["Produto"] = df_temp["PRODUTO"].astype(str).str.strip().str.upper()
+                    df_temp["DT Emissao"] = pd.to_datetime(df_temp["DIGITACAO"], errors="coerce")
 
                     df_temp = df_temp[df_temp["DT Emissao"].notna()]
 
                     df_temp["Filial"] = df_temp["FILIAL"].astype(str).str.title()
-
-                    df_temp["Empresa / Filial"] = (
-                        empresa_normalizada + " / " + df_temp["Filial"]
-                    )
-
-                    df_temp["ID_UNICO"] = (
-                        df_temp["Empresa / Filial"] + "|" + df_temp["Produto"]
-                    )
+                    df_temp["Empresa / Filial"] = empresa_normalizada + " / " + df_temp["Filial"]
+                    df_temp["ID_UNICO"] = df_temp["Empresa / Filial"] + "|" + df_temp["Produto"]
 
                     lista_mov.append(df_temp[["ID_UNICO", "DT Emissao"]])
 
         # =====================================================
-        # CONSOLIDA ÚLTIMO MOVIMENTO
+        # CONSOLIDA
         # =====================================================
 
         if lista_mov:
             df_mov = pd.concat(lista_mov)
-            df_mov_cons = (
-                df_mov.groupby("ID_UNICO", as_index=False)
-                .agg(Ult_Mov=("DT Emissao", "max"))
+            df_mov_cons = df_mov.groupby("ID_UNICO", as_index=False).agg(
+                Ult_Mov=("DT Emissao", "max")
             )
         else:
             df_mov_cons = pd.DataFrame(columns=["ID_UNICO", "Ult_Mov"])
 
-        # =====================================================
-        # MERGE FINAL
-        # =====================================================
-
-        df_final = df_estoque.merge(
-            df_mov_cons,
-            on="ID_UNICO",
-            how="left"
-        )
+        df_final = df_estoque.merge(df_mov_cons, on="ID_UNICO", how="left")
 
         df_final = df_final.drop(columns=["Empresa", "Filial"])
-
-        colunas_ordenadas = [
-            "Data Fechamento",
-            "Empresa / Filial",
-            "Tipo de Estoque",
-            "Conta",
-            "Produto",
-            "Descricao",
-            "Unid",
-            "Saldo Atual",
-            "Vlr Unit",
-            "Custo Total",
-            "ID_UNICO",
-            "Ult_Mov",
-            "Data_Base"
-        ]
-
-        df_final = df_final[colunas_ordenadas]
 
         buffer = io.BytesIO()
         df_final.to_excel(buffer, index=False)
