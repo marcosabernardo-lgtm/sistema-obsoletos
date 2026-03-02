@@ -1,40 +1,35 @@
 import os
-import zipfile
 import io
+import zipfile
+import uuid
 import pandas as pd
-from datetime import datetime
 
 
 def executar_motor(uploaded_file):
 
-    # =====================================================
-    # EXTRAÇÃO DO ZIP
-    # =====================================================
-
-    pasta_base = "dados_temp"
-
-    if os.path.exists(pasta_base):
-        import shutil
-        shutil.rmtree(pasta_base)
-
+    # ===============================
+    # CRIA PASTA TEMPORÁRIA ÚNICA
+    # ===============================
+    pasta_base = f"temp_upload_{uuid.uuid4().hex}"
     os.makedirs(pasta_base)
 
-    with zipfile.ZipFile(uploaded_file, 'r') as z:
+    # ===============================
+    # EXTRAI ZIP
+    # ===============================
+    zip_bytes = uploaded_file.read()
+
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
         z.extractall(pasta_base)
 
-    # =====================================================
-    # LEITURA DO ESTOQUE
-    # =====================================================
-
+    # ===============================
+    # ESTOQUE ATUAL
+    # ===============================
     pasta_estoque = os.path.join(pasta_base, "02_Estoque_Atual")
 
-    arquivos = [
-        f for f in os.listdir(pasta_estoque)
-        if f.endswith(".xlsx")
-    ]
+    arquivos = [f for f in os.listdir(pasta_estoque) if f.endswith(".xlsx")]
 
     if not arquivos:
-        raise Exception("Nenhum arquivo de estoque encontrado")
+        raise Exception("Nenhum arquivo encontrado em 02_Estoque_Atual")
 
     caminho_estoque = os.path.join(pasta_estoque, arquivos[0])
 
@@ -51,45 +46,37 @@ def executar_motor(uploaded_file):
 
     for col in colunas_necessarias:
         if col not in df_estoque.columns:
-            raise Exception(f"Coluna obrigatória não encontrada: {col}")
+            raise Exception(f"Coluna {col} não encontrada no estoque")
 
     df_final = df_estoque[colunas_necessarias].copy()
 
-    # =====================================================
+    # ===============================
     # DATA BASE
-    # =====================================================
-
+    # ===============================
     if "Data Fechamento" in df_estoque.columns:
-        data_base = df_estoque["Data Fechamento"].max()
+        df_final["Data_Base"] = df_estoque["Data Fechamento"]
     else:
-        data_base = datetime.today()
+        df_final["Data_Base"] = pd.Timestamp.today().normalize()
 
-    df_final["Data_Base"] = data_base
-
-    # =====================================================
+    # ===============================
     # HISTÓRICO AUTOMÁTICO
-    # =====================================================
-
+    # ===============================
     historico_path = "historico_obsoletos.csv"
 
-    df_hist_atual = df_final.copy()
-    df_hist_atual["Data_Processamento"] = datetime.now()
-
     if os.path.exists(historico_path):
-        df_hist_antigo = pd.read_csv(historico_path, dtype=str)
-        df_hist_novo = pd.concat(
-            [df_hist_antigo, df_hist_atual.astype(str)],
+        df_historico_antigo = pd.read_csv(historico_path, dtype=str)
+        df_historico = pd.concat(
+            [df_historico_antigo, df_final.astype(str)],
             ignore_index=True
         )
     else:
-        df_hist_novo = df_hist_atual.astype(str)
+        df_historico = df_final.astype(str)
 
-    df_hist_novo.to_csv(historico_path, index=False)
+    df_historico.to_csv(historico_path, index=False)
 
-    # =====================================================
-    # GERAÇÃO DO EXCEL PARA DOWNLOAD
-    # =====================================================
-
+    # ===============================
+    # EXPORTAÇÃO PARA EXCEL
+    # ===============================
     buffer = io.BytesIO()
     df_final.to_excel(buffer, index=False)
     buffer.seek(0)
