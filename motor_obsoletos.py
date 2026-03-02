@@ -2,19 +2,13 @@ import pandas as pd
 import zipfile
 import io
 import time
+import unicodedata
 
 
-def normalizar_empresa(nome):
-    nome = str(nome).upper()
-    if "TOOLS" in nome:
-        return "Tools"
-    if "MAQUINAS" in nome:
-        return "Maquinas"
-    if "ALLSERVICE" in nome:
-        return "Service"
-    if "ROBOTICA" in nome:
-        return "Robotica"
-    return nome
+def normalizar_coluna(col):
+    col = str(col).strip().upper()
+    col = unicodedata.normalize("NFKD", col).encode("ASCII", "ignore").decode("ASCII")
+    return col
 
 
 def executar_motor(uploaded_file):
@@ -23,6 +17,31 @@ def executar_motor(uploaded_file):
 
     with zipfile.ZipFile(uploaded_file) as z:
 
+        # =====================================================
+        # 1️⃣ MATRIZ 05_EMPRESAS
+        # =====================================================
+
+        arquivo_matriz = next(
+            (n for n in z.namelist()
+             if "05_Empresas" in n and n.endswith(".xlsx")),
+            None
+        )
+
+        if not arquivo_matriz:
+            raise Exception("05_Empresas não encontrado no ZIP")
+
+        with z.open(arquivo_matriz) as f:
+            df_matriz = pd.read_excel(f, engine="openpyxl")
+
+        df_matriz.columns = [normalizar_coluna(c) for c in df_matriz.columns]
+
+        # Esperado: MESCLADO | EMPRESA / FILIAL
+        df_matriz = df_matriz[["MESCLADO", "EMPRESA / FILIAL"]]
+
+        # =====================================================
+        # 2️⃣ ENTRADAS / SAÍDAS
+        # =====================================================
+
         lista_mov = []
 
         arquivos_excel = [
@@ -30,18 +49,10 @@ def executar_motor(uploaded_file):
             if "01_Entradas_Saidas" in n and n.endswith(".xlsx")
         ]
 
-        print(f"Arquivos encontrados: {len(arquivos_excel)}")
-
         for arq in arquivos_excel:
 
-            print(f"Lendo arquivo: {arq}")
-
-            try:
-                empresa_arquivo = arq.split("_")[1]
-            except:
-                continue
-
-            empresa_normalizada = normalizar_empresa(empresa_arquivo)
+            # Nome empresa vem do arquivo
+            empresa_arquivo = arq.split("_")[1]
 
             with z.open(arq) as f:
 
@@ -52,33 +63,38 @@ def executar_motor(uploaded_file):
                     if aba not in xls.sheet_names:
                         continue
 
-                    print(f"  Aba: {aba}")
-
-                    # 🔥 LEITURA ROBUSTA (resolve espaço em DIGITACAO )
                     df_temp = pd.read_excel(
                         xls,
                         sheet_name=aba,
-                        engine="openpyxl",
-                        usecols=lambda x: x.strip().upper() in [
-                            "FILIAL",
-                            "PRODUTO",
-                            "DIGITACAO",
-                            "ESTOQUE",
-                            "QUANTIDADE"
-                        ]
+                        engine="openpyxl"
                     )
 
-                    if df_temp.empty:
-                        continue
-
-                    # Remove espaços invisíveis
-                    df_temp.columns = df_temp.columns.str.strip().str.upper()
+                    # Normaliza nomes das colunas
+                    df_temp.columns = [normalizar_coluna(c) for c in df_temp.columns]
 
                     if "ESTOQUE" not in df_temp.columns:
                         continue
 
-                    # Apenas movimentações que afetam estoque
                     df_temp = df_temp[df_temp["ESTOQUE"] == "S"]
+
+                    if df_temp.empty:
+                        continue
+
+                    # Cria chave Mesclado (igual padrão anterior)
+                    df_temp["FILIAL"] = df_temp["FILIAL"].astype(str).str.strip()
+
+                    df_temp["MESCLADO"] = (
+                        empresa_arquivo.upper() + " " + df_temp["FILIAL"]
+                    )
+
+                    # Merge com matriz
+                    df_temp = df_temp.merge(
+                        df_matriz,
+                        on="MESCLADO",
+                        how="left"
+                    )
+
+                    df_temp = df_temp[df_temp["EMPRESA / FILIAL"].notna()]
 
                     if df_temp.empty:
                         continue
@@ -91,7 +107,7 @@ def executar_motor(uploaded_file):
                         .str.upper()
                     )
 
-                    # Data (resolve DIGITACAO com espaço)
+                    # Data
                     df_temp["DT_EMISSAO"] = pd.to_datetime(
                         df_temp["DIGITACAO"],
                         errors="coerce"
@@ -102,22 +118,9 @@ def executar_motor(uploaded_file):
                     if df_temp.empty:
                         continue
 
-                    # Filial
-                    df_temp["FILIAL"] = (
-                        df_temp["FILIAL"]
-                        .astype(str)
-                        .str.strip()
-                        .str.title()
-                    )
-
-                    # Empresa / Filial
-                    df_temp["EMPRESA_FILIAL"] = (
-                        empresa_normalizada + " / " + df_temp["FILIAL"]
-                    )
-
                     # ID Único
                     df_temp["ID_UNICO"] = (
-                        df_temp["EMPRESA_FILIAL"] + "|" + df_temp["PRODUTO"]
+                        df_temp["EMPRESA / FILIAL"] + "|" + df_temp["PRODUTO"]
                     )
 
                     lista_mov.append(
@@ -141,6 +144,7 @@ def executar_motor(uploaded_file):
     fim = time.time()
 
     print(f"Tempo total: {round(fim - inicio, 2)} segundos")
+    print(f"Total registros consolidados: {len(df_mov_cons)}")
 
     buffer = io.BytesIO()
     df_mov_cons.to_excel(buffer, index=False)
