@@ -1,44 +1,55 @@
 import pandas as pd
 import zipfile
 import io
-import os
+
 
 def executar_motor(uploaded_file):
 
     # ================================
-    # ABRIR ZIP
+    # LEITURA DO ZIP
     # ================================
     with zipfile.ZipFile(uploaded_file) as z:
 
-        # Procurar arquivo de estoque dentro do ZIP
-        arquivo_estoque = None
+        # Procurar arquivo de estoque atual
+        arquivo_estoque = [f for f in z.namelist() if "02_Estoque_Atual" in f and f.endswith(".xlsx")]
 
-        for nome in z.namelist():
-            if "02_Estoque_Atual" in nome and nome.endswith(".xlsx"):
-                arquivo_estoque = nome
-                break
+        if not arquivo_estoque:
+            raise Exception("Arquivo de Estoque Atual não encontrado no ZIP")
 
-        if arquivo_estoque is None:
-            raise Exception("Arquivo 02_Estoque_Atual não encontrado no ZIP")
-
-        with z.open(arquivo_estoque) as f:
-            df_estoque = pd.read_excel(f, sheet_name="Detalhado", dtype=str)
+        with z.open(arquivo_estoque[0]) as f:
+            df_estoque = pd.read_excel(f, sheet_name="Detalhado")
 
     # ================================
-    # LIMPEZA BÁSICA
+    # LIMPEZA DE COLUNAS
     # ================================
     df_estoque.columns = df_estoque.columns.str.strip()
 
-    print("Colunas encontradas na aba Detalhado:")
+    print("Colunas encontradas no estoque:")
     print(df_estoque.columns.tolist())
 
     # ================================
-    # TRABALHAR APENAS ESTOQUE (TEMPORÁRIO)
+    # VALIDAÇÃO DE COLUNAS OBRIGATÓRIAS
+    # ================================
+    colunas_obrigatorias = [
+        "Data Fechamento",
+        "Empresa",
+        "Filial",
+        "Código",
+        "Quantidade",
+        "Valor Total"
+    ]
+
+    for col in colunas_obrigatorias:
+        if col not in df_estoque.columns:
+            raise Exception(f"Coluna {col} não encontrada no estoque")
+
+    # ================================
+    # BASE FINAL (por enquanto só estoque)
     # ================================
     df_final = df_estoque.copy()
 
     # ================================
-    # EXPORTAÇÃO PARA EXCEL
+    # EXPORTAÇÃO EXCEL
     # ================================
     buffer = io.BytesIO()
     df_final.to_excel(buffer, index=False)
