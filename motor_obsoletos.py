@@ -72,7 +72,7 @@ def executar_motor(uploaded_file):
     for col in colunas_necessarias:
         if col not in df.columns:
             raise Exception(f"Coluna {col} não encontrada no estoque")
-
+            
     df_final = df[colunas_necessarias].copy()
 
     # ================================
