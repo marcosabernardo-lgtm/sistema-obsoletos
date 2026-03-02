@@ -109,4 +109,46 @@ def executar_motor(uploaded_file):
     if "Mesclado" not in df_matriz.columns or "Empresa / Filial" not in df_matriz.columns:
         raise Exception("Colunas esperadas não encontradas na matriz de empresas")
 
+        # ===============================
+    # LEITURA DAS MOVIMENTAÇÕES BASE (04_Movimento)
+    # ===============================
+
+    pasta_mov = os.path.join(pasta_base, "04_Movimento")
+
+    arquivos_csv = [
+        f for f in os.listdir(pasta_mov)
+        if f.lower().endswith(".csv")
+    ]
+
+    if not arquivos_csv:
+        raise Exception("Nenhum CSV encontrado em 04_Movimento")
+
+    lista_mov = []
+
+    for arquivo in arquivos_csv:
+
+        caminho_csv = os.path.join(pasta_mov, arquivo)
+
+        df_temp = pd.read_csv(
+            caminho_csv,
+            sep=",",
+            encoding="cp1252",
+            skiprows=2,
+            dtype=str
+        )
+
+        df_temp["OrigemArquivo"] = arquivo
+        lista_mov.append(df_temp)
+
+    df_mov_base = pd.concat(lista_mov, ignore_index=True)
+
+    # Retorno provisório para teste
+    df_teste = df_mov_base.head(20)
+
+    buffer = io.BytesIO()
+    df_teste.to_excel(buffer, index=False)
+    buffer.seek(0)
+
+    return df_teste, buffer.getvalue()
+
     return df_teste, buffer.getvalue()
