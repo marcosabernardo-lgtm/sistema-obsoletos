@@ -1,10 +1,8 @@
 import pandas as pd
 import zipfile
-import io
 import os
 import shutil
 from pathlib import Path
-from datetime import datetime
 
 
 def executar_motor(uploaded_file):
@@ -16,8 +14,31 @@ def executar_motor(uploaded_file):
 
     os.makedirs(pasta_base)
 
-    # Extrai o ZIP enviado pelo usuário
+    # Extrai o ZIP
     with zipfile.ZipFile(uploaded_file, 'r') as z:
         z.extractall(pasta_base)
 
-    return None, None
+    # Lista estrutura encontrada
+    pastas_encontradas = os.listdir(pasta_base)
+
+    pastas_esperadas = [
+        "01_Entradas_Saidas",
+        "02_Estoque_Atual",
+        "04_Movimento",
+        "05_Empresas",
+        "06_Usadas"
+    ]
+
+    faltando = [p for p in pastas_esperadas if p not in pastas_encontradas]
+
+    if faltando:
+        raise Exception(f"Pastas faltando no ZIP: {faltando}")
+
+    # Se chegou até aqui, estrutura está OK
+    df_teste = pd.DataFrame({
+        "Status": ["Estrutura validada com sucesso"]
+    })
+
+    excel_bytes = df_teste.to_excel(index=False)
+
+    return df_teste, excel_bytes
