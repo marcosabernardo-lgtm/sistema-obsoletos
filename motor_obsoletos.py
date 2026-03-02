@@ -1,109 +1,95 @@
 import pandas as pd
 import zipfile
 import io
-import os
 
 def executar_motor(uploaded_file):
 
     # ===============================
-    # EXTRAÇÃO DO ZIP
+    # LEITURA DO ZIP
     # ===============================
-    zip_bytes = io.BytesIO(uploaded_file.read())
 
-    with zipfile.ZipFile(zip_bytes, 'r') as z:
-        lista_arquivos = z.namelist()
+    with zipfile.ZipFile(uploaded_file) as z:
+        arquivos_excel = [f for f in z.namelist() if f.endswith(".xlsx")]
 
-        # ===============================
-        # ESTOQUE ATUAL (aba Detalhado)
-        # ===============================
-        arquivo_estoque = [f for f in lista_arquivos if "02_Estoque_Atual" in f and f.endswith(".xlsx")][0]
+        if not arquivos_excel:
+            raise Exception("Nenhum arquivo Excel encontrado dentro do ZIP.")
 
-        with z.open(arquivo_estoque) as f:
-            df_estoque = pd.read_excel(f, sheet_name="Detalhado", dtype=str)
+        nome_arquivo = arquivos_excel[0]
 
-        df_estoque.columns = df_estoque.columns.str.strip()
+        with z.open(nome_arquivo) as excel_file:
+            df_estoque = pd.read_excel(
+                excel_file,
+                sheet_name="Detalhado",
+                dtype={"Código": str}
+            )
 
-        colunas_necessarias = [
-            "Data Fechamento",
-            "Empresa",
-            "Filial",
-            "Código",
-            "Quantidade",
-            "Valor Total"
-        ]
+    # ===============================
+    # PADRONIZAÇÃO DE COLUNAS
+    # ===============================
 
-        for col in colunas_necessarias:
-            if col not in df_estoque.columns:
-                raise Exception(f"Coluna {col} não encontrada no estoque")
+    df_estoque = df_estoque.rename(columns={
+        "Valor Total": "Custo Total",
+        "Código": "Produto",
+        "Descrição": "Descricao",
+        "Quantidade": "Saldo Atual"
+    })
 
-        # ===============================
-        # TRATAMENTO BÁSICO
-        # ===============================
-        df_estoque["Código"] = df_estoque["Código"].astype(str).str.zfill(6)
+    # ===============================
+    # NORMALIZAÇÃO EMPRESA
+    # ===============================
 
-        df_estoque["Quantidade"] = (
-            df_estoque["Quantidade"]
-            .str.replace(".", "", regex=False)
-            .str.replace(",", ".", regex=False)
-        ).astype(float)
+    def normalizar_empresa(nome):
+        nome = str(nome).upper()
+        if "TOOLS" in nome: return "Tools"
+        if "MAQUINAS" in nome: return "Maquinas"
+        if "ALLSERVICE" in nome: return "Service"
+        if "ROBOTICA" in nome: return "Robotica"
+        return nome
 
-        df_estoque["Valor Total"] = (
-            df_estoque["Valor Total"]
-            .str.replace(".", "", regex=False)
-            .str.replace(",", ".", regex=False)
-        ).astype(float)
+    df_estoque["Empresa"] = df_estoque["Empresa"].apply(normalizar_empresa)
 
-        # Cria Mesclado
-        df_estoque["Mesclado"] = df_estoque["Empresa"] + " " + df_estoque["Filial"]
+    # ===============================
+    # AJUSTES DE CAMPOS
+    # ===============================
 
-        # ===============================
-        # MATRIZ DE EMPRESAS
-        # ===============================
-        arquivo_matriz = [f for f in lista_arquivos if "05_Empresas" in f and f.endswith(".xlsx")][0]
+    df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.title()
 
-        with z.open(arquivo_matriz) as f:
-            df_matriz = pd.read_excel(f, dtype=str)
+    df_estoque["Empresa / Filial"] = (
+        df_estoque["Empresa"] + " / " + df_estoque["Filial"]
+    )
 
-        df_matriz.columns = df_matriz.columns.str.strip()
+    df_estoque["Produto"] = (
+        df_estoque["Produto"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+    )
 
-        if "Mesclado" not in df_matriz.columns or "Empresa / Filial" not in df_matriz.columns:
-            raise Exception("Colunas esperadas não encontradas na matriz de empresas")
+    # Garante zero à esquerda
+    df_estoque["Produto"] = df_estoque["Produto"].str.zfill(6)
 
-        # ===============================
-        # MERGE COM MATRIZ
-        # ===============================
-        df_final = df_estoque.merge(
-            df_matriz[["Mesclado", "Empresa / Filial"]],
-            on="Mesclado",
-            how="left"
-        )
+    df_estoque["ID_UNICO"] = (
+        df_estoque["Empresa / Filial"] + "|" + df_estoque["Produto"]
+    )
 
-        df_final["Empresa / Filial"] = df_final["Empresa / Filial"].fillna("N/D")
+    # ===============================
+    # DATA BASE
+    # ===============================
 
-        # ===============================
-        # ID ÚNICO
-        # ===============================
-        df_final["ID_UNICO"] = (
-            df_final["Empresa / Filial"] + "|" + df_final["Código"]
-        )
+    DataBase = pd.to_datetime(
+        df_estoque["Data Fechamento"],
+        dayfirst=True,
+        errors="coerce"
+    ).max()
 
-        # ===============================
-        # SELEÇÃO FINAL
-        # ===============================
-        df_final = df_final[[
-            "Data Fechamento",
-            "Empresa / Filial",
-            "Código",
-            "Quantidade",
-            "Valor Total",
-            "ID_UNICO"
-        ]]
+    df_estoque["Data Base"] = DataBase
 
-        # ===============================
-        # EXPORTAÇÃO PARA EXCEL
-        # ===============================
-        buffer = io.BytesIO()
-        df_final.to_excel(buffer, index=False)
-        buffer.seek(0)
+    # ===============================
+    # EXPORTAÇÃO PARA EXCEL
+    # ===============================
 
-        return df_final, buffer.getvalue()
+    buffer = io.BytesIO()
+    df_estoque.to_excel(buffer, index=False)
+    buffer.seek(0)
+
+    return df_estoque, buffer.getvalue()
