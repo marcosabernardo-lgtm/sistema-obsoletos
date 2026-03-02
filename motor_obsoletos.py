@@ -45,7 +45,7 @@ def executar_motor(uploaded_file):
             )
 
     # =====================================================
-    # PADRONIZAÇÃO
+    # PADRONIZAÇÃO DE COLUNAS
     # =====================================================
 
     df_estoque = df_estoque.rename(columns={
@@ -56,7 +56,7 @@ def executar_motor(uploaded_file):
     })
 
     # =====================================================
-    # NORMALIZA EMPRESA
+    # NORMALIZA EMPRESA E FILIAL
     # =====================================================
 
     df_estoque["Empresa"] = df_estoque["Empresa"].apply(normalizar_empresa)
@@ -98,7 +98,7 @@ def executar_motor(uploaded_file):
     df_estoque["Data_Base"] = data_base
 
     # =====================================================
-    # NUMÉRICOS
+    # FORMATAÇÃO NUMÉRICA
     # =====================================================
 
     df_estoque["Saldo Atual"] = pd.to_numeric(
@@ -110,14 +110,39 @@ def executar_motor(uploaded_file):
     )
 
     # =====================================================
+    # REMOVER COLUNAS REDUNDANTES
+    # =====================================================
+
+    df_estoque = df_estoque.drop(columns=["Empresa", "Filial"])
+
+    # =====================================================
+    # ORGANIZAÇÃO FINAL DAS COLUNAS
+    # Empresa / Filial logo após Data Fechamento
+    # =====================================================
+
+    colunas_ordenadas = [
+        "Data Fechamento",
+        "Empresa / Filial",
+        "Tipo de Estoque",
+        "Conta",
+        "Produto",
+        "Descricao",
+        "Unid",
+        "Saldo Atual",
+        "Vlr Unit",
+        "Custo Total",
+        "ID_UNICO",
+        "Data_Base"
+    ]
+
+    df_final = df_estoque[colunas_ordenadas].copy()
+
+    # =====================================================
     # EXPORTAÇÃO
     # =====================================================
 
-  # Removendo colunas redundantes
-df_saida = df_estoque.drop(columns=["Empresa", "Filial"])
+    buffer = io.BytesIO()
+    df_final.to_excel(buffer, index=False)
+    buffer.seek(0)
 
-buffer = io.BytesIO()
-df_saida.to_excel(buffer, index=False)
-buffer.seek(0)
-
-return df_saida, buffer.getvalue()
+    return df_final, buffer.getvalue()
