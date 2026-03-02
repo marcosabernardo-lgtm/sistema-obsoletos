@@ -4,6 +4,17 @@ import io
 
 
 # ============================================================
+# CONFIGURAÇÃO DE EMPRESAS/FILIAIS QUE DEVEM CALCULAR MOV
+# ============================================================
+
+EMPRESAS_FILIAL_CONSIDERADAS = {
+    "Service / Filial",
+    "Robotica / Matriz",
+    "Robotica / Filial Jaragua"
+}
+
+
+# ============================================================
 # NORMALIZAÇÃO EMPRESA
 # ============================================================
 
@@ -21,12 +32,16 @@ def normalizar_empresa(nome):
 
 
 # ============================================================
-# MOTOR - BLOCO 1 (SOMENTE ESTOQUE)
+# MOTOR PRINCIPAL
 # ============================================================
 
 def executar_motor(uploaded_file):
 
     with zipfile.ZipFile(uploaded_file) as z:
+
+        # =====================================================
+        # 1️⃣ ESTOQUE ATUAL
+        # =====================================================
 
         arquivo_estoque = next(
             (n for n in z.namelist()
@@ -44,105 +59,183 @@ def executar_motor(uploaded_file):
                 dtype={"Código": str}
             )
 
-    # =====================================================
-    # PADRONIZAÇÃO DE COLUNAS
-    # =====================================================
+        df_estoque = df_estoque.rename(columns={
+            "Valor Total": "Custo Total",
+            "Código": "Produto",
+            "Descrição": "Descricao",
+            "Quantidade": "Saldo Atual"
+        })
 
-    df_estoque = df_estoque.rename(columns={
-        "Valor Total": "Custo Total",
-        "Código": "Produto",
-        "Descrição": "Descricao",
-        "Quantidade": "Saldo Atual"
-    })
+        df_estoque["Empresa"] = df_estoque["Empresa"].apply(normalizar_empresa)
+        df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.title()
 
-    # =====================================================
-    # NORMALIZA EMPRESA E FILIAL
-    # =====================================================
+        df_estoque["Empresa / Filial"] = (
+            df_estoque["Empresa"] + " / " + df_estoque["Filial"]
+        )
 
-    df_estoque["Empresa"] = df_estoque["Empresa"].apply(normalizar_empresa)
-    df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.title()
+        df_estoque["Produto"] = (
+            df_estoque["Produto"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
 
-    df_estoque["Empresa / Filial"] = (
-        df_estoque["Empresa"] + " / " + df_estoque["Filial"]
-    )
+        df_estoque["ID_UNICO"] = (
+            df_estoque["Empresa / Filial"] + "|" + df_estoque["Produto"]
+        )
 
-    # =====================================================
-    # PRODUTO (mantém zeros à esquerda)
-    # =====================================================
+        data_base = pd.to_datetime(
+            df_estoque["Data Fechamento"],
+            dayfirst=True,
+            errors="coerce"
+        ).max()
 
-    df_estoque["Produto"] = (
-        df_estoque["Produto"]
-        .astype(str)
-        .str.strip()
-        .str.upper()
-    )
+        df_estoque["Data_Base"] = data_base
 
-    # =====================================================
-    # ID ÚNICO
-    # =====================================================
+        df_estoque["Saldo Atual"] = pd.to_numeric(
+            df_estoque["Saldo Atual"], errors="coerce"
+        )
 
-    df_estoque["ID_UNICO"] = (
-        df_estoque["Empresa / Filial"] + "|" + df_estoque["Produto"]
-    )
+        df_estoque["Custo Total"] = pd.to_numeric(
+            df_estoque["Custo Total"], errors="coerce"
+        )
 
-    # =====================================================
-    # DATA BASE
-    # =====================================================
+        # =====================================================
+        # 2️⃣ MOVIMENTAÇÕES CSV (04_Movimento)
+        # =====================================================
 
-    data_base = pd.to_datetime(
-        df_estoque["Data Fechamento"],
-        dayfirst=True,
-        errors="coerce"
-    ).max()
+        arquivos_csv = [
+            n for n in z.namelist()
+            if "04_Movimento" in n and n.endswith(".csv")
+        ]
 
-    df_estoque["Data_Base"] = data_base
+        lista_mov = []
 
-    # =====================================================
-    # FORMATAÇÃO NUMÉRICA
-    # =====================================================
+        for arq in arquivos_csv:
 
-    df_estoque["Saldo Atual"] = pd.to_numeric(
-        df_estoque["Saldo Atual"], errors="coerce"
-    )
+            with z.open(arq) as f:
+                df_temp = pd.read_csv(
+                    f,
+                    sep=",",
+                    encoding="cp1252",
+                    skiprows=2,
+                    dtype=str
+                )
 
-    df_estoque["Custo Total"] = pd.to_numeric(
-        df_estoque["Custo Total"], errors="coerce"
-    )
+            df_temp.columns = df_temp.columns.str.strip()
 
-    # =====================================================
-    # REMOVER COLUNAS REDUNDANTES
-    # =====================================================
+            # Se não existir coluna Quantidade ou DT Emissao, ignora o arquivo
+            if "Quantidade" not in df_temp.columns or "DT Emissao" not in df_temp.columns:
+                continue
 
-    df_estoque = df_estoque.drop(columns=["Empresa", "Filial"])
+            df_temp["Quantidade"] = pd.to_numeric(
+                df_temp["Quantidade"], errors="coerce"
+            )
 
-    # =====================================================
-    # ORGANIZAÇÃO FINAL DAS COLUNAS
-    # Empresa / Filial logo após Data Fechamento
-    # =====================================================
+            df_temp["DT Emissao"] = pd.to_datetime(
+                df_temp["DT Emissao"],
+                dayfirst=True,
+                errors="coerce"
+            )
 
-    colunas_ordenadas = [
-        "Data Fechamento",
-        "Empresa / Filial",
-        "Tipo de Estoque",
-        "Conta",
-        "Produto",
-        "Descricao",
-        "Unid",
-        "Saldo Atual",
-        "Vlr Unit",
-        "Custo Total",
-        "ID_UNICO",
-        "Data_Base"
-    ]
+            df_temp = df_temp[
+                (df_temp["Quantidade"] != 0) &
+                (df_temp["DT Emissao"].notna())
+            ]
 
-    df_final = df_estoque[colunas_ordenadas].copy()
+            if df_temp.empty:
+                continue
 
-    # =====================================================
-    # EXPORTAÇÃO
-    # =====================================================
+            # Empresa vem do nome do arquivo
+            try:
+                empresa_arquivo = arq.split("_")[1]
+            except:
+                continue
 
-    buffer = io.BytesIO()
-    df_final.to_excel(buffer, index=False)
-    buffer.seek(0)
+            empresa_normalizada = normalizar_empresa(empresa_arquivo)
 
-    return df_final, buffer.getvalue()
+            df_temp["Empresa"] = empresa_normalizada
+            df_temp["Filial"] = df_temp["Filial"].astype(str).str.title()
+
+            df_temp["Empresa / Filial"] = (
+                df_temp["Empresa"] + " / " + df_temp["Filial"]
+            )
+
+            # 🔵 FILTRO DE EMPRESAS PERMITIDAS
+            df_temp = df_temp[
+                df_temp["Empresa / Filial"]
+                .isin(EMPRESAS_FILIAL_CONSIDERADAS)
+            ]
+
+            if df_temp.empty:
+                continue
+
+            df_temp["Produto"] = (
+                df_temp["Produto"]
+                .astype(str)
+                .str.strip()
+                .str.upper()
+            )
+
+            df_temp["ID_UNICO"] = (
+                df_temp["Empresa / Filial"] + "|" + df_temp["Produto"]
+            )
+
+            lista_mov.append(
+                df_temp[["ID_UNICO", "DT Emissao"]]
+            )
+
+        # Consolidação do Último Movimento
+        if lista_mov:
+            df_mov = pd.concat(lista_mov)
+
+            df_mov_cons = (
+                df_mov.groupby("ID_UNICO", as_index=False)
+                .agg(Ult_Mov=("DT Emissao", "max"))
+            )
+        else:
+            df_mov_cons = pd.DataFrame(
+                columns=["ID_UNICO", "Ult_Mov"]
+            )
+
+        # =====================================================
+        # 3️⃣ MERGE FINAL (ainda sem cálculos)
+        # =====================================================
+
+        df_final = df_estoque.merge(
+            df_mov_cons,
+            on="ID_UNICO",
+            how="left"
+        )
+
+        # Remover colunas redundantes
+        df_final = df_final.drop(columns=["Empresa", "Filial"])
+
+        # Organizar colunas
+        colunas_ordenadas = [
+            "Data Fechamento",
+            "Empresa / Filial",
+            "Tipo de Estoque",
+            "Conta",
+            "Produto",
+            "Descricao",
+            "Unid",
+            "Saldo Atual",
+            "Vlr Unit",
+            "Custo Total",
+            "ID_UNICO",
+            "Ult_Mov",
+            "Data_Base"
+        ]
+
+        df_final = df_final[colunas_ordenadas]
+
+        # =====================================================
+        # EXPORTAÇÃO
+        # =====================================================
+
+        buffer = io.BytesIO()
+        df_final.to_excel(buffer, index=False)
+        buffer.seek(0)
+
+        return df_final, buffer.getvalue()
