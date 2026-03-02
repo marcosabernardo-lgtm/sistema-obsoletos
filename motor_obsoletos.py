@@ -93,4 +93,20 @@ def executar_motor(uploaded_file):
     df_teste.to_excel(buffer, index=False)
     buffer.seek(0)
 
+        # ===============================
+    # LEITURA DA MATRIZ DE EMPRESAS
+    # ===============================
+
+    pasta_empresas = os.path.join(pasta_base, "05_Empresas")
+    caminho_matriz = os.path.join(pasta_empresas, "05_Empresas.xlsx")
+
+    if not os.path.exists(caminho_matriz):
+        raise Exception("Arquivo 05_Empresas.xlsx não encontrado")
+
+    df_matriz = pd.read_excel(caminho_matriz, dtype=str)
+    df_matriz.columns = df_matriz.columns.str.strip()
+
+    if "Mesclado" not in df_matriz.columns or "Empresa / Filial" not in df_matriz.columns:
+        raise Exception("Colunas esperadas não encontradas na matriz de empresas")
+
     return df_teste, buffer.getvalue()
