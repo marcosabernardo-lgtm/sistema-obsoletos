@@ -1,186 +1,97 @@
-import pandas as pd
-import zipfile
 import os
-import shutil
-from pathlib import Path
+import zipfile
 import io
+import pandas as pd
+from datetime import datetime
 
-
-import uuid
 
 def executar_motor(uploaded_file):
 
-    pasta_base = f"temp_upload_{uuid.uuid4().hex}"
+    # =====================================================
+    # EXTRAÇÃO DO ZIP
+    # =====================================================
+
+    pasta_base = "dados_temp"
+
+    if os.path.exists(pasta_base):
+        import shutil
+        shutil.rmtree(pasta_base)
 
     os.makedirs(pasta_base)
-    
-    # Extrai o ZIP
+
     with zipfile.ZipFile(uploaded_file, 'r') as z:
         z.extractall(pasta_base)
 
-    # Lista estrutura encontrada
-    pastas_encontradas = os.listdir(pasta_base)
-
-    pastas_esperadas = [
-        "01_Entradas_Saidas",
-        "02_Estoque_Atual",
-        "04_Movimento",
-        "05_Empresas",
-        "06_Usadas"
-    ]
-
-    faltando = [p for p in pastas_esperadas if p not in pastas_encontradas]
-
-    if faltando:
-        raise Exception(f"Pastas faltando no ZIP: {faltando}")
-
-    # Se chegou até aqui, estrutura está OK
-    df_teste = pd.DataFrame({
-        "Status": ["Estrutura validada com sucesso"]
-    })
-
-    # Criar Excel em memória corretamente
-    buffer = io.BytesIO()
-    df_teste.to_excel(buffer, index=False)
-    buffer.seek(0)
-
-        # ===============================
-    # LEITURA DO ESTOQUE ATUAL
-    # ===============================
+    # =====================================================
+    # LEITURA DO ESTOQUE
+    # =====================================================
 
     pasta_estoque = os.path.join(pasta_base, "02_Estoque_Atual")
 
-    arquivos_excel = [
+    arquivos = [
         f for f in os.listdir(pasta_estoque)
         if f.endswith(".xlsx")
     ]
 
-    if not arquivos_excel:
-        raise Exception("Nenhum arquivo .xlsx encontrado em 02_Estoque_Atual")
+    if not arquivos:
+        raise Exception("Nenhum arquivo de estoque encontrado")
 
-    caminho_arquivo = os.path.join(pasta_estoque, arquivos_excel[0])
+    caminho_estoque = os.path.join(pasta_estoque, arquivos[0])
 
-    df_estoque = pd.read_excel(
-        caminho_arquivo,
-        sheet_name="Detalhado",
-        dtype={"Código": str}
-    )
+    df_estoque = pd.read_excel(caminho_estoque)
 
-    df_estoque = df_estoque.rename(columns={
-        "Valor Total": "Custo Total",
-        "Código": "Produto",
-        "Descrição": "Descricao",
-        "Quantidade": "Saldo Atual"
-    })
+    df_estoque.columns = df_estoque.columns.str.strip()
 
-    df_estoque["Produto"] = df_estoque["Produto"].astype(str).str.strip().str.upper()
-    df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.title()
-    df_estoque["Empresa / Filial"] = df_estoque["Empresa"] + " / " + df_estoque["Filial"]
-    df_estoque["ID_UNICO"] = df_estoque["Empresa / Filial"] + "|" + df_estoque["Produto"]
-
-    # Data base
-    DataBase = pd.to_datetime(df_estoque["Data Fechamento"], dayfirst=True).max()
-
-    # Retorno provisório para teste
-    df_teste = df_estoque[[
+    colunas_necessarias = [
         "Empresa / Filial",
         "Produto",
         "Saldo Atual",
         "Custo Total"
-    ]].head(20)
-
-    buffer = io.BytesIO()
-    df_teste.to_excel(buffer, index=False)
-    buffer.seek(0)
-
-        # ===============================
-    # LEITURA DA MATRIZ DE EMPRESAS
-    # ===============================
-
-    pasta_empresas = os.path.join(pasta_base, "05_Empresas")
-    caminho_matriz = os.path.join(pasta_empresas, "05_Empresas.xlsx")
-
-    if not os.path.exists(caminho_matriz):
-        raise Exception("Arquivo 05_Empresas.xlsx não encontrado")
-
-    df_matriz = pd.read_excel(caminho_matriz, dtype=str)
-    df_matriz.columns = df_matriz.columns.str.strip()
-
-    if "Mesclado" not in df_matriz.columns or "Empresa / Filial" not in df_matriz.columns:
-        raise Exception("Colunas esperadas não encontradas na matriz de empresas")
-
-        # ===============================
-    # LEITURA DAS MOVIMENTAÇÕES BASE (04_Movimento)
-    # ===============================
-
-    pasta_mov = os.path.join(pasta_base, "04_Movimento")
-
-    arquivos_csv = [
-        f for f in os.listdir(pasta_mov)
-        if f.lower().endswith(".csv")
     ]
 
-    if not arquivos_csv:
-        raise Exception("Nenhum CSV encontrado em 04_Movimento")
+    for col in colunas_necessarias:
+        if col not in df_estoque.columns:
+            raise Exception(f"Coluna obrigatória não encontrada: {col}")
 
-    lista_mov = []
+    df_final = df_estoque[colunas_necessarias].copy()
 
-    for arquivo in arquivos_csv:
+    # =====================================================
+    # DATA BASE
+    # =====================================================
 
-        caminho_csv = os.path.join(pasta_mov, arquivo)
+    if "Data Fechamento" in df_estoque.columns:
+        data_base = df_estoque["Data Fechamento"].max()
+    else:
+        data_base = datetime.today()
 
-        df_temp = pd.read_csv(
-            caminho_csv,
-            sep=",",
-            encoding="cp1252",
-            skiprows=2,
-            dtype=str
+    df_final["Data_Base"] = data_base
+
+    # =====================================================
+    # HISTÓRICO AUTOMÁTICO
+    # =====================================================
+
+    historico_path = "historico_obsoletos.csv"
+
+    df_hist_atual = df_final.copy()
+    df_hist_atual["Data_Processamento"] = datetime.now()
+
+    if os.path.exists(historico_path):
+        df_hist_antigo = pd.read_csv(historico_path, dtype=str)
+        df_hist_novo = pd.concat(
+            [df_hist_antigo, df_hist_atual.astype(str)],
+            ignore_index=True
         )
+    else:
+        df_hist_novo = df_hist_atual.astype(str)
 
-        df_temp["OrigemArquivo"] = arquivo
-        lista_mov.append(df_temp)
+    df_hist_novo.to_csv(historico_path, index=False)
 
-    df_mov_base = pd.concat(lista_mov, ignore_index=True)
-
-    # Retorno provisório para teste
-    df_teste = df_mov_base.head(20)
+    # =====================================================
+    # GERAÇÃO DO EXCEL PARA DOWNLOAD
+    # =====================================================
 
     buffer = io.BytesIO()
-    df_teste.to_excel(buffer, index=False)
+    df_final.to_excel(buffer, index=False)
     buffer.seek(0)
 
-  # =====================================
-# DEFINE DF_FINAL PRIMEIRO
-# =====================================
-
-df_final = df_teste.copy()
-
-# =====================================
-# SALVAR HISTÓRICO AUTOMÁTICO
-# =====================================
-
-historico_path = "historico_obsoletos.csv"
-
-# adiciona coluna Data_Base
-if "Data Fechamento" in df_final.columns:
-    df_final["Data_Base"] = df_final["Data Fechamento"]
-else:
-    df_final["Data_Base"] = pd.Timestamp.today().normalize()
-
-# concatena histórico
-if os.path.exists(historico_path):
-    df_historico = pd.read_csv(historico_path, dtype=str)
-    df_historico = pd.concat(
-        [df_historico, df_final.astype(str)],
-        ignore_index=True
-    )
-else:
-    df_historico = df_final.astype(str)
-
-df_historico.to_csv(historico_path, index=False)
-
-# pega data base para controle
-if "Data Fechamento" in df_final.columns:
-    data_base = df_final["Data Fechamento"].max()
-
-return df_final, buffer.getvalue()
+    return df_final, buffer.getvalue()
