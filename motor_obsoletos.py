@@ -6,15 +6,14 @@ from pathlib import Path
 import io
 
 
+import uuid
+
 def executar_motor(uploaded_file):
 
-    pasta_base = "temp_upload"
-
-    if os.path.exists(pasta_base):
-        shutil.rmtree(pasta_base)
+    pasta_base = f"temp_upload_{uuid.uuid4().hex}"
 
     os.makedirs(pasta_base)
-
+    
     # Extrai o ZIP
     with zipfile.ZipFile(uploaded_file, 'r') as z:
         z.extractall(pasta_base)
