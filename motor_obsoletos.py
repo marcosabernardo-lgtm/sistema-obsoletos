@@ -1,33 +1,37 @@
 import pandas as pd
 import zipfile
 import io
+import os
+
 
 def executar_motor(uploaded_file):
 
+    # ===============================
+    # EXTRAÇÃO DO ZIP
+    # ===============================
+
     with zipfile.ZipFile(uploaded_file) as z:
 
-        # 🔎 procurar arquivo dentro da pasta 02_Estoque_Atual
-        arquivos_estoque = [
-            f for f in z.namelist()
-            if f.startswith("02_Estoque_Atual")
-            and f.lower().endswith(".xlsx")
-        ]
+        arquivo_estoque = None
 
-        if not arquivos_estoque:
-            raise Exception("Arquivo de estoque não encontrado na pasta 02_Estoque_Atual dentro do ZIP")
+        for nome in z.namelist():
+            if "02_Estoque_Atual" in nome and nome.endswith(".xlsx"):
+                arquivo_estoque = nome
+                break
 
-        caminho_estoque = arquivos_estoque[0]
+        if not arquivo_estoque:
+            raise Exception("Arquivo 02_Estoque_Atual não encontrado no ZIP")
 
-        with z.open(caminho_estoque) as arquivo_excel:
+        with z.open(arquivo_estoque) as f:
             df_estoque = pd.read_excel(
-                arquivo_excel,
+                f,
                 sheet_name="Detalhado",
                 dtype={"Código": str}
             )
 
-    # ================================
-    # RENOMEAR COLUNAS
-    # ================================
+    # ===============================
+    # PADRONIZAÇÃO DE COLUNAS
+    # ===============================
 
     df_estoque = df_estoque.rename(columns={
         "Valor Total": "Custo Total",
@@ -36,9 +40,9 @@ def executar_motor(uploaded_file):
         "Quantidade": "Saldo Atual"
     })
 
-    # ================================
-    # NORMALIZA EMPRESA
-    # ================================
+    # ===============================
+    # NORMALIZAÇÃO DE EMPRESA
+    # ===============================
 
     def normalizar_empresa(nome):
         nome = str(nome).upper()
@@ -49,50 +53,87 @@ def executar_motor(uploaded_file):
         return nome
 
     df_estoque["Empresa"] = df_estoque["Empresa"].apply(normalizar_empresa)
-
-    # ================================
-    # AJUSTES PADRÃO
-    # ================================
-
     df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.title()
 
     df_estoque["Empresa / Filial"] = (
         df_estoque["Empresa"] + " / " + df_estoque["Filial"]
     )
 
+    # ===============================
+    # PRODUTO COM ZERO À ESQUERDA
+    # ===============================
+
     df_estoque["Produto"] = (
         df_estoque["Produto"]
         .astype(str)
         .str.strip()
         .str.upper()
+        .str.zfill(6)
     )
 
-    # manter zero à esquerda
-    df_estoque["Produto"] = df_estoque["Produto"].str.zfill(6)
-
-    # garantir numéricos corretos
-    df_estoque["Saldo Atual"] = pd.to_numeric(df_estoque["Saldo Atual"], errors="coerce")
-    df_estoque["Custo Total"] = pd.to_numeric(df_estoque["Custo Total"], errors="coerce")
+    # ===============================
+    # ID ÚNICO
+    # ===============================
 
     df_estoque["ID_UNICO"] = (
         df_estoque["Empresa / Filial"] + "|" + df_estoque["Produto"]
     )
 
-    # Data base
-    DataBase = pd.to_datetime(
+    # ===============================
+    # DATA BASE
+    # ===============================
+
+    df_estoque["Data_Base"] = pd.to_datetime(
         df_estoque["Data Fechamento"],
         dayfirst=True,
         errors="coerce"
     ).max()
 
-    df_estoque["Data_Base"] = DataBase
+    # ===============================
+    # FORMATAÇÃO NUMÉRICA CORRETA
+    # ===============================
 
-    # ================================
-    # EXPORTAÇÃO
-    # ================================
+    df_estoque["Saldo Atual"] = pd.to_numeric(
+        df_estoque["Saldo Atual"], errors="coerce"
+    )
+
+    df_estoque["Vlr Unit"] = pd.to_numeric(
+        df_estoque["Vlr Unit"], errors="coerce"
+    )
+
+    df_estoque["Custo Total"] = pd.to_numeric(
+        df_estoque["Custo Total"], errors="coerce"
+    )
+
+    # ===============================
+    # ESTRUTURA FINAL
+    # ===============================
+
+    colunas_finais = [
+        "Data Fechamento",
+        "Empresa",
+        "Filial",
+        "Tipo de Estoque",
+        "Conta",
+        "Produto",
+        "Descricao",
+        "Unid",
+        "Saldo Atual",
+        "Vlr Unit",
+        "Custo Total",
+        "Empresa / Filial",
+        "ID_UNICO",
+        "Data_Base"
+    ]
+
+    df_final = df_estoque[colunas_finais].copy()
+
+    # ===============================
+    # EXPORTAÇÃO EXCEL
+    # ===============================
 
     buffer = io.BytesIO()
-    df_estoque.to_excel(buffer, index=False)
+    df_final.to_excel(buffer, index=False)
     buffer.seek(0)
 
-    return df_estoque, buffer.getvalue()
+    return df_final, buffer.getvalue()
