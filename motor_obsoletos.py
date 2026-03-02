@@ -113,8 +113,11 @@ def executar_motor(uploaded_file):
     # EXPORTAÇÃO
     # =====================================================
 
-    buffer = io.BytesIO()
-    df_estoque.to_excel(buffer, index=False)
-    buffer.seek(0)
+  # Removendo colunas redundantes
+df_saida = df_estoque.drop(columns=["Empresa", "Filial"])
 
-    return df_estoque, buffer.getvalue()
+buffer = io.BytesIO()
+df_saida.to_excel(buffer, index=False)
+buffer.seek(0)
+
+return df_saida, buffer.getvalue()
