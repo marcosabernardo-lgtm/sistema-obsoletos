@@ -1,48 +1,47 @@
-import zipfile
 import pandas as pd
+import zipfile
 import io
-
+import os
 
 def executar_motor(uploaded_file):
 
+    # ================================
+    # ABRIR ZIP
+    # ================================
     with zipfile.ZipFile(uploaded_file) as z:
 
-        # ============================
-        # LOCALIZA PASTA DO ESTOQUE
-        # ============================
-        arquivos_estoque = [
-            f for f in z.namelist()
-            if "02_Estoque_Atual" in f and f.endswith(".xlsx")
-        ]
+        # Procurar arquivo de estoque dentro do ZIP
+        arquivo_estoque = None
 
-        if not arquivos_estoque:
-            raise Exception("Nenhum arquivo encontrado em 02_Estoque_Atual")
+        for nome in z.namelist():
+            if "02_Estoque_Atual" in nome and nome.endswith(".xlsx"):
+                arquivo_estoque = nome
+                break
 
-        arquivo_estoque = arquivos_estoque[0]
+        if arquivo_estoque is None:
+            raise Exception("Arquivo 02_Estoque_Atual não encontrado no ZIP")
 
-        with z.open(arquivo_estoque) as file:
-    df_estoque = pd.read_excel(
-    caminho_estoque,
-    sheet_name="Detalhado",
-    dtype=str
-)
+        with z.open(arquivo_estoque) as f:
+            df_estoque = pd.read_excel(f, sheet_name="Detalhado", dtype=str)
 
-df_estoque.columns = df_estoque.columns.str.strip()
-
-print("Colunas encontradas na aba Detalhado:")
-print(df_estoque.columns.tolist())
-
-    # Remove espaços extras nos nomes das colunas
+    # ================================
+    # LIMPEZA BÁSICA
+    # ================================
     df_estoque.columns = df_estoque.columns.str.strip()
 
-    # ============================
-    # EXPORTAÇÃO PARA EXCEL
-    # ============================
-    buffer = io.BytesIO()
-    df_estoque.to_excel(buffer, index=False)
-    buffer.seek(0)
-
-    print("Colunas encontradas no estoque:")
+    print("Colunas encontradas na aba Detalhado:")
     print(df_estoque.columns.tolist())
 
-    return df_estoque, buffer.getvalue()
+    # ================================
+    # TRABALHAR APENAS ESTOQUE (TEMPORÁRIO)
+    # ================================
+    df_final = df_estoque.copy()
+
+    # ================================
+    # EXPORTAÇÃO PARA EXCEL
+    # ================================
+    buffer = io.BytesIO()
+    df_final.to_excel(buffer, index=False)
+    buffer.seek(0)
+
+    return df_final, buffer.getvalue()
