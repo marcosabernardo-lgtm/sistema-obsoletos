@@ -169,4 +169,11 @@ def executar_motor(uploaded_file):
 
     df_historico.to_csv(historico_path, index=False)
 
-    return df_teste, buffer.getvalue()
+    df_final = df_teste.copy()
+
+  # Aqui você pode fazer validações adicionais se quiser
+  if "Data Fechamento" in df_final.columns:
+    data_base = df_final["Data Fechamento"].max()
+
+  return df_final, buffer.getvalue()
+
