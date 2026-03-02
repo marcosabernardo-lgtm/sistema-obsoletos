@@ -81,4 +81,7 @@ def executar_motor(uploaded_file):
     df_final.to_excel(buffer, index=False)
     buffer.seek(0)
 
+    print("Colunas encontradas no estoque:")
+print(df_estoque.columns.tolist())
+
     return df_final, buffer.getvalue()
