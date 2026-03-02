@@ -201,16 +201,15 @@ def executar_motor(uploaded_file):
         # MERGE FINAL
         # =====================================================
 
-        df_final = df_estoque.merge(
-            df_mov_cons,
-            on="ID_UNICO",
-            how="left"
-        )
+       df_final = df_estoque.merge(
+    df_mov_cons,
+    on="ID_UNICO",
+    how="left"
+)
 
-        df_final = df_final.drop(columns=["Empresa", "Filial"])
-
-        buffer = io.BytesIO()
-        df_final.to_excel(buffer, index=False)
-        buffer.seek(0)
+# 🔎 TESTE: somente Robotica
+df_final = df_final[
+    df_final["Empresa / Filial"].str.contains("Robotica")
+]
 
         return df_final, buffer.getvalue()
