@@ -3,6 +3,7 @@ import zipfile
 import os
 import shutil
 from pathlib import Path
+import io
 
 
 def executar_motor(uploaded_file):
@@ -39,6 +40,9 @@ def executar_motor(uploaded_file):
         "Status": ["Estrutura validada com sucesso"]
     })
 
-    excel_bytes = df_teste.to_excel(index=False)
+    # Criar Excel em memória corretamente
+    buffer = io.BytesIO()
+    df_teste.to_excel(buffer, index=False)
+    buffer.seek(0)
 
-    return df_teste, excel_bytes
+    return df_teste, buffer.getvalue()
