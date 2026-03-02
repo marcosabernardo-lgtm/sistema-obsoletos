@@ -149,6 +149,24 @@ def executar_motor(uploaded_file):
     df_teste.to_excel(buffer, index=False)
     buffer.seek(0)
 
-    return df_teste, buffer.getvalue()
+       # ================================
+    # SALVAR HISTÓRICO AUTOMÁTICO
+    # ================================
+
+    historico_path = "historico_obsoletos.csv"
+
+    # adiciona coluna Data_Base (pega da coluna Data Fechamento)
+    if "Data Fechamento" in df_final.columns:
+        df_final["Data_Base"] = df_final["Data Fechamento"]
+    else:
+        df_final["Data_Base"] = pd.Timestamp.today().normalize()
+
+    if os.path.exists(historico_path):
+        df_historico = pd.read_csv(historico_path, dtype=str)
+        df_historico = pd.concat([df_historico, df_final.astype(str)], ignore_index=True)
+    else:
+        df_historico = df_final.astype(str)
+
+    df_historico.to_csv(historico_path, index=False)
 
     return df_teste, buffer.getvalue()
