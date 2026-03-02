@@ -149,31 +149,38 @@ def executar_motor(uploaded_file):
     df_teste.to_excel(buffer, index=False)
     buffer.seek(0)
 
-       # ================================
-    # SALVAR HISTÓRICO AUTOMÁTICO
-    # ================================
+  # =====================================
+# DEFINE DF_FINAL PRIMEIRO
+# =====================================
 
-    historico_path = "historico_obsoletos.csv"
+df_final = df_teste.copy()
 
-    # adiciona coluna Data_Base (pega da coluna Data Fechamento)
-    if "Data Fechamento" in df_final.columns:
-        df_final["Data_Base"] = df_final["Data Fechamento"]
-    else:
-        df_final["Data_Base"] = pd.Timestamp.today().normalize()
+# =====================================
+# SALVAR HISTÓRICO AUTOMÁTICO
+# =====================================
 
-    if os.path.exists(historico_path):
-        df_historico = pd.read_csv(historico_path, dtype=str)
-        df_historico = pd.concat([df_historico, df_final.astype(str)], ignore_index=True)
-    else:
-        df_historico = df_final.astype(str)
+historico_path = "historico_obsoletos.csv"
 
-    df_historico.to_csv(historico_path, index=False)
+# adiciona coluna Data_Base
+if "Data Fechamento" in df_final.columns:
+    df_final["Data_Base"] = df_final["Data Fechamento"]
+else:
+    df_final["Data_Base"] = pd.Timestamp.today().normalize()
 
-    df_final = df_teste.copy()
+# concatena histórico
+if os.path.exists(historico_path):
+    df_historico = pd.read_csv(historico_path, dtype=str)
+    df_historico = pd.concat(
+        [df_historico, df_final.astype(str)],
+        ignore_index=True
+    )
+else:
+    df_historico = df_final.astype(str)
 
-  # Aqui você pode fazer validações adicionais se quiser
-  if "Data Fechamento" in df_final.columns:
+df_historico.to_csv(historico_path, index=False)
+
+# pega data base para controle
+if "Data Fechamento" in df_final.columns:
     data_base = df_final["Data Fechamento"].max()
 
-  return df_final, buffer.getvalue()
-
+return df_final, buffer.getvalue()
