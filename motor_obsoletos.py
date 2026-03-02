@@ -42,7 +42,10 @@ def executar_motor(uploaded_file):
             with z.open(arq) as f:
                 xls = pd.ExcelFile(f, engine="openpyxl")
 
-                for aba in xls.sheet_names:
+                for aba in ["ENTRADA", "SAIDA"]:
+
+                    if aba not in xls.sheet_names:
+                        continue
 
                     print(f"  Aba: {aba}")
 
