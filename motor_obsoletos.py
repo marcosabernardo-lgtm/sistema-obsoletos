@@ -45,4 +45,53 @@ def executar_motor(uploaded_file):
     df_teste.to_excel(buffer, index=False)
     buffer.seek(0)
 
+        # ===============================
+    # LEITURA DO ESTOQUE ATUAL
+    # ===============================
+
+    pasta_estoque = os.path.join(pasta_base, "02_Estoque_Atual")
+
+    arquivos_excel = [
+        f for f in os.listdir(pasta_estoque)
+        if f.endswith(".xlsx")
+    ]
+
+    if not arquivos_excel:
+        raise Exception("Nenhum arquivo .xlsx encontrado em 02_Estoque_Atual")
+
+    caminho_arquivo = os.path.join(pasta_estoque, arquivos_excel[0])
+
+    df_estoque = pd.read_excel(
+        caminho_arquivo,
+        sheet_name="Detalhado",
+        dtype={"Código": str}
+    )
+
+    df_estoque = df_estoque.rename(columns={
+        "Valor Total": "Custo Total",
+        "Código": "Produto",
+        "Descrição": "Descricao",
+        "Quantidade": "Saldo Atual"
+    })
+
+    df_estoque["Produto"] = df_estoque["Produto"].astype(str).str.strip().str.upper()
+    df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.title()
+    df_estoque["Empresa / Filial"] = df_estoque["Empresa"] + " / " + df_estoque["Filial"]
+    df_estoque["ID_UNICO"] = df_estoque["Empresa / Filial"] + "|" + df_estoque["Produto"]
+
+    # Data base
+    DataBase = pd.to_datetime(df_estoque["Data Fechamento"], dayfirst=True).max()
+
+    # Retorno provisório para teste
+    df_teste = df_estoque[[
+        "Empresa / Filial",
+        "Produto",
+        "Saldo Atual",
+        "Custo Total"
+    ]].head(20)
+
+    buffer = io.BytesIO()
+    df_teste.to_excel(buffer, index=False)
+    buffer.seek(0)
+
     return df_teste, buffer.getvalue()
