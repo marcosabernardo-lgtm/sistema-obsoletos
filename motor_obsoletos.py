@@ -21,7 +21,16 @@ def executar_motor(uploaded_file):
         arquivo_estoque = arquivos_estoque[0]
 
         with z.open(arquivo_estoque) as file:
-            df_estoque = pd.read_excel(file, dtype=str)
+            df_estoque = pd.read_excel(
+    caminho_estoque,
+    sheet_name="Detalhado",
+    dtype=str
+)
+
+df_estoque.columns = df_estoque.columns.str.strip()
+
+print("Colunas encontradas na aba Detalhado:")
+print(df_estoque.columns.tolist())
 
     # Remove espaços extras nos nomes das colunas
     df_estoque.columns = df_estoque.columns.str.strip()
