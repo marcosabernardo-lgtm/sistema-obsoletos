@@ -21,7 +21,7 @@ def executar_motor(uploaded_file):
         arquivo_estoque = arquivos_estoque[0]
 
         with z.open(arquivo_estoque) as file:
-            df_estoque = pd.read_excel(
+    df_estoque = pd.read_excel(
     caminho_estoque,
     sheet_name="Detalhado",
     dtype=str
