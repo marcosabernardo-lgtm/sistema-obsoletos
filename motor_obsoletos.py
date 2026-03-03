@@ -120,5 +120,3 @@ def testar_entradas_saidas(caminho_zip):
 
         return lista_exc
 
-# Teste
-lista = testar_entradas_saidas("PROJETO_UPLOAD.zip")
