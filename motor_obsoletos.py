@@ -7,49 +7,102 @@ def executar_motor(uploaded_file):
 
     with zipfile.ZipFile(uploaded_file) as z:
 
-        caminho_robotica = "04_Movimento/05_Robotica.csv"
+        # ==========================================
+        # LOCALIZA 02_Estoque_Atual
+        # ==========================================
 
-        with z.open(caminho_robotica) as f:
-            df = pd.read_csv(
+        arquivo_estoque = next(
+            (n for n in z.namelist()
+             if "02_Estoque_Atual" in n and n.endswith(".xlsx")),
+            None
+        )
+
+        if not arquivo_estoque:
+            raise Exception("Arquivo 02_Estoque_Atual não encontrado no ZIP")
+
+        # ==========================================
+        # LEITURA DA ABA DETALHADO
+        # ==========================================
+
+        with z.open(arquivo_estoque) as f:
+            df_estoque = pd.read_excel(
                 f,
-                sep=",",
-                skiprows=2,
-                encoding="cp1252",
-                engine="python",
-                quotechar='"',
-                usecols=[
-                    "Filial",
-                    "Produto",
-                    "Quantidade",
-                    "DT Emissao"
-                ],
-                dtype=str
+                sheet_name="Detalhado",
+                dtype={"Código": str},
+                engine="openpyxl"
             )
 
-        df.columns = df.columns.str.strip()
+        # ==========================================
+        # RENOMEIA COLUNAS PADRÃO
+        # ==========================================
 
-        df["Quantidade"] = pd.to_numeric(df["Quantidade"], errors="coerce")
+        df_estoque = df_estoque.rename(columns={
+            "Valor Total": "Custo Total",
+            "Código": "Produto",
+            "Descrição": "Descricao",
+            "Quantidade": "Saldo Atual"
+        })
 
-        df["DT Emissao"] = pd.to_datetime(
-            df["DT Emissao"],
-            dayfirst=True,
-            errors="coerce"
+        # ==========================================
+        # MONTA EMPRESA / FILIAL (SEM NORMALIZAR)
+        # ==========================================
+
+        df_estoque["Empresa"] = df_estoque["Empresa"].astype(str).str.strip()
+        df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.strip()
+
+        df_estoque["Empresa / Filial"] = (
+            df_estoque["Empresa"] + " / " + df_estoque["Filial"]
         )
 
-        df = df[
-            (df["Quantidade"] != 0) &
-            (df["DT Emissao"].notna())
-        ]
+        # ==========================================
+        # PRODUTO PRESERVANDO ZERO À ESQUERDA
+        # ==========================================
 
-        df["Produto"] = df["Produto"].str.strip()
-
-        df_resultado = df.sort_values(
-            by="DT Emissao",
-            ascending=False
+        df_estoque["Produto"] = (
+            df_estoque["Produto"]
+            .astype(str)
+            .str.strip()
+            .str.replace(".0", "", regex=False)
         )
+
+        # ==========================================
+        # ID ÚNICO
+        # ==========================================
+
+        df_estoque["ID_UNICO"] = (
+            df_estoque["Empresa / Filial"] + "|" + df_estoque["Produto"]
+        )
+
+        # ==========================================
+        # CONVERSÕES NUMÉRICAS
+        # ==========================================
+
+        df_estoque["Saldo Atual"] = pd.to_numeric(
+            df_estoque["Saldo Atual"], errors="coerce"
+        )
+
+        df_estoque["Custo Total"] = pd.to_numeric(
+            df_estoque["Custo Total"], errors="coerce"
+        )
+
+        # ==========================================
+        # ORGANIZA COLUNAS
+        # Empresa / Filial logo após Data Fechamento
+        # ==========================================
+
+        colunas = df_estoque.columns.tolist()
+
+        nova_ordem = ["Data Fechamento", "Empresa / Filial"]
+        demais = [c for c in colunas if c not in nova_ordem]
+
+        df_final = df_estoque[nova_ordem + demais]
+
+        # ==========================================
+        # EXPORTAÇÃO
+        # ==========================================
 
         buffer = io.BytesIO()
-        df_resultado.to_excel(buffer, index=False)
+        df_final.to_excel(buffer, index=False)
         buffer.seek(0)
 
-        return df_resultado, buffer.getvalue()
+        return df_final, buffer.getvalue()
