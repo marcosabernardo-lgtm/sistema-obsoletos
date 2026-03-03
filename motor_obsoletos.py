@@ -1,4 +1,3 @@
-print("### MOTOR NOVO CARREGADO ###")
 import pandas as pd
 import zipfile
 import io
@@ -9,112 +8,81 @@ def executar_motor(uploaded_file):
     with zipfile.ZipFile(uploaded_file) as z:
 
         # =========================
-        # 1️⃣ LER TODOS CSV DA PASTA 04_Movimento
+        # 1️⃣ LER TODOS XLSX DA PASTA 04_Movimento
         # =========================
 
         arquivos_mov = [
             f for f in z.namelist()
-            if "04_Movimento/" in f and f.lower().endswith(".csv")
+            if "04_Movimento/" in f and f.lower().endswith(".xlsx")
         ]
 
         if not arquivos_mov:
-            raise Exception("Nenhum CSV encontrado na pasta 04_Movimento.")
+            raise Exception("Nenhum XLSX encontrado na pasta 04_Movimento.")
 
         lista_mov = []
 
         for nome_arquivo in arquivos_mov:
 
             with z.open(nome_arquivo) as arq:
-                df_mov = pd.read_csv(
-                    io.TextIOWrapper(arq, encoding="cp1252"),
-                    sep=",",
-                    skiprows=2,      # pula SD3 e linha vazia
-                    dtype=str,       # preserva zeros
-                    engine="python"
+
+                df = pd.read_excel(
+                    arq,
+                    dtype=str,
+                    engine="openpyxl"
                 )
 
-            # Remove coluna vazia (vírgula final)
-            df_mov = df_mov.dropna(axis=1, how="all")
+            # Empresa vem do nome do arquivo
+            nome_upper = nome_arquivo.upper()
 
-            df_mov["ARQUIVO_ORIGEM"] = nome_arquivo.split("/")[-1]
+            if "ROBOTICA" in nome_upper:
+                empresa = "Robotica"
+            elif "SERVICE" in nome_upper:
+                empresa = "Service"
+            else:
+                empresa = "Indefinido"
 
-            lista_mov.append(df_mov)
+            # =========================
+            # PADRONIZA CAMPOS
+            # =========================
 
-        df_mov_total = pd.concat(lista_mov, ignore_index=True)
+            df["Codigo"] = df["Produto"].astype(str).str.strip()
 
-        # =========================
-        # 2️⃣ FILTRAR APENAS ROBOTICA
-        # =========================
+            df["Qtd"] = pd.to_numeric(
+                df["Quantidade"],
+                errors="coerce"
+            )
 
-        df_mov_total = df_mov_total[
-            df_mov_total["ARQUIVO_ORIGEM"].str.contains("Robotica", case=False)
-        ]
+            df["Dt_Mov"] = pd.to_datetime(
+                df["DT Emissao"],
+                errors="coerce",
+                dayfirst=True
+            )
 
-        # =========================
-        # 3️⃣ PADRONIZAR CAMPOS
-        # =========================
+            df["Filial"] = df["Filial"].astype(str).str.strip().str.title()
 
-        # Produto preservando zeros
-        df_mov_total["Codigo"] = (
-            df_mov_total["Produto"]
-            .astype(str)
-            .str.strip()
-        )
+            df["Empresa / Filial"] = empresa + " / " + df["Filial"]
 
-        # Quantidade numérica
-        df_mov_total["Qtd"] = pd.to_numeric(
-            df_mov_total["Quantidade"],
-            errors="coerce"
-        )
+            df["Descricao"] = df["Descr. Prod"]
 
-        # Data
-        df_mov_total["Dt_Mov"] = pd.to_datetime(
-            df_mov_total["DT Emissao"],
-            errors="coerce",
-            dayfirst=True
-        )
+            df_final_temp = df[
+                [
+                    "Empresa / Filial",
+                    "Codigo",
+                    "Descricao",
+                    "Qtd",
+                    "Dt_Mov"
+                ]
+            ].copy()
 
-        # Empresa fixa Robotica
-        df_mov_total["Empresa"] = "Robotica"
+            lista_mov.append(df_final_temp)
 
-        df_mov_total["Filial"] = (
-            df_mov_total["Filial"]
-            .astype(str)
-            .str.strip()
-            .str.title()
-        )
+        df_final = pd.concat(lista_mov, ignore_index=True)
 
-        df_mov_total["Empresa / Filial"] = (
-            df_mov_total["Empresa"] + " / " + df_mov_total["Filial"]
-        )
-
-        # Descrição (se existir no CSV)
-        if "Descricao" in df_mov_total.columns:
-            df_mov_total["Descricao"] = df_mov_total["Descricao"]
-        elif "Descrição" in df_mov_total.columns:
-            df_mov_total["Descricao"] = df_mov_total["Descrição"]
-        else:
-            df_mov_total["Descricao"] = None
-
-        # =========================
-        # 4️⃣ COLUNAS FINAIS
-        # =========================
-
-        df_final = df_mov_total[
-            [
-                "Empresa / Filial",
-                "Codigo",
-                "Descricao",
-                "Qtd",
-                "Dt_Mov"
-            ]
-        ].copy()
-
-        # Remove linhas sem data válida
+        # Remove datas inválidas
         df_final = df_final[df_final["Dt_Mov"].notna()]
 
         # =========================
-        # 5️⃣ EXPORTAR
+        # EXPORTAÇÃO
         # =========================
 
         buffer = io.BytesIO()
