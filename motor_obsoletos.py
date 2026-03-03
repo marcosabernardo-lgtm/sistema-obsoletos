@@ -10,26 +10,21 @@ def executar_motor(uploaded_file):
         caminho_robotica = "04_Movimento/05_Robotica.csv"
 
         with z.open(caminho_robotica) as f:
-            conteudo = f.read().decode("cp1252")
-
-        # 🔥 remove duas primeiras linhas (SD3 + linha vazia)
-        linhas = conteudo.splitlines()[2:]
-
-        # 🔥 remove aspas e vírgula final
-        linhas_tratadas = []
-        for linha in linhas:
-            linha = linha.rstrip(",")       # remove vírgula final
-            linha = linha.replace('"', "")  # remove aspas
-            linhas_tratadas.append(linha)
-
-        texto_limpo = "\n".join(linhas_tratadas)
-
-        # 🔥 agora sim converte corretamente
-        df = pd.read_csv(
-            io.StringIO(texto_limpo),
-            sep=",",
-            dtype=str
-        )
+            df = pd.read_csv(
+                f,
+                sep=",",
+                skiprows=2,
+                encoding="cp1252",
+                engine="python",
+                quotechar='"',
+                usecols=[
+                    "Filial",
+                    "Produto",
+                    "Quantidade",
+                    "DT Emissao"
+                ],
+                dtype=str
+            )
 
         df.columns = df.columns.str.strip()
 
@@ -46,14 +41,12 @@ def executar_motor(uploaded_file):
             (df["DT Emissao"].notna())
         ]
 
-        df["Produto"] = df["Produto"].astype(str).str.strip()
+        df["Produto"] = df["Produto"].str.strip()
 
-        df_resultado = df[[
-            "Filial",
-            "Produto",
-            "Quantidade",
-            "DT Emissao"
-        ]].sort_values(by="DT Emissao", ascending=False)
+        df_resultado = df.sort_values(
+            by="DT Emissao",
+            ascending=False
+        )
 
         buffer = io.BytesIO()
         df_resultado.to_excel(buffer, index=False)
