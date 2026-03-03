@@ -200,9 +200,10 @@ def executar_motor(uploaded_file):
 
         df_final = df_final.drop(columns=["Empresa", "Filial"])
 
-        # 🔎 FILTRO TEMPORÁRIO PARA TESTE (Robotica)
+        # 🔎 FILTRO TEMPORÁRIO PARA TESTE
         df_final = df_final[
-            df_final["Empresa / Filial"].str.contains("Robotica", na=False)
+            (df_final["Empresa / Filial"].str.contains("Robotica", na=False)) &
+            (df_final["Ult_Mov"].notna())
         ]
 
         # Organiza ordem
