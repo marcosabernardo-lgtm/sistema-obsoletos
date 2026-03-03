@@ -3,12 +3,25 @@ import zipfile
 import io
 
 
+def normalizar_empresa(nome):
+    nome = str(nome).upper()
+    if "TOOLS" in nome:
+        return "Tools"
+    if "MAQUINAS" in nome:
+        return "Maquinas"
+    if "ALLSERVICE" in nome:
+        return "Service"
+    if "ROBOTICA" in nome:
+        return "Robotica"
+    return nome
+
+
 def executar_motor(uploaded_file):
 
     with zipfile.ZipFile(uploaded_file) as z:
 
         # ==========================================
-        # LOCALIZA 02_Estoque_Atual
+        # LOCALIZA ARQUIVO 02_Estoque_Atual
         # ==========================================
 
         arquivo_estoque = next(
@@ -21,7 +34,7 @@ def executar_motor(uploaded_file):
             raise Exception("Arquivo 02_Estoque_Atual não encontrado no ZIP")
 
         # ==========================================
-        # LEITURA DA ABA DETALHADO
+        # LEITURA ABA DETALHADO
         # ==========================================
 
         with z.open(arquivo_estoque) as f:
@@ -33,7 +46,7 @@ def executar_motor(uploaded_file):
             )
 
         # ==========================================
-        # RENOMEIA COLUNAS PADRÃO
+        # PADRONIZAÇÃO DE COLUNAS
         # ==========================================
 
         df_estoque = df_estoque.rename(columns={
@@ -44,18 +57,18 @@ def executar_motor(uploaded_file):
         })
 
         # ==========================================
-        # MONTA EMPRESA / FILIAL (SEM NORMALIZAR)
+        # NORMALIZA EMPRESA E FILIAL
         # ==========================================
 
-        df_estoque["Empresa"] = df_estoque["Empresa"].astype(str).str.strip()
-        df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.strip()
+        df_estoque["Empresa"] = df_estoque["Empresa"].apply(normalizar_empresa)
+        df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.title()
 
         df_estoque["Empresa / Filial"] = (
             df_estoque["Empresa"] + " / " + df_estoque["Filial"]
         )
 
         # ==========================================
-        # PRODUTO PRESERVANDO ZERO À ESQUERDA
+        # PRODUTO COM ZERO À ESQUERDA PRESERVADO
         # ==========================================
 
         df_estoque["Produto"] = (
@@ -74,6 +87,16 @@ def executar_motor(uploaded_file):
         )
 
         # ==========================================
+        # DATA BASE (MAIOR DATA FECHAMENTO)
+        # ==========================================
+
+        data_base = pd.to_datetime(
+            df_estoque["Data Fechamento"],
+            dayfirst=True,
+            errors="coerce"
+        ).max()
+
+        # ==========================================
         # CONVERSÕES NUMÉRICAS
         # ==========================================
 
@@ -86,7 +109,7 @@ def executar_motor(uploaded_file):
         )
 
         # ==========================================
-        # ORGANIZA COLUNAS
+        # ORGANIZA ORDEM DAS COLUNAS
         # Empresa / Filial logo após Data Fechamento
         # ==========================================
 
