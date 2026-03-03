@@ -12,14 +12,20 @@ def executar_motor(uploaded_file):
         with z.open(caminho_robotica) as f:
             df = pd.read_csv(
                 f,
-                sep=",",          # ← CORRETO
-                quotechar='"',    # ← IMPORTANTE
+                sep=",",
                 encoding="cp1252",
-                skiprows=2,       # ← CORRETO
-                dtype=str
+                skiprows=2,
+                dtype=str,
+                engine="python",      # 🔥 importante
+                on_bad_lines="skip"
             )
 
-        df.columns = df.columns.str.strip()
+        # 🔥 limpa aspas do cabeçalho
+        df.columns = df.columns.str.replace('"', '').str.strip()
+
+        # Verificação defensiva
+        if "Quantidade" not in df.columns:
+            return pd.DataFrame({"Colunas_detectadas": df.columns}), None
 
         df["Quantidade"] = pd.to_numeric(df["Quantidade"], errors="coerce")
 
