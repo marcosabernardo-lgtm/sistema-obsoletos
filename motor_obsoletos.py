@@ -151,7 +151,6 @@ def executar_motor(uploaded_file):
                 empresa_normalizada + " / " + df_temp["Filial"]
             )
 
-            # 🔵 FILTRO APLICADO SOMENTE AQUI
             df_temp = df_temp[
                 df_temp["Empresa / Filial"]
                 .isin(EMPRESAS_FILIAL_CONSIDERADAS)
@@ -199,34 +198,18 @@ def executar_motor(uploaded_file):
             how="left"
         )
 
-        # Remove colunas redundantes
         df_final = df_final.drop(columns=["Empresa", "Filial"])
 
-        # Remove Data_Base (não é mais necessária)
-        if "Data_Base" in df_final.columns:
-            df_final = df_final.drop(columns=["Data_Base"])
+        # 🔎 FILTRO TEMPORÁRIO PARA TESTE (Robotica)
+        df_final = df_final[
+            df_final["Empresa / Filial"].str.contains("Robotica", na=False)
+        ]
 
-        # =====================================================
-        # ORGANIZA ORDEM DAS COLUNAS
-        # =====================================================
-
+        # Organiza ordem
         colunas = df_final.columns.tolist()
-
-        nova_ordem = [
-            "Data Fechamento",
-            "Empresa / Filial"
-        ]
-
-        demais_colunas = [
-            c for c in colunas
-            if c not in nova_ordem
-        ]
-
-        df_final = df_final[nova_ordem + demais_colunas]
-
-        # =====================================================
-        # EXPORTAÇÃO
-        # =====================================================
+        nova_ordem = ["Data Fechamento", "Empresa / Filial"]
+        demais = [c for c in colunas if c not in nova_ordem]
+        df_final = df_final[nova_ordem + demais]
 
         buffer = io.BytesIO()
         df_final.to_excel(buffer, index=False)
