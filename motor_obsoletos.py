@@ -165,9 +165,6 @@ def executar_movimentacoes(uploaded_file):
 
             lista_mov.append(df_temp)
 
-        if not lista_mov:
-            raise Exception("Nenhuma movimentação encontrada.")
-
         df_mov = pd.concat(lista_mov, ignore_index=True)
         df_mov = df_mov[df_mov["DT Emissao"].notna()]
 
@@ -187,12 +184,24 @@ def executar_movimentacoes(uploaded_file):
 
 
 # =========================
-# ENTRADAS / SAÍDAS (NOVO BLOCO)
+# ENTRADAS / SAIDAS (INALTERADO)
 # =========================
 
 def executar_entradas_saidas(uploaded_file):
 
     with zipfile.ZipFile(uploaded_file) as z:
+
+        arquivo_empresas = next(
+            (n for n in z.namelist()
+             if "05_Empresas" in n and n.endswith(".xlsx")),
+            None
+        )
+
+        with z.open(arquivo_empresas) as f:
+            df_empresas = pd.read_excel(f, dtype=str, engine="openpyxl")
+
+        df_empresas["Mesclado"] = df_empresas["Mesclado"].str.strip()
+        df_empresas["Empresa / Filial"] = df_empresas["Empresa / Filial"].str.strip()
 
         arquivos_excel = [
             f for f in z.namelist()
@@ -213,6 +222,10 @@ def executar_entradas_saidas(uploaded_file):
                     empresa = "Robotica"
                 elif "SERVICE" in nome_upper:
                     empresa = "Service"
+                elif "TOOLS" in nome_upper:
+                    empresa = "Tools"
+                elif "MAQUINAS" in nome_upper:
+                    empresa = "Maquinas"
                 else:
                     continue
 
@@ -238,20 +251,30 @@ def executar_entradas_saidas(uploaded_file):
                             "QUANTIDADE"
                         ]].copy()
 
+                        df["Tipo Movimento"] = tipo
+
                         df["DIGITACAO"] = pd.to_datetime(
                             df["DIGITACAO"],
                             errors="coerce"
                         )
 
-                        df = df[df["ESTOQUE"] == "S"]
+                        df = df[(df["ESTOQUE"] == "S")]
 
                         df["Produto"] = df["PRODUTO"].astype(str).str.strip()
-                        df["Empresa / Filial"] = empresa + " / " + df["FILIAL"].astype(str).str.strip()
+                        df["Mesclado"] = empresa + " " + df["FILIAL"].astype(str).str.strip()
 
-                        df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
+                        df = df.merge(
+                            df_empresas[["Mesclado", "Empresa / Filial"]],
+                            on="Mesclado",
+                            how="left"
+                        )
 
-                        df["DtEnt"] = df["DIGITACAO"].where(tipo == "Entrada")
-                        df["DtSai"] = df["DIGITACAO"].where(tipo == "Saida")
+                        df["ID_UNICO"] = (
+                            df["Empresa / Filial"] + "|" + df["Produto"]
+                        )
+
+                        df["DtEnt"] = df["DIGITACAO"].where(df["Tipo Movimento"] == "Entrada")
+                        df["DtSai"] = df["DIGITACAO"].where(df["Tipo Movimento"] == "Saida")
 
                         lista.append(df[["ID_UNICO", "DtEnt", "DtSai"]])
 
