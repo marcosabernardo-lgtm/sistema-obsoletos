@@ -3,9 +3,9 @@ import zipfile
 import io
 
 
-# =========================
-# ESTOQUE (INALTERADO)
-# =========================
+# ==========================================================
+# ESTOQUE
+# ==========================================================
 
 def normalizar_empresa(nome):
     nome = str(nome).upper()
@@ -34,60 +34,49 @@ def executar_estoque(uploaded_file):
             raise Exception("Arquivo 02_Estoque_Atual não encontrado no ZIP")
 
         with z.open(arquivo_estoque) as f:
-            df_estoque = pd.read_excel(
+            df = pd.read_excel(
                 f,
                 sheet_name="Detalhado",
                 dtype={"Código": str},
                 engine="openpyxl"
             )
 
-        df_estoque = df_estoque.rename(columns={
-            "Valor Total": "Custo Total",
-            "Código": "Produto",
-            "Descrição": "Descricao",
-            "Quantidade": "Saldo Atual"
-        })
+    df = df.rename(columns={
+        "Valor Total": "Custo Total",
+        "Código": "Produto",
+        "Descrição": "Descricao",
+        "Quantidade": "Saldo Atual"
+    })
 
-        df_estoque["Empresa"] = df_estoque["Empresa"].apply(normalizar_empresa)
-        df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.title()
+    df["Empresa"] = df["Empresa"].apply(normalizar_empresa)
+    df["Filial"] = df["Filial"].astype(str).str.title()
 
-        df_estoque["Empresa / Filial"] = (
-            df_estoque["Empresa"] + " / " + df_estoque["Filial"]
-        )
+    df["Empresa / Filial"] = df["Empresa"] + " / " + df["Filial"]
 
-        df_estoque["Produto"] = (
-            df_estoque["Produto"]
-            .astype(str)
-            .str.strip()
-            .str.replace(".0", "", regex=False)
-        )
+    df["Produto"] = (
+        df["Produto"]
+        .astype(str)
+        .str.strip()
+        .str.replace(".0", "", regex=False)
+    )
 
-        df_estoque["ID_UNICO"] = (
-            df_estoque["Empresa / Filial"] + "|" + df_estoque["Produto"]
-        )
+    df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
 
-        df_estoque["Saldo Atual"] = pd.to_numeric(
-            df_estoque["Saldo Atual"], errors="coerce"
-        )
+    df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce")
+    df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce")
 
-        df_estoque["Custo Total"] = pd.to_numeric(
-            df_estoque["Custo Total"], errors="coerce"
-        )
+    df = df.drop(columns=["Empresa", "Filial"])
 
-        df_estoque = df_estoque.drop(columns=["Empresa", "Filial"])
+    colunas = df.columns.tolist()
+    nova_ordem = ["Data Fechamento", "Empresa / Filial"]
+    demais = [c for c in colunas if c not in nova_ordem]
 
-        colunas = df_estoque.columns.tolist()
-        nova_ordem = ["Data Fechamento", "Empresa / Filial"]
-        demais = [c for c in colunas if c not in nova_ordem]
-
-        df_final = df_estoque[nova_ordem + demais]
-
-        return df_final
+    return df[nova_ordem + demais]
 
 
-# =========================
-# MOVIMENTAÇÕES (INALTERADO)
-# =========================
+# ==========================================================
+# MOVIMENTAÇÕES
+# ==========================================================
 
 def executar_movimentacoes(uploaded_file):
 
@@ -99,28 +88,25 @@ def executar_movimentacoes(uploaded_file):
             None
         )
 
-        if not arquivo_empresas:
-            raise Exception("Arquivo 05_Empresas não encontrado.")
-
         with z.open(arquivo_empresas) as f:
             df_empresas = pd.read_excel(f, dtype=str, engine="openpyxl")
 
         df_empresas["Mesclado"] = df_empresas["Mesclado"].str.strip()
         df_empresas["Empresa / Filial"] = df_empresas["Empresa / Filial"].str.strip()
 
-        arquivos_mov = [
+        arquivos = [
             f for f in z.namelist()
             if "04_Movimento/" in f and f.lower().endswith(".xlsx")
         ]
 
-        lista_mov = []
+        lista = []
 
-        for nome_arquivo in arquivos_mov:
+        for nome in arquivos:
 
-            with z.open(nome_arquivo) as arq:
+            with z.open(nome) as arq:
                 df = pd.read_excel(arq, dtype=str, engine="openpyxl")
 
-            nome_upper = nome_arquivo.upper()
+            nome_upper = nome.upper()
 
             if "ROBOTICA" in nome_upper:
                 empresa = "Robotica"
@@ -146,37 +132,24 @@ def executar_movimentacoes(uploaded_file):
                 dayfirst=True
             )
 
-            df["ID_UNICO"] = (
-                df["Empresa / Filial"] + "|" + df["Produto"]
-            )
+            df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
 
-            df_temp = df[
-                ["Empresa / Filial", "Produto", "ID_UNICO", "DT Emissao"]
-            ].copy()
+            lista.append(df[["ID_UNICO", "DT Emissao"]])
 
-            lista_mov.append(df_temp)
-
-        df_mov = pd.concat(lista_mov, ignore_index=True)
+        df_mov = pd.concat(lista, ignore_index=True)
         df_mov = df_mov[df_mov["DT Emissao"].notna()]
 
-        df_final = (
+        return (
             df_mov
-            .groupby(
-                ["Empresa / Filial", "Produto", "ID_UNICO"],
-                as_index=False
-            )["DT Emissao"]
+            .groupby("ID_UNICO", as_index=False)["DT Emissao"]
             .max()
-            .rename(columns={
-                "DT Emissao": "Ult_Mov"
-            })
+            .rename(columns={"DT Emissao": "Ult_Mov"})
         )
 
-        return df_final
 
-
-# =========================
-# ENTRADAS / SAIDAS
-# =========================
+# ==========================================================
+# ENTRADAS / SAÍDAS
+# ==========================================================
 
 def executar_entradas_saidas(uploaded_file):
 
@@ -194,93 +167,87 @@ def executar_entradas_saidas(uploaded_file):
         df_empresas["Mesclado"] = df_empresas["Mesclado"].str.strip()
         df_empresas["Empresa / Filial"] = df_empresas["Empresa / Filial"].str.strip()
 
-        arquivos_excel = [
+        arquivos = [
             f for f in z.namelist()
             if "01_Entradas_Saidas/" in f and f.lower().endswith(".xlsx")
         ]
 
         lista = []
 
-        for nome_arquivo in arquivos_excel:
+        for nome in arquivos:
 
-            with z.open(nome_arquivo) as arq:
+            with z.open(nome) as arq:
                 xl = pd.ExcelFile(arq)
 
-                nome_upper = nome_arquivo.upper()
+            nome_upper = nome.upper()
 
-                if "ROBOTICA" in nome_upper:
-                    empresa = "Robotica"
-                elif "SERVICE" in nome_upper:
-                    empresa = "Service"
-                elif "TOOLS" in nome_upper:
-                    empresa = "Tools"
-                elif "MAQUINAS" in nome_upper:
-                    empresa = "Maquinas"
-                else:
-                    continue
+            if "ROBOTICA" in nome_upper:
+                empresa = "Robotica"
+            elif "SERVICE" in nome_upper:
+                empresa = "Service"
+            elif "TOOLS" in nome_upper:
+                empresa = "Tools"
+            elif "MAQUINAS" in nome_upper:
+                empresa = "Maquinas"
+            else:
+                continue
 
-                for aba, tipo in [("ENTRADA", "Entrada"), ("SAIDA", "Saida")]:
+            for aba, tipo in [("ENTRADA", "Entrada"), ("SAIDA", "Saida")]:
 
-                    if aba in xl.sheet_names:
+                if aba in xl.sheet_names:
 
-                        df = pd.read_excel(
-                            arq,
-                            sheet_name=aba,
-                            skiprows=1,
-                            dtype=str,
-                            engine="openpyxl"
-                        )
+                    df = pd.read_excel(
+                        xl,
+                        sheet_name=aba,
+                        skiprows=1,
+                        dtype=str,
+                        engine="openpyxl"
+                    )
 
-                        df.columns = df.columns.str.strip().str.upper()
+                    df.columns = df.columns.str.strip().str.upper()
 
-                        df = df[[
-                            "FILIAL",
-                            "PRODUTO",
-                            "DIGITACAO",
-                            "ESTOQUE",
-                            "QUANTIDADE"
-                        ]].copy()
+                    df = df[[
+                        "FILIAL",
+                        "PRODUTO",
+                        "DIGITACAO",
+                        "ESTOQUE"
+                    ]].copy()
 
-                        df["Tipo Movimento"] = tipo
+                    df["DIGITACAO"] = pd.to_datetime(df["DIGITACAO"], errors="coerce")
 
-                        df["DIGITACAO"] = pd.to_datetime(
-                            df["DIGITACAO"],
-                            errors="coerce"
-                        )
+                    df = df[df["ESTOQUE"] == "S"]
 
-                        df = df[df["ESTOQUE"] == "S"]
+                    df["Produto"] = df["PRODUTO"].astype(str).str.strip()
+                    df["Mesclado"] = empresa + " " + df["FILIAL"].astype(str).str.strip()
 
-                        df["Produto"] = df["PRODUTO"].astype(str).str.strip()
-                        df["Mesclado"] = empresa + " " + df["FILIAL"].astype(str).str.strip()
+                    df = df.merge(
+                        df_empresas[["Mesclado", "Empresa / Filial"]],
+                        on="Mesclado",
+                        how="left"
+                    )
 
-                        df = df.merge(
-                            df_empresas[["Mesclado", "Empresa / Filial"]],
-                            on="Mesclado",
-                            how="left"
-                        )
+                    df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
 
-                        df["ID_UNICO"] = (
-                            df["Empresa / Filial"] + "|" + df["Produto"]
-                        )
+                    if tipo == "Entrada":
+                        df["DtEnt"] = df["DIGITACAO"]
+                        df["DtSai"] = pd.NaT
+                    else:
+                        df["DtEnt"] = pd.NaT
+                        df["DtSai"] = df["DIGITACAO"]
 
-                        df["DtEnt"] = df["DIGITACAO"].where(df["Tipo Movimento"] == "Entrada")
-                        df["DtSai"] = df["DIGITACAO"].where(df["Tipo Movimento"] == "Saida")
+                    lista.append(df[["ID_UNICO", "DtEnt", "DtSai"]])
 
-                        lista.append(df[["ID_UNICO", "DtEnt", "DtSai"]])
+        df_all = pd.concat(lista, ignore_index=True)
 
-        df_mov = pd.concat(lista, ignore_index=True)
-
-        df_final = df_mov.groupby("ID_UNICO", as_index=False).agg(
+        return df_all.groupby("ID_UNICO", as_index=False).agg(
             Ult_Entrada=("DtEnt", "max"),
             Ult_Saida=("DtSai", "max")
         )
 
-        return df_final
 
-
-# =========================
-# FUNÇÃO FINAL UNIFICADA
-# =========================
+# ==========================================================
+# MOTOR FINAL
+# ==========================================================
 
 def executar_motor(uploaded_file):
 
@@ -288,40 +255,30 @@ def executar_motor(uploaded_file):
     df_mov = executar_movimentacoes(uploaded_file)
     df_es = executar_entradas_saidas(uploaded_file)
 
-    df_final = df_estoque.merge(
-        df_mov[["ID_UNICO", "Ult_Mov"]],
-        on="ID_UNICO",
-        how="left"
-    )
+    df_final = df_estoque.merge(df_mov, on="ID_UNICO", how="left")
+    df_final = df_final.merge(df_es, on="ID_UNICO", how="left")
 
-    df_final = df_final.merge(
-        df_es[["ID_UNICO", "Ult_Entrada", "Ult_Saida"]],
-        on="ID_UNICO",
-        how="left"
-    )
+    df_final["Ult_Movimentacao"] = df_final[
+        ["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
+    ].max(axis=1)
 
-   # =========================
-# DEFINIR ÚLTIMA MOVIMENTAÇÃO GERAL
-# =========================
-
-df_final["Ult_Movimentacao"] = df_final[
-    ["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
-].max(axis=1)
-
-def definir_origem(row):
-    if row["Ult_Movimentacao"] == row["Ult_Saida"]:
-        return "Ult_Saida"
-    elif row["Ult_Movimentacao"] == row["Ult_Entrada"]:
-        return "Ult_Entrada"
-    elif row["Ult_Movimentacao"] == row["Ult_Mov"]:
-        return "Ult_Mov"
-    else:
+    def origem(row):
+        if row["Ult_Movimentacao"] == row["Ult_Saida"]:
+            return "Ult_Saida"
+        elif row["Ult_Movimentacao"] == row["Ult_Entrada"]:
+            return "Ult_Entrada"
+        elif row["Ult_Movimentacao"] == row["Ult_Mov"]:
+            return "Ult_Mov"
         return None
 
-df_final["Origem Mov"] = df_final.apply(definir_origem, axis=1)
+    df_final["Origem Mov"] = df_final.apply(origem, axis=1)
 
-# 🔥 REMOVE AS COLUNAS AUXILIARES
-df_final = df_final.drop(
-    columns=["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
-)
+    df_final = df_final.drop(
+        columns=["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
+    )
+
+    buffer = io.BytesIO()
+    df_final.to_excel(buffer, index=False)
+    buffer.seek(0)
+
     return df_final, buffer.getvalue()
