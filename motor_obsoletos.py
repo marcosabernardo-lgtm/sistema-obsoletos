@@ -85,14 +85,6 @@ def executar_motor(uploaded_file):
             df_estoque["Empresa / Filial"] + "|" + df_estoque["Produto"]
         )
 
-        data_base = pd.to_datetime(
-            df_estoque["Data Fechamento"],
-            dayfirst=True,
-            errors="coerce"
-        ).max()
-
-        df_estoque["Data_Base"] = data_base
-
         df_estoque["Saldo Atual"] = pd.to_numeric(
             df_estoque["Saldo Atual"], errors="coerce"
         )
@@ -207,7 +199,34 @@ def executar_motor(uploaded_file):
             how="left"
         )
 
+        # Remove colunas redundantes
         df_final = df_final.drop(columns=["Empresa", "Filial"])
+
+        # Remove Data_Base (não é mais necessária)
+        if "Data_Base" in df_final.columns:
+            df_final = df_final.drop(columns=["Data_Base"])
+
+        # =====================================================
+        # ORGANIZA ORDEM DAS COLUNAS
+        # =====================================================
+
+        colunas = df_final.columns.tolist()
+
+        nova_ordem = [
+            "Data Fechamento",
+            "Empresa / Filial"
+        ]
+
+        demais_colunas = [
+            c for c in colunas
+            if c not in nova_ordem
+        ]
+
+        df_final = df_final[nova_ordem + demais_colunas]
+
+        # =====================================================
+        # EXPORTAÇÃO
+        # =====================================================
 
         buffer = io.BytesIO()
         df_final.to_excel(buffer, index=False)
