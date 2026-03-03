@@ -282,7 +282,7 @@ def executar_motor(uploaded_file):
     )
 
     # ==========================================================
-    # CÁLCULOS FINAIS (OBSOLESCÊNCIA)
+    # BLOCO FINAL (APENAS ACRESCENTADO)
     # ==========================================================
 
     DataBase = pd.to_datetime(df_final["Data Fechamento"].iloc[0])
