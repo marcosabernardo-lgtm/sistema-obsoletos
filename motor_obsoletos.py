@@ -104,7 +104,9 @@ def executar_movimentacoes(uploaded_file):
         for nome in arquivos:
 
             with z.open(nome) as arq:
-                df = pd.read_excel(arq, dtype=str, engine="openpyxl")
+                arquivo_bytes = io.BytesIO(arq.read())
+
+            df = pd.read_excel(arquivo_bytes, dtype=str, engine="openpyxl")
 
             nome_upper = nome.upper()
 
@@ -177,9 +179,9 @@ def executar_entradas_saidas(uploaded_file):
         for nome in arquivos:
 
             with z.open(nome) as arq:
-    arquivo_bytes = io.BytesIO(arq.read())
+                arquivo_bytes = io.BytesIO(arq.read())
 
-xl = pd.ExcelFile(arquivo_bytes)
+            xl = pd.ExcelFile(arquivo_bytes)
 
             nome_upper = nome.upper()
 
@@ -216,7 +218,6 @@ xl = pd.ExcelFile(arquivo_bytes)
                     ]].copy()
 
                     df["DIGITACAO"] = pd.to_datetime(df["DIGITACAO"], errors="coerce")
-
                     df = df[df["ESTOQUE"] == "S"]
 
                     df["Produto"] = df["PRODUTO"].astype(str).str.strip()
