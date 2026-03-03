@@ -8,14 +8,14 @@ def ler_movimentacoes(caminho_zip):
 
     with zipfile.ZipFile(caminho_zip, 'r') as z:
 
-        # Lista todos arquivos da pasta 04_Movimento
+        # Lista todos CSVs dentro da pasta 04_Movimento
         arquivos_mov = [
             f for f in z.namelist()
-            if "04_Movimento/" in f and f.endswith(".csv")
+            if "04_Movimento/" in f and f.lower().endswith(".csv")
         ]
 
         if not arquivos_mov:
-            raise FileNotFoundError("Nenhum CSV encontrado em 04_Movimento.")
+            raise FileNotFoundError("Nenhum CSV encontrado na pasta 04_Movimento.")
 
         for nome_arquivo in arquivos_mov:
 
@@ -28,15 +28,18 @@ def ler_movimentacoes(caminho_zip):
                     engine="python"
                 )
 
-            # Remove coluna vazia criada por vírgula final
+            # Remove coluna vazia (vírgula final gera isso)
             df = df.dropna(axis=1, how="all")
 
-            # Adiciona coluna origem (empresa)
+            # Guarda nome do arquivo
             df["ARQUIVO_ORIGEM"] = nome_arquivo.split("/")[-1]
 
             lista_dfs.append(df)
 
-    # Concatena todos
-    df_final = pd.concat(lista_dfs, ignore_index=True)
+    # Junta tudo
+    df_mov = pd.concat(lista_dfs, ignore_index=True)
 
-    return df_final
+    # 🔎 FILTRO FINAL → somente Robotica
+    df_mov = df_mov[df_mov["ARQUIVO_ORIGEM"].str.contains("Robotica", case=False)]
+
+    return df_mov
