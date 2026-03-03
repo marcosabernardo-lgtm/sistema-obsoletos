@@ -177,7 +177,9 @@ def executar_entradas_saidas(uploaded_file):
         for nome in arquivos:
 
             with z.open(nome) as arq:
-                xl = pd.ExcelFile(arq)
+    arquivo_bytes = io.BytesIO(arq.read())
+
+xl = pd.ExcelFile(arquivo_bytes)
 
             nome_upper = nome.upper()
 
