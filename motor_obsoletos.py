@@ -21,30 +21,7 @@ def executar_motor(uploaded_file):
     with zipfile.ZipFile(uploaded_file) as z:
 
         # =========================
-        # 1️⃣ LER 05_EMPRESAS
-        # =========================
-
-        arquivo_empresas = next(
-            (n for n in z.namelist()
-             if "05_Empresas" in n and n.endswith(".xlsx")),
-            None
-        )
-
-        if not arquivo_empresas:
-            raise Exception("Arquivo 05_Empresas não encontrado.")
-
-        with z.open(arquivo_empresas) as f:
-            df_empresas = pd.read_excel(
-                f,
-                dtype=str,
-                engine="openpyxl"
-            )
-
-        df_empresas["Mesclado"] = df_empresas["Mesclado"].str.strip()
-        df_empresas["Empresa / Filial"] = df_empresas["Empresa / Filial"].str.strip()
-
-        # =========================
-        # 2️⃣ LER ESTOQUE
+        # 1️⃣ LEITURA ESTOQUE (SEM ALTERAÇÃO)
         # =========================
 
         arquivo_estoque = next(
@@ -54,7 +31,7 @@ def executar_motor(uploaded_file):
         )
 
         if not arquivo_estoque:
-            raise Exception("Arquivo 02_Estoque_Atual não encontrado.")
+            raise Exception("Arquivo 02_Estoque_Atual não encontrado no ZIP")
 
         with z.open(arquivo_estoque) as f:
             df_estoque = pd.read_excel(
@@ -72,17 +49,10 @@ def executar_motor(uploaded_file):
         })
 
         df_estoque["Empresa"] = df_estoque["Empresa"].apply(normalizar_empresa)
-        df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.strip()
+        df_estoque["Filial"] = df_estoque["Filial"].astype(str).str.title()
 
-        df_estoque["Mesclado"] = (
-            df_estoque["Empresa"] + " " + df_estoque["Filial"]
-        )
-
-        # Ajusta nome correto da filial via 05_Empresas
-        df_estoque = df_estoque.merge(
-            df_empresas[["Mesclado", "Empresa / Filial"]],
-            on="Mesclado",
-            how="left"
+        df_estoque["Empresa / Filial"] = (
+            df_estoque["Empresa"] + " / " + df_estoque["Filial"]
         )
 
         df_estoque["Produto"] = (
@@ -104,8 +74,10 @@ def executar_motor(uploaded_file):
             df_estoque["Custo Total"], errors="coerce"
         )
 
+        df_estoque = df_estoque.drop(columns=["Empresa", "Filial"])
+
         # =========================
-        # 3️⃣ LER MOVIMENTAÇÕES
+        # 2️⃣ LEITURA MOVIMENTAÇÕES (SOMENTE PARA GERAR ULT_MOV)
         # =========================
 
         arquivos_mov = [
@@ -134,14 +106,12 @@ def executar_motor(uploaded_file):
                 continue
 
             df["Produto"] = df["Produto"].astype(str).str.strip()
-            df["Filial"] = df["Filial"].astype(str).str.strip()
+            df["Filial"] = df["Filial"].astype(str).str.title()
 
-            df["Mesclado"] = empresa + " " + df["Filial"]
+            df["Empresa / Filial"] = empresa + " / " + df["Filial"]
 
-            df = df.merge(
-                df_empresas[["Mesclado", "Empresa / Filial"]],
-                on="Mesclado",
-                how="left"
+            df["ID_UNICO"] = (
+                df["Empresa / Filial"] + "|" + df["Produto"]
             )
 
             df["DT Emissao"] = pd.to_datetime(
@@ -150,13 +120,7 @@ def executar_motor(uploaded_file):
                 dayfirst=True
             )
 
-            df["ID_UNICO"] = (
-                df["Empresa / Filial"] + "|" + df["Produto"]
-            )
-
-            df_temp = df[
-                ["ID_UNICO", "DT Emissao"]
-            ].copy()
+            df_temp = df[["ID_UNICO", "DT Emissao"]].copy()
 
             lista_mov.append(df_temp)
 
@@ -174,7 +138,7 @@ def executar_motor(uploaded_file):
             df_ult_mov = pd.DataFrame(columns=["ID_UNICO", "Ult_Mov"])
 
         # =========================
-        # 4️⃣ INTEGRAR ESTOQUE + MOV
+        # 3️⃣ MERGE SIMPLES
         # =========================
 
         df_final = df_estoque.merge(
@@ -184,7 +148,7 @@ def executar_motor(uploaded_file):
         )
 
         # =========================
-        # ORGANIZA COLUNAS
+        # ORGANIZA COLUNAS (MANTIDO)
         # =========================
 
         colunas = df_final.columns.tolist()
@@ -192,10 +156,6 @@ def executar_motor(uploaded_file):
         demais = [c for c in colunas if c not in nova_ordem]
 
         df_final = df_final[nova_ordem + demais]
-
-        # =========================
-        # EXPORTAÇÃO
-        # =========================
 
         buffer = io.BytesIO()
         df_final.to_excel(buffer, index=False)
