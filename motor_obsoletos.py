@@ -8,7 +8,7 @@ def executar_motor(uploaded_file):
     with zipfile.ZipFile(uploaded_file) as z:
 
         # =========================
-        # 1️⃣ LER CADASTRO DE EMPRESAS
+        # 1️⃣ LER 05_EMPRESAS
         # =========================
 
         arquivo_empresas = next(
@@ -27,14 +27,8 @@ def executar_motor(uploaded_file):
                 engine="openpyxl"
             )
 
-        df_empresas["Empresa"] = df_empresas["Empresa"].str.strip()
-        df_empresas["Filial"] = df_empresas["Filial"].str.strip()
-
-        # Cria chave Empresa + CodigoFilial
-        df_empresas["CHAVE"] = (
-            df_empresas["Empresa"].str.upper() + "|" +
-            df_empresas["Filial"]
-        )
+        df_empresas["Mesclado"] = df_empresas["Mesclado"].str.strip()
+        df_empresas["Empresa / Filial"] = df_empresas["Empresa / Filial"].str.strip()
 
         # =========================
         # 2️⃣ LER MOVIMENTAÇÕES
@@ -69,23 +63,14 @@ def executar_motor(uploaded_file):
             df["Produto"] = df["Produto"].astype(str).str.strip()
             df["Filial"] = df["Filial"].astype(str).str.strip()
 
-            df["Empresa"] = empresa
+            # Cria chave igual ao Mesclado
+            df["Mesclado"] = empresa + " " + df["Filial"]
 
-            # Cria chave para buscar nome filial
-            df["CHAVE"] = (
-                df["Empresa"].str.upper() + "|" +
-                df["Filial"]
-            )
-
-            # Merge com cadastro de empresas
+            # Merge com cadastro empresas
             df = df.merge(
-                df_empresas[["CHAVE", "Nome Filial"]],
-                on="CHAVE",
+                df_empresas[["Mesclado", "Empresa / Filial"]],
+                on="Mesclado",
                 how="left"
-            )
-
-            df["Empresa / Filial"] = (
-                df["Empresa"] + " / " + df["Nome Filial"]
             )
 
             df["DT Emissao"] = pd.to_datetime(
@@ -108,7 +93,6 @@ def executar_motor(uploaded_file):
             raise Exception("Nenhuma movimentação encontrada.")
 
         df_mov = pd.concat(lista_mov, ignore_index=True)
-
         df_mov = df_mov[df_mov["DT Emissao"].notna()]
 
         # =========================
