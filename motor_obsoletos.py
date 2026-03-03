@@ -4,7 +4,7 @@ import io
 
 
 # =========================
-# 🔵 ESTOQUE (INALTERADO)
+# ESTOQUE (INALTERADO)
 # =========================
 
 def normalizar_empresa(nome):
@@ -86,7 +86,7 @@ def executar_estoque(uploaded_file):
 
 
 # =========================
-# 🔵 MOVIMENTAÇÕES (INALTERADO)
+# MOVIMENTAÇÕES (INALTERADO)
 # =========================
 
 def executar_movimentacoes(uploaded_file):
@@ -179,7 +179,6 @@ def executar_movimentacoes(uploaded_file):
             )["DT Emissao"]
             .max()
             .rename(columns={
-                "Produto": "Produto",
                 "DT Emissao": "Ult_Mov"
             })
         )
@@ -188,7 +187,7 @@ def executar_movimentacoes(uploaded_file):
 
 
 # =========================
-# 🔵 FUNÇÃO FINAL UNIFICADA
+# FUNÇÃO FINAL UNIFICADA
 # =========================
 
 def executar_motor(uploaded_file):
@@ -196,8 +195,10 @@ def executar_motor(uploaded_file):
     df_estoque = executar_estoque(uploaded_file)
     df_mov = executar_movimentacoes(uploaded_file)
 
+    df_mov_reduzido = df_mov[["ID_UNICO", "Ult_Mov"]]
+
     df_final = df_estoque.merge(
-        df_mov[["ID_UNICO", "Ult_Mov"]],
+        df_mov_reduzido,
         on="ID_UNICO",
         how="left"
     )
