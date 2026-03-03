@@ -70,9 +70,13 @@ def executar_motor(uploaded_file):
                         df = pd.read_excel(
                             arq,
                             sheet_name=aba,
+                            skiprows=1,  # 🔥 CORREÇÃO DO HEADER
                             dtype=str,
                             engine="openpyxl"
                         )
+
+                        # Normaliza nomes das colunas
+                        df.columns = df.columns.str.strip().str.upper()
 
                         df = df[[
                             "FILIAL",
@@ -110,7 +114,7 @@ def executar_motor(uploaded_file):
                         df["Produto"] = df["PRODUTO"].astype(str).str.strip()
                         df["Mesclado"] = empresa + " " + df["FILIAL"].astype(str).str.strip()
 
-                        # 🔹 Merge com 05_Empresas
+                        # 🔹 Merge com cadastro empresas
                         df = df.merge(
                             df_empresas[["Mesclado", "Empresa / Filial"]],
                             on="Mesclado",
