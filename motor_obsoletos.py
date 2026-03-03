@@ -187,6 +187,85 @@ def executar_movimentacoes(uploaded_file):
 
 
 # =========================
+# ENTRADAS / SAÍDAS (NOVO BLOCO)
+# =========================
+
+def executar_entradas_saidas(uploaded_file):
+
+    with zipfile.ZipFile(uploaded_file) as z:
+
+        arquivos_excel = [
+            f for f in z.namelist()
+            if "01_Entradas_Saidas/" in f and f.lower().endswith(".xlsx")
+        ]
+
+        lista = []
+
+        for nome_arquivo in arquivos_excel:
+
+            with z.open(nome_arquivo) as arq:
+
+                xl = pd.ExcelFile(arq)
+
+                nome_upper = nome_arquivo.upper()
+
+                if "ROBOTICA" in nome_upper:
+                    empresa = "Robotica"
+                elif "SERVICE" in nome_upper:
+                    empresa = "Service"
+                else:
+                    continue
+
+                for aba, tipo in [("ENTRADA", "Entrada"), ("SAIDA", "Saida")]:
+
+                    if aba in xl.sheet_names:
+
+                        df = pd.read_excel(
+                            arq,
+                            sheet_name=aba,
+                            skiprows=1,
+                            dtype=str,
+                            engine="openpyxl"
+                        )
+
+                        df.columns = df.columns.str.strip().str.upper()
+
+                        df = df[[
+                            "FILIAL",
+                            "PRODUTO",
+                            "DIGITACAO",
+                            "ESTOQUE",
+                            "QUANTIDADE"
+                        ]].copy()
+
+                        df["DIGITACAO"] = pd.to_datetime(
+                            df["DIGITACAO"],
+                            errors="coerce"
+                        )
+
+                        df = df[df["ESTOQUE"] == "S"]
+
+                        df["Produto"] = df["PRODUTO"].astype(str).str.strip()
+                        df["Empresa / Filial"] = empresa + " / " + df["FILIAL"].astype(str).str.strip()
+
+                        df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
+
+                        df["DtEnt"] = df["DIGITACAO"].where(tipo == "Entrada")
+                        df["DtSai"] = df["DIGITACAO"].where(tipo == "Saida")
+
+                        lista.append(df[["ID_UNICO", "DtEnt", "DtSai"]])
+
+        df_mov = pd.concat(lista, ignore_index=True)
+
+        df_final = df_mov.groupby("ID_UNICO", as_index=False).agg(
+            Ult_Entrada=("DtEnt", "max"),
+            Ult_Saida=("DtSai", "max")
+        )
+
+        return df_final
+
+
+# =========================
 # FUNÇÃO FINAL UNIFICADA
 # =========================
 
@@ -194,11 +273,16 @@ def executar_motor(uploaded_file):
 
     df_estoque = executar_estoque(uploaded_file)
     df_mov = executar_movimentacoes(uploaded_file)
-
-    df_mov_reduzido = df_mov[["ID_UNICO", "Ult_Mov"]]
+    df_es = executar_entradas_saidas(uploaded_file)
 
     df_final = df_estoque.merge(
-        df_mov_reduzido,
+        df_mov[["ID_UNICO", "Ult_Mov"]],
+        on="ID_UNICO",
+        how="left"
+    )
+
+    df_final = df_final.merge(
+        df_es[["ID_UNICO", "Ult_Entrada", "Ult_Saida"]],
         on="ID_UNICO",
         how="left"
     )
