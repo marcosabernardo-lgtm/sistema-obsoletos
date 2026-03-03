@@ -103,11 +103,7 @@ def executar_movimentacoes(uploaded_file):
             raise Exception("Arquivo 05_Empresas não encontrado.")
 
         with z.open(arquivo_empresas) as f:
-            df_empresas = pd.read_excel(
-                f,
-                dtype=str,
-                engine="openpyxl"
-            )
+            df_empresas = pd.read_excel(f, dtype=str, engine="openpyxl")
 
         df_empresas["Mesclado"] = df_empresas["Mesclado"].str.strip()
         df_empresas["Empresa / Filial"] = df_empresas["Empresa / Filial"].str.strip()
@@ -122,12 +118,7 @@ def executar_movimentacoes(uploaded_file):
         for nome_arquivo in arquivos_mov:
 
             with z.open(nome_arquivo) as arq:
-
-                df = pd.read_excel(
-                    arq,
-                    dtype=str,
-                    engine="openpyxl"
-                )
+                df = pd.read_excel(arq, dtype=str, engine="openpyxl")
 
             nome_upper = nome_arquivo.upper()
 
@@ -184,7 +175,7 @@ def executar_movimentacoes(uploaded_file):
 
 
 # =========================
-# ENTRADAS / SAIDAS (INALTERADO)
+# ENTRADAS / SAIDAS
 # =========================
 
 def executar_entradas_saidas(uploaded_file):
@@ -213,7 +204,6 @@ def executar_entradas_saidas(uploaded_file):
         for nome_arquivo in arquivos_excel:
 
             with z.open(nome_arquivo) as arq:
-
                 xl = pd.ExcelFile(arq)
 
                 nome_upper = nome_arquivo.upper()
@@ -258,7 +248,7 @@ def executar_entradas_saidas(uploaded_file):
                             errors="coerce"
                         )
 
-                        df = df[(df["ESTOQUE"] == "S")]
+                        df = df[df["ESTOQUE"] == "S"]
 
                         df["Produto"] = df["PRODUTO"].astype(str).str.strip()
                         df["Mesclado"] = empresa + " " + df["FILIAL"].astype(str).str.strip()
@@ -309,6 +299,26 @@ def executar_motor(uploaded_file):
         on="ID_UNICO",
         how="left"
     )
+
+    # =========================
+    # DEFINIR ÚLTIMA MOVIMENTAÇÃO GERAL
+    # =========================
+
+    df_final["Ult_Movimentacao"] = df_final[
+        ["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
+    ].max(axis=1)
+
+    def definir_origem(row):
+        if row["Ult_Movimentacao"] == row["Ult_Saida"]:
+            return "Ult_Saida"
+        elif row["Ult_Movimentacao"] == row["Ult_Entrada"]:
+            return "Ult_Entrada"
+        elif row["Ult_Movimentacao"] == row["Ult_Mov"]:
+            return "Ult_Mov"
+        else:
+            return None
+
+    df_final["Origem Mov"] = df_final.apply(definir_origem, axis=1)
 
     buffer = io.BytesIO()
     df_final.to_excel(buffer, index=False)
