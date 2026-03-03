@@ -27,11 +27,14 @@ def executar_motor(uploaded_file):
 
                 df = pd.read_excel(
                     arq,
-                    dtype=str,
+                    dtype=str,           # preserva zeros
                     engine="openpyxl"
                 )
 
-            # Empresa vem do nome do arquivo
+            # =========================
+            # IDENTIFICA EMPRESA PELO NOME DO ARQUIVO
+            # =========================
+
             nome_upper = nome_arquivo.upper()
 
             if "ROBOTICA" in nome_upper:
@@ -64,7 +67,7 @@ def executar_motor(uploaded_file):
 
             df["Descricao"] = df["Descr. Prod"]
 
-            df_final_temp = df[
+            df_temp = df[
                 [
                     "Empresa / Filial",
                     "Codigo",
@@ -74,15 +77,33 @@ def executar_motor(uploaded_file):
                 ]
             ].copy()
 
-            lista_mov.append(df_final_temp)
-
-        df_final = pd.concat(lista_mov, ignore_index=True)
-
-        # Remove datas inválidas
-        df_final = df_final[df_final["Dt_Mov"].notna()]
+            lista_mov.append(df_temp)
 
         # =========================
-        # EXPORTAÇÃO
+        # 2️⃣ CONSOLIDA TODOS ARQUIVOS
+        # =========================
+
+        df_mov = pd.concat(lista_mov, ignore_index=True)
+
+        # Remove datas inválidas
+        df_mov = df_mov[df_mov["Dt_Mov"].notna()]
+
+        # =========================
+        # 3️⃣ CALCULA ÚLTIMA MOVIMENTAÇÃO
+        # =========================
+
+        df_final = (
+            df_mov
+            .groupby(
+                ["Empresa / Filial", "Codigo", "Descricao"],
+                as_index=False
+            )["Dt_Mov"]
+            .max()
+            .rename(columns={"Dt_Mov": "Ult_Mov"})
+        )
+
+        # =========================
+        # 4️⃣ EXPORTAÇÃO
         # =========================
 
         buffer = io.BytesIO()
