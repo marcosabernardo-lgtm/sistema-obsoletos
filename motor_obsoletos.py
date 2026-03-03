@@ -8,16 +8,42 @@ def executar_motor(uploaded_file):
     with zipfile.ZipFile(uploaded_file) as z:
 
         # =========================
-        # 1️⃣ LER TODOS XLSX DA PASTA 04_Movimento
+        # 1️⃣ LER CADASTRO DE EMPRESAS
+        # =========================
+
+        arquivo_empresas = next(
+            (n for n in z.namelist()
+             if "05_Empresas" in n and n.endswith(".xlsx")),
+            None
+        )
+
+        if not arquivo_empresas:
+            raise Exception("Arquivo 05_Empresas não encontrado.")
+
+        with z.open(arquivo_empresas) as f:
+            df_empresas = pd.read_excel(
+                f,
+                dtype=str,
+                engine="openpyxl"
+            )
+
+        df_empresas["Empresa"] = df_empresas["Empresa"].str.strip()
+        df_empresas["Filial"] = df_empresas["Filial"].str.strip()
+
+        # Cria chave Empresa + CodigoFilial
+        df_empresas["CHAVE"] = (
+            df_empresas["Empresa"].str.upper() + "|" +
+            df_empresas["Filial"]
+        )
+
+        # =========================
+        # 2️⃣ LER MOVIMENTAÇÕES
         # =========================
 
         arquivos_mov = [
             f for f in z.namelist()
             if "04_Movimento/" in f and f.lower().endswith(".xlsx")
         ]
-
-        if not arquivos_mov:
-            raise Exception("Nenhum XLSX encontrado na pasta 04_Movimento.")
 
         lista_mov = []
 
@@ -27,13 +53,9 @@ def executar_motor(uploaded_file):
 
                 df = pd.read_excel(
                     arq,
-                    dtype=str,           # preserva zeros
+                    dtype=str,
                     engine="openpyxl"
                 )
-
-            # =========================
-            # IDENTIFICA EMPRESA PELO NOME DO ARQUIVO
-            # =========================
 
             nome_upper = nome_arquivo.upper()
 
@@ -42,68 +64,72 @@ def executar_motor(uploaded_file):
             elif "SERVICE" in nome_upper:
                 empresa = "Service"
             else:
-                empresa = "Indefinido"
+                continue
 
-            # =========================
-            # PADRONIZA CAMPOS
-            # =========================
+            df["Produto"] = df["Produto"].astype(str).str.strip()
+            df["Filial"] = df["Filial"].astype(str).str.strip()
 
-            df["Codigo"] = df["Produto"].astype(str).str.strip()
+            df["Empresa"] = empresa
 
-            df["Qtd"] = pd.to_numeric(
-                df["Quantidade"],
-                errors="coerce"
+            # Cria chave para buscar nome filial
+            df["CHAVE"] = (
+                df["Empresa"].str.upper() + "|" +
+                df["Filial"]
             )
 
-            df["Dt_Mov"] = pd.to_datetime(
+            # Merge com cadastro de empresas
+            df = df.merge(
+                df_empresas[["CHAVE", "Nome Filial"]],
+                on="CHAVE",
+                how="left"
+            )
+
+            df["Empresa / Filial"] = (
+                df["Empresa"] + " / " + df["Nome Filial"]
+            )
+
+            df["DT Emissao"] = pd.to_datetime(
                 df["DT Emissao"],
                 errors="coerce",
                 dayfirst=True
             )
 
-            df["Filial"] = df["Filial"].astype(str).str.strip().str.title()
-
-            df["Empresa / Filial"] = empresa + " / " + df["Filial"]
-
-            df["Descricao"] = df["Descr. Prod"]
+            df["ID_UNICO"] = (
+                df["Empresa / Filial"] + "|" + df["Produto"]
+            )
 
             df_temp = df[
-                [
-                    "Empresa / Filial",
-                    "Codigo",
-                    "Descricao",
-                    "Qtd",
-                    "Dt_Mov"
-                ]
+                ["Empresa / Filial", "Produto", "ID_UNICO", "DT Emissao"]
             ].copy()
 
             lista_mov.append(df_temp)
 
-        # =========================
-        # 2️⃣ CONSOLIDA TODOS ARQUIVOS
-        # =========================
+        if not lista_mov:
+            raise Exception("Nenhuma movimentação encontrada.")
 
         df_mov = pd.concat(lista_mov, ignore_index=True)
 
-        # Remove datas inválidas
-        df_mov = df_mov[df_mov["Dt_Mov"].notna()]
+        df_mov = df_mov[df_mov["DT Emissao"].notna()]
 
         # =========================
-        # 3️⃣ CALCULA ÚLTIMA MOVIMENTAÇÃO
+        # 3️⃣ ÚLTIMA MOVIMENTAÇÃO
         # =========================
 
         df_final = (
             df_mov
             .groupby(
-                ["Empresa / Filial", "Codigo", "Descricao"],
+                ["Empresa / Filial", "Produto", "ID_UNICO"],
                 as_index=False
-            )["Dt_Mov"]
+            )["DT Emissao"]
             .max()
-            .rename(columns={"Dt_Mov": "Ult_Mov"})
+            .rename(columns={
+                "Produto": "Codigo",
+                "DT Emissao": "Ult_Mov"
+            })
         )
 
         # =========================
-        # 4️⃣ EXPORTAÇÃO
+        # EXPORTAÇÃO
         # =========================
 
         buffer = io.BytesIO()
