@@ -300,28 +300,28 @@ def executar_motor(uploaded_file):
         how="left"
     )
 
-    # =========================
-    # DEFINIR ÚLTIMA MOVIMENTAÇÃO GERAL
-    # =========================
+   # =========================
+# DEFINIR ÚLTIMA MOVIMENTAÇÃO GERAL
+# =========================
 
-    df_final["Ult_Movimentacao"] = df_final[
-        ["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
-    ].max(axis=1)
+df_final["Ult_Movimentacao"] = df_final[
+    ["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
+].max(axis=1)
 
-    def definir_origem(row):
-        if row["Ult_Movimentacao"] == row["Ult_Saida"]:
-            return "Ult_Saida"
-        elif row["Ult_Movimentacao"] == row["Ult_Entrada"]:
-            return "Ult_Entrada"
-        elif row["Ult_Movimentacao"] == row["Ult_Mov"]:
-            return "Ult_Mov"
-        else:
-            return None
+def definir_origem(row):
+    if row["Ult_Movimentacao"] == row["Ult_Saida"]:
+        return "Ult_Saida"
+    elif row["Ult_Movimentacao"] == row["Ult_Entrada"]:
+        return "Ult_Entrada"
+    elif row["Ult_Movimentacao"] == row["Ult_Mov"]:
+        return "Ult_Mov"
+    else:
+        return None
 
-    df_final["Origem Mov"] = df_final.apply(definir_origem, axis=1)
+df_final["Origem Mov"] = df_final.apply(definir_origem, axis=1)
 
-    buffer = io.BytesIO()
-    df_final.to_excel(buffer, index=False)
-    buffer.seek(0)
-
+# 🔥 REMOVE AS COLUNAS AUXILIARES
+df_final = df_final.drop(
+    columns=["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
+)
     return df_final, buffer.getvalue()
