@@ -188,7 +188,7 @@ def executar_motor(uploaded_file):
         else:
             df_mov_cons = pd.DataFrame(columns=["ID_UNICO", "Ult_Mov"])
 
-        # =====================================================
+                # =====================================================
         # MERGE FINAL
         # =====================================================
 
@@ -198,22 +198,29 @@ def executar_motor(uploaded_file):
             how="left"
         )
 
-        df_final = df_final.drop(columns=["Empresa", "Filial"])
+        # =========================
+        # 🔎 DIAGNÓSTICO
+        # =========================
 
-        # 🔎 FILTRO TEMPORÁRIO PARA TESTE
-        df_final = df_final[
-            (df_final["Empresa / Filial"].str.contains("Robotica", na=False)) &
-            (df_final["Ult_Mov"].notna())
-        ]
+        print("\n===== AMOSTRA ESTOQUE ROBOTICA =====")
+        amostra_estoque = df_estoque[
+            df_estoque["Empresa / Filial"].str.contains("Robotica", na=False)
+        ][["Empresa / Filial", "Produto", "ID_UNICO"]].head(5)
 
-        # Organiza ordem
-        colunas = df_final.columns.tolist()
-        nova_ordem = ["Data Fechamento", "Empresa / Filial"]
-        demais = [c for c in colunas if c not in nova_ordem]
-        df_final = df_final[nova_ordem + demais]
+        print(amostra_estoque)
 
+        if lista_mov:
+            print("\n===== AMOSTRA MOVIMENTACOES =====")
+            print(df_mov.head(5))
+        else:
+            print("\nNenhuma movimentação consolidada.")
+
+        print("\n===== TOTAL MOVIMENTACOES CONSOLIDADAS =====")
+        print(len(df_mov_cons))
+
+        # 🔴 Retorno temporário apenas para inspeção
         buffer = io.BytesIO()
-        df_final.to_excel(buffer, index=False)
+        amostra_estoque.to_excel(buffer, index=False)
         buffer.seek(0)
 
-        return df_final, buffer.getvalue()
+        return amostra_estoque, buffer.getvalue()
