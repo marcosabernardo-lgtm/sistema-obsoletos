@@ -10,22 +10,28 @@ def executar_motor(uploaded_file):
         caminho_robotica = "04_Movimento/05_Robotica.csv"
 
         with z.open(caminho_robotica) as f:
-            df = pd.read_csv(
-                f,
-                sep=",",
-                encoding="cp1252",
-                skiprows=2,
-                dtype=str,
-                engine="python",      # 🔥 importante
-                on_bad_lines="skip"
-            )
+            conteudo = f.read().decode("cp1252")
 
-        # 🔥 limpa aspas do cabeçalho
-        df.columns = df.columns.str.replace('"', '').str.strip()
+        # 🔥 remove duas primeiras linhas (SD3 + linha vazia)
+        linhas = conteudo.splitlines()[2:]
 
-        # Verificação defensiva
-        if "Quantidade" not in df.columns:
-            return pd.DataFrame({"Colunas_detectadas": df.columns}), None
+        # 🔥 remove aspas e vírgula final
+        linhas_tratadas = []
+        for linha in linhas:
+            linha = linha.rstrip(",")       # remove vírgula final
+            linha = linha.replace('"', "")  # remove aspas
+            linhas_tratadas.append(linha)
+
+        texto_limpo = "\n".join(linhas_tratadas)
+
+        # 🔥 agora sim converte corretamente
+        df = pd.read_csv(
+            io.StringIO(texto_limpo),
+            sep=",",
+            dtype=str
+        )
+
+        df.columns = df.columns.str.strip()
 
         df["Quantidade"] = pd.to_numeric(df["Quantidade"], errors="coerce")
 
@@ -40,12 +46,7 @@ def executar_motor(uploaded_file):
             (df["DT Emissao"].notna())
         ]
 
-        df["Produto"] = (
-            df["Produto"]
-            .astype(str)
-            .str.strip()
-            .str.replace(".0", "", regex=False)
-        )
+        df["Produto"] = df["Produto"].astype(str).str.strip()
 
         df_resultado = df[[
             "Filial",
