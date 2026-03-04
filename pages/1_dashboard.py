@@ -44,20 +44,22 @@ tbody tr{
 .kpi-card{
     background-color:#005562;
     border:2px solid #EC6E21;
-    padding:20px;
-    border-radius:10px;
+    padding:22px;
+    border-radius:12px;
     text-align:center;
 }
 
 .kpi-title{
     color:white;
-    font-size:15px;
+    font-size:16px;
+    margin-bottom:6px;
 }
 
 .kpi-value{
     color:white;
-    font-size:34px;
-    font-weight:bold;
+    font-size:36px;
+    font-weight:700;
+    white-space:nowrap;
 }
 
 </style>
@@ -205,7 +207,7 @@ col3.markdown(f"""
 col4.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">Itens Obsoletos</div>
-<div class="kpi-value">{format(itens_obsoletos, ',').replace(',', '.')}</div>
+<div class="kpi-value">{format(itens_obsoletos, ",").replace(",", ".")}</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -269,75 +271,3 @@ with tab2:
     ]
 
     st.dataframe(df_tabela, use_container_width=True)
-
-# =================================================
-# TOP 20
-# =================================================
-
-with tab3:
-
-    st.subheader("Top 20 Produtos Obsoletos")
-
-    ultima_data = df_filtrado["Data Fechamento"].max()
-
-    top20 = (
-        df_filtrado[df_filtrado["Data Fechamento"] == ultima_data]
-        .groupby(["Empresa / Filial","Produto","Descricao"],as_index=False)
-        .agg(
-            Quantidade=("Saldo Atual","sum"),
-            Custo_Total=("Custo Total","sum")
-        )
-        .sort_values("Custo_Total",ascending=False)
-        .head(20)
-    )
-
-    top20 = top20.rename(columns={"Custo_Total":"Custo Total"})
-
-    top20["Custo Total"] = top20["Custo Total"].apply(moeda_br)
-
-    st.dataframe(top20, use_container_width=True)
-
-# =================================================
-# GRÁFICOS
-# =================================================
-
-with tab4:
-
-    ultima_data = df_filtrado["Data Fechamento"].max()
-
-    base = df_filtrado[
-        df_filtrado["Data Fechamento"] == ultima_data
-    ]
-
-    st.subheader("Obsoleto por Empresa / Filial")
-
-    empresa = (
-        base.groupby("Empresa / Filial")["Custo Total"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-    )
-
-    empresa["%"] = empresa["Custo Total"] / empresa["Custo Total"].sum()
-
-    empresa["Label"] = empresa.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
-        axis=1
-    )
-
-    chart = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
-        x=alt.X("Custo Total", axis=None),
-        y=alt.Y("Empresa / Filial", sort="-x", axis=alt.Axis(title=None)),
-    )
-
-    text = alt.Chart(empresa).mark_text(
-        align="left",
-        dx=5,
-        color="white"
-    ).encode(
-        x="Custo Total",
-        y=alt.Y("Empresa / Filial",sort="-x"),
-        text="Label"
-    )
-
-    st.altair_chart(chart + text, use_container_width=True)
