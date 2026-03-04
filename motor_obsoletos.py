@@ -31,35 +31,30 @@ def ler_codigos_usadas(z):
     if not arquivos:
         return set()
 
-    lista = []
+    codigos = set()
     for nome in arquivos:
         with z.open(nome) as f:
             conteudo = f.read().decode("utf-8", errors="ignore")
 
-        # Remove aspas externas de cada linha (formato com duplo encapsulamento)
-        linhas = []
-        for linha in conteudo.splitlines():
+        for i, linha in enumerate(conteudo.splitlines()):
+            # Remove aspas externas se existirem
             linha = linha.strip()
             if linha.startswith('"') and linha.endswith('"'):
                 linha = linha[1:-1]
-            linhas.append(linha)
-        conteudo_limpo = "\n".join(linhas)
 
-        df_csv = pd.read_csv(
-            io.StringIO(conteudo_limpo),
-            dtype=str,
-            sep=",",
-            quotechar='"',
-            engine="python"
-        )
-        df_csv.columns = df_csv.columns.str.strip().str.replace('"', '', regex=False)
-        lista.append(df_csv)
+            # Pula cabeçalho
+            if i == 0:
+                continue
 
-    df_usadas = pd.concat(lista, ignore_index=True)
+            if not linha:
+                continue
 
-    return set(
-        df_usadas["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
-    )
+            # Pega o primeiro campo (código) antes da primeira vírgula
+            codigo = linha.split(",")[0].strip().strip('"').replace(".0", "")
+            if codigo:
+                codigos.add(codigo)
+
+    return codigos
 
 
 def executar_estoque(z):
