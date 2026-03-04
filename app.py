@@ -5,6 +5,7 @@ from base_historica import atualizar_base_historica
 st.set_page_config(page_title="Sistema de Obsoletos", layout="wide")
 
 st.title("📦 Sistema de Controle de Obsoletos")
+
 st.markdown("---")
 
 st.subheader("Upload do Arquivo")
@@ -24,8 +25,11 @@ if uploaded_file is not None:
 
         if df_final is not None:
 
-            # SALVAR NO HISTÓRICO
-            atualizar_base_historica(df_final)
+            # Salva no histórico
+            df_hist = atualizar_base_historica(df_final)
+
+            # Mostra quantidade de registros no histórico
+            st.write("Registros no histórico:", len(df_hist))
 
             st.success("Processamento concluído com sucesso!")
 
