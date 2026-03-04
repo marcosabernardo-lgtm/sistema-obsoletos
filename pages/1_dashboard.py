@@ -9,7 +9,10 @@ st.title("📊 Dashboard de Estoque Obsoleto")
 
 st.markdown("---")
 
-# Upload manual do histórico (caso o servidor reinicie)
+# -------------------------------------------------
+# Upload manual do histórico (caso servidor reinicie)
+# -------------------------------------------------
+
 uploaded_hist = st.file_uploader(
     "📤 Carregar Histórico (arquivo base_historica.parquet)",
     type=["parquet"]
@@ -20,14 +23,20 @@ if uploaded_hist is not None:
     df_hist.to_parquet("data/base_historica.parquet", index=False)
     st.success("Histórico carregado com sucesso!")
 
-# Tentar carregar histórico existente
+# -------------------------------------------------
+# Tentar carregar histórico
+# -------------------------------------------------
+
 try:
     df_hist = pd.read_parquet("data/base_historica.parquet")
 except:
-    st.warning("Nenhum histórico encontrado. Faça upload do histórico ou processe um fechamento.")
+    st.warning("Nenhum histórico encontrado.")
     st.stop()
 
-# botão de download do histórico
+# -------------------------------------------------
+# Download do histórico
+# -------------------------------------------------
+
 with open("data/base_historica.parquet", "rb") as f:
     st.download_button(
         label="📥 Baixar Histórico",
@@ -37,33 +46,84 @@ with open("data/base_historica.parquet", "rb") as f:
 
 st.markdown("---")
 
-# Ajustar data
-df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"]).dt.date
+# -------------------------------------------------
+# Criar abas
+# -------------------------------------------------
 
-st.subheader("📚 Base Histórica")
+tab1, tab2 = st.tabs([
+    "📚 Base Histórica",
+    "📈 Evolução do Estoque"
+])
 
-st.dataframe(df_hist)
+# -------------------------------------------------
+# ABA 1 - BASE HISTORICA
+# -------------------------------------------------
 
-st.markdown("---")
+with tab1:
 
-st.subheader("📈 Evolução do Estoque")
+    df_hist["Data Fechamento"] = pd.to_datetime(
+        df_hist["Data Fechamento"]
+    ).dt.date
 
-df_evolucao = evolucao_estoque(df_hist)
+    st.subheader("Base Histórica")
 
-df_evolucao["Data Fechamento"] = pd.to_datetime(df_evolucao["Data Fechamento"]).dt.date
+    st.dataframe(df_hist)
 
-# tabela formatada
-df_tabela = df_evolucao.copy()
+# -------------------------------------------------
+# ABA 2 - EVOLUÇÃO
+# -------------------------------------------------
 
-df_tabela["Estoque Total"] = df_tabela["Estoque Total"].map(lambda x: f"R$ {x:,.2f}")
-df_tabela["Estoque Obsoleto"] = df_tabela["Estoque Obsoleto"].map(lambda x: f"R$ {x:,.2f}")
-df_tabela["% Obsoleto"] = (df_tabela["% Obsoleto"] * 100).map(lambda x: f"{x:.2f}%")
+with tab2:
 
-st.dataframe(df_tabela)
+    df_evolucao = evolucao_estoque(df_hist)
 
-# gráfico
-st.line_chart(
-    df_evolucao.set_index("Data Fechamento")[
-        ["Estoque Total", "Estoque Obsoleto"]
+    # criar coluna de fechamento mensal
+    df_evolucao["Fechamento"] = pd.to_datetime(
+        df_evolucao["Data Fechamento"]
+    ).dt.strftime("%m/%Y")
+
+    # -------------------------------------------------
+    # TABELA FORMATADA
+    # -------------------------------------------------
+
+    df_tabela = df_evolucao.copy()
+
+    df_tabela["Estoque Total"] = df_tabela["Estoque Total"].map(
+        lambda x: f"R$ {x:,.2f}"
+    )
+
+    df_tabela["Estoque Obsoleto"] = df_tabela["Estoque Obsoleto"].map(
+        lambda x: f"R$ {x:,.2f}"
+    )
+
+    df_tabela["% Obsoleto"] = (
+        df_tabela["% Obsoleto"] * 100
+    ).map(lambda x: f"{x:.2f}%")
+
+    df_tabela = df_tabela[
+        [
+            "Fechamento",
+            "Estoque Total",
+            "Estoque Obsoleto",
+            "% Obsoleto"
+        ]
     ]
-)
+
+    st.subheader("Evolução do Estoque")
+
+    st.dataframe(df_tabela)
+
+    # -------------------------------------------------
+    # GRÁFICO
+    # -------------------------------------------------
+
+    df_chart = df_evolucao.set_index("Fechamento")
+
+    st.line_chart(
+        df_chart[
+            [
+                "Estoque Total",
+                "Estoque Obsoleto"
+            ]
+        ]
+    )
