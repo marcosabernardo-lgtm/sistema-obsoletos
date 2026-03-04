@@ -253,26 +253,49 @@ with tab2:
     # TOP 20 PRODUTOS OBSOLETOS
     # =================================================
 
-    st.subheader("Top 20 Produtos Obsoletos")
+    # -------------------------------------------------
+# TOP 20 PRODUTOS OBSOLETOS
+# -------------------------------------------------
 
-    top_produtos = (
-        df_filtrado[df_filtrado["Status Estoque"] == "Obsoleto"]
-        .groupby(["Produto", "Descricao"], as_index=False)["Custo Total"]
-        .sum()
-        .sort_values("Custo Total", ascending=False)
-        .head(20)
+st.markdown("---")
+st.subheader("Top 20 Produtos Obsoletos")
+
+ultima_data = df_filtrado["Data Fechamento"].max()
+
+top_produtos = (
+    df_filtrado[
+        (df_filtrado["Data Fechamento"] == ultima_data) &
+        (df_filtrado["Status Estoque"] == "Obsoleto")
+    ]
+    .groupby("Descricao", as_index=False)["Custo Total"]
+    .sum()
+    .sort_values("Custo Total", ascending=False)
+    .head(20)
+)
+
+chart = alt.Chart(top_produtos).mark_bar(
+    color="#EC6E21"
+).encode(
+    x=alt.X(
+        "Custo Total:Q",
+        title="Custo Total"
+    ),
+    y=alt.Y(
+        "Descricao:N",
+        sort="-x",
+        title="Descrição"
     )
+).properties(
+    height=500
+).configure_axis(
+    labelColor="#FFFFFF",
+    titleColor="#FFFFFF",
+    gridColor="#005562"
+).configure_view(
+    strokeWidth=0
+)
 
-    fig_prod = px.bar(
-        top_produtos,
-        x="Custo Total",
-        y="Descricao",
-        orientation="h"
-    )
-
-    fig_prod.update_layout(height=600)
-
-    st.plotly_chart(fig_prod, use_container_width=True)
+st.altair_chart(chart, use_container_width=True)
 
     # =================================================
     # TOP 5 EMPRESAS
