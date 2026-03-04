@@ -287,7 +287,11 @@ with tab4:
 
     base = df_filtrado[df_filtrado["Data Fechamento"] == ultima_data]
 
-    col1, col2 = st.columns(2)
+    total_estoque = base["Custo Total"].sum()
+
+    # =================================================
+    # ESTOQUE POR EMPRESA
+    # =================================================
 
     empresa = (
         base.groupby("Empresa / Filial")["Custo Total"]
@@ -296,17 +300,40 @@ with tab4:
         .sort_values("Custo Total", ascending=False)
     )
 
-    chart_empresa = alt.Chart(empresa).mark_bar(
-        color="#EC6E21"
+    empresa["perc"] = empresa["Custo Total"] / total_estoque
+
+    empresa["label"] = empresa.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["perc"]*100:.1f}%)',
+        axis=1
+    )
+
+    bars = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
+        x=alt.X("Custo Total:Q", title="Custo Total"),
+        y=alt.Y("Empresa / Filial:N", sort="-x")
+    )
+
+    text = alt.Chart(empresa).mark_text(
+        align="left",
+        dx=3,
+        color="white"
     ).encode(
         x="Custo Total:Q",
-        y=alt.Y("Empresa / Filial:N", sort="-x")
-    ).properties(
+        y=alt.Y("Empresa / Filial:N", sort="-x"),
+        text="label"
+    )
+
+    chart_empresa = (bars + text).properties(
         title="Estoque - Empresa / Filial",
         height=400
     )
 
-    col1.altair_chart(chart_empresa, use_container_width=True)
+    st.altair_chart(chart_empresa, use_container_width=True)
+
+    st.markdown("---")
+
+    # =================================================
+    # STATUS MOVIMENTO
+    # =================================================
 
     status = (
         base.groupby("Status do Movimento")["Custo Total"]
@@ -315,17 +342,40 @@ with tab4:
         .sort_values("Custo Total", ascending=False)
     )
 
-    chart_status = alt.Chart(status).mark_bar(
-        color="#EC6E21"
-    ).encode(
-        x="Custo Total:Q",
-        y=alt.Y("Status do Movimento:N", sort="-x")
-    ).properties(
-        title="Estoque - Status do Movimento",
-        height=200
+    status["perc"] = status["Custo Total"] / total_estoque
+
+    status["label"] = status.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["perc"]*100:.1f}%)',
+        axis=1
     )
 
-    col2.altair_chart(chart_status, use_container_width=True)
+    bars = alt.Chart(status).mark_bar(color="#EC6E21").encode(
+        x=alt.X("Custo Total:Q", title="Custo Total"),
+        y=alt.Y("Status do Movimento:N", sort="-x")
+    )
+
+    text = alt.Chart(status).mark_text(
+        align="left",
+        dx=3,
+        color="white"
+    ).encode(
+        x="Custo Total:Q",
+        y=alt.Y("Status do Movimento:N", sort="-x"),
+        text="label"
+    )
+
+    chart_status = (bars + text).properties(
+        title="Estoque - Status do Movimento",
+        height=300
+    )
+
+    st.altair_chart(chart_status, use_container_width=True)
+
+    st.markdown("---")
+
+    # =================================================
+    # ESTOQUE POR CONTA
+    # =================================================
 
     conta = (
         base.groupby("Conta")["Custo Total"]
@@ -334,14 +384,31 @@ with tab4:
         .sort_values("Custo Total", ascending=False)
     )
 
-    chart_conta = alt.Chart(conta).mark_bar(
-        color="#EC6E21"
-    ).encode(
-        x="Custo Total:Q",
-        y=alt.Y("Conta:N", sort="-x")
-    ).properties(
-        title="Estoque - Conta",
-        height=200
+    conta["perc"] = conta["Custo Total"] / total_estoque
+
+    conta["label"] = conta.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["perc"]*100:.1f}%)',
+        axis=1
     )
 
-    col2.altair_chart(chart_conta, use_container_width=True)
+    bars = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
+        x=alt.X("Custo Total:Q", title="Custo Total"),
+        y=alt.Y("Conta:N", sort="-x")
+    )
+
+    text = alt.Chart(conta).mark_text(
+        align="left",
+        dx=3,
+        color="white"
+    ).encode(
+        x="Custo Total:Q",
+        y=alt.Y("Conta:N", sort="-x"),
+        text="label"
+    )
+
+    chart_conta = (bars + text).properties(
+        title="Estoque - Conta",
+        height=300
+    )
+
+    st.altair_chart(chart_conta, use_container_width=True)
