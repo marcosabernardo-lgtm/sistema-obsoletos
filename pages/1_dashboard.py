@@ -21,12 +21,7 @@ span[data-baseweb="tag"]{
     background-color:#1f77b4 !important;
 }
 
-[data-baseweb="select"]{
-    border:1px solid #EC6E21 !important;
-    border-radius:6px !important;
-}
-
-[data-baseweb="popover"]{
+div[data-baseweb="select"] > div{
     border:1px solid #EC6E21 !important;
 }
 
@@ -82,7 +77,7 @@ with open("data/base_historica.parquet", "rb") as f:
 st.sidebar.header("Filtros")
 
 # -------------------------------------------------
-# STATUS DO ESTOQUE
+# STATUS ESTOQUE
 # -------------------------------------------------
 
 status_estoque = st.sidebar.selectbox(
@@ -91,7 +86,7 @@ status_estoque = st.sidebar.selectbox(
 )
 
 # -------------------------------------------------
-# EMPRESA / FILIAL
+# EMPRESA
 # -------------------------------------------------
 
 empresas_lista = sorted(df_hist["Empresa / Filial"].dropna().unique())
@@ -115,24 +110,30 @@ contas_sel = st.sidebar.multiselect(
 )
 
 # -------------------------------------------------
-# APLICAR FILTROS
+# BASE KPI (IGNORA STATUS ESTOQUE)
 # -------------------------------------------------
 
-df_filtrado = df_hist.copy()
+df_kpi = df_hist.copy()
+
+if empresas_sel:
+    df_kpi = df_kpi[df_kpi["Empresa / Filial"].isin(empresas_sel)]
+
+if contas_sel:
+    df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
+
+# -------------------------------------------------
+# BASE FILTRADA (USA STATUS ESTOQUE)
+# -------------------------------------------------
+
+df_filtrado = df_kpi.copy()
 
 if status_estoque == "Obsoletos":
     df_filtrado = df_filtrado[
         df_filtrado["Status do Movimento"] != "Até 6 meses"
     ]
 
-if empresas_sel:
-    df_filtrado = df_filtrado[df_filtrado["Empresa / Filial"].isin(empresas_sel)]
-
-if contas_sel:
-    df_filtrado = df_filtrado[df_filtrado["Conta"].isin(contas_sel)]
-
 # -------------------------------------------------
-# SEM DADOS
+# SE NÃO HOUVER DADOS
 # -------------------------------------------------
 
 if df_filtrado.empty:
@@ -172,12 +173,12 @@ with tab1:
     st.dataframe(df_base, use_container_width=True)
 
 # =================================================
-# EVOLUÇÃO DO ESTOQUE
+# EVOLUÇÃO ESTOQUE
 # =================================================
 
 with tab2:
 
-    df_evolucao = evolucao_estoque(df_filtrado)
+    df_evolucao = evolucao_estoque(df_kpi)
 
     df_evolucao = df_evolucao.sort_values("Data Fechamento")
 
@@ -187,11 +188,11 @@ with tab2:
     estoque_obsoleto = ultimo["Estoque Obsoleto"]
     percentual = ultimo["% Obsoleto"]
 
-    ultima_data = df_filtrado["Data Fechamento"].max()
+    ultima_data = df_kpi["Data Fechamento"].max()
 
-    itens_obsoletos = df_filtrado[
-        (df_filtrado["Data Fechamento"] == ultima_data) &
-        (df_filtrado["Status Estoque"] == "Obsoleto")
+    itens_obsoletos = df_kpi[
+        (df_kpi["Data Fechamento"] == ultima_data) &
+        (df_kpi["Status Estoque"] == "Obsoleto")
     ].shape[0]
 
     col1, col2, col3, col4 = st.columns(4)
@@ -203,33 +204,34 @@ with tab2:
 
     st.markdown("---")
 
-    df_chart = df_evolucao.copy()
+    df_tabela = df_evolucao.copy()
 
-    df_chart["Data Fechamento"] = pd.to_datetime(df_chart["Data Fechamento"])
+    df_tabela["Fechamento"] = pd.to_datetime(
+        df_tabela["Data Fechamento"]
+    ).dt.strftime("%m/%Y")
 
-    df_chart = df_chart.sort_values("Data Fechamento")
+    df_tabela["Estoque Total"] = df_tabela["Estoque Total"].apply(moeda_br)
+    df_tabela["Estoque Obsoleto"] = df_tabela["Estoque Obsoleto"].apply(moeda_br)
 
-    df_chart["Fechamento"] = df_chart["Data Fechamento"].dt.strftime("%m/%Y")
+    df_tabela["% Obsoleto"] = (
+        df_tabela["% Obsoleto"] * 100
+    ).map(lambda x: f"{x:.2f}%")
 
-    df_chart = df_chart.melt(
-        id_vars=["Data Fechamento", "Fechamento"],
-        value_vars=["Estoque Total", "Estoque Obsoleto"],
-        var_name="Tipo",
-        value_name="Valor"
-    )
+    df_tabela = df_tabela[
+        [
+            "Fechamento",
+            "Estoque Total",
+            "Estoque Obsoleto",
+            "% Obsoleto"
+        ]
+    ]
 
-    ordem = df_chart["Fechamento"].drop_duplicates().tolist()
+    st.subheader("Evolução do Estoque")
 
-    chart = alt.Chart(df_chart).mark_line(point=True).encode(
-        x=alt.X("Fechamento:N", sort=ordem),
-        y="Valor:Q",
-        color="Tipo:N"
-    ).properties(height=280)
-
-    st.altair_chart(chart, use_container_width=True)
+    st.dataframe(df_tabela, use_container_width=True)
 
 # =================================================
-# TOP 20 PRODUTOS
+# TOP 20
 # =================================================
 
 with tab3:
@@ -240,31 +242,17 @@ with tab3:
 
     top20 = (
         df_filtrado[
-            (df_filtrado["Data Fechamento"] == ultima_data) &
-            (df_filtrado["Status Estoque"] == "Obsoleto")
+            (df_filtrado["Data Fechamento"] == ultima_data)
         ]
+        .groupby(["Produto","Descricao"], as_index=False)["Custo Total"]
+        .sum()
         .sort_values("Custo Total", ascending=False)
         .head(20)
     )
 
-    tabela_top20 = top20[
-        [
-            "Empresa / Filial",
-            "Conta",
-            "Produto",
-            "Descricao",
-            "Saldo Atual",
-            "Vlr Unit",
-            "Custo Total",
-            "Meses Ult Mov",
-            "Status do Movimento"
-        ]
-    ].copy()
+    top20["Custo Total"] = top20["Custo Total"].apply(moeda_br)
 
-    tabela_top20["Vlr Unit"] = tabela_top20["Vlr Unit"].apply(moeda_br)
-    tabela_top20["Custo Total"] = tabela_top20["Custo Total"].apply(moeda_br)
-
-    st.dataframe(tabela_top20, use_container_width=True)
+    st.dataframe(top20, use_container_width=True)
 
 # =================================================
 # GRÁFICOS
@@ -276,115 +264,105 @@ with tab4:
 
     ultima_data = df_filtrado["Data Fechamento"].max()
 
-    base = df_filtrado[df_filtrado["Data Fechamento"] == ultima_data]
+    base = df_filtrado[
+        df_filtrado["Data Fechamento"] == ultima_data
+    ]
 
-    total_estoque = base["Custo Total"].sum()
-
-    # =================================================
     # EMPRESA
-    # =================================================
 
     empresa = (
         base.groupby("Empresa / Filial")["Custo Total"]
         .sum()
+        .sort_values(ascending=False)
         .reset_index()
-        .sort_values("Custo Total", ascending=False)
     )
 
-    empresa["perc"] = empresa["Custo Total"] / total_estoque
+    empresa["%"] = empresa["Custo Total"] / empresa["Custo Total"].sum()
 
-    empresa["label"] = empresa.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["perc"]*100:.1f}%)',
+    empresa["Label"] = empresa.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
         axis=1
     )
 
-    bars = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
-        x="Custo Total:Q",
-        y=alt.Y("Empresa / Filial:N", sort="-x")
+    chart1 = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
+        x="Custo Total",
+        y=alt.Y("Empresa / Filial", sort="-x")
     )
 
-    text = alt.Chart(empresa).mark_text(
+    text1 = alt.Chart(empresa).mark_text(
         align="left",
-        dx=3,
+        dx=5,
         color="white"
     ).encode(
-        x="Custo Total:Q",
-        y=alt.Y("Empresa / Filial:N", sort="-x"),
-        text="label"
+        x="Custo Total",
+        y=alt.Y("Empresa / Filial", sort="-x"),
+        text="Label"
     )
 
-    st.altair_chart((bars + text).properties(height=400), use_container_width=True)
+    st.altair_chart(chart1 + text1, use_container_width=True)
 
-    st.markdown("---")
-
-    # =================================================
     # STATUS MOVIMENTO
-    # =================================================
 
     status = (
         base.groupby("Status do Movimento")["Custo Total"]
         .sum()
+        .sort_values(ascending=False)
         .reset_index()
-        .sort_values("Custo Total", ascending=False)
     )
 
-    status["perc"] = status["Custo Total"] / total_estoque
+    status["%"] = status["Custo Total"] / status["Custo Total"].sum()
 
-    status["label"] = status.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["perc"]*100:.1f}%)',
+    status["Label"] = status.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
         axis=1
     )
 
-    bars = alt.Chart(status).mark_bar(color="#EC6E21").encode(
-        x="Custo Total:Q",
-        y=alt.Y("Status do Movimento:N", sort="-x")
+    chart2 = alt.Chart(status).mark_bar(color="#EC6E21").encode(
+        x="Custo Total",
+        y=alt.Y("Status do Movimento", sort="-x")
     )
 
-    text = alt.Chart(status).mark_text(
+    text2 = alt.Chart(status).mark_text(
         align="left",
-        dx=3,
+        dx=5,
         color="white"
     ).encode(
-        x="Custo Total:Q",
-        y=alt.Y("Status do Movimento:N", sort="-x"),
-        text="label"
+        x="Custo Total",
+        y=alt.Y("Status do Movimento", sort="-x"),
+        text="Label"
     )
 
-    st.altair_chart((bars + text).properties(height=300), use_container_width=True)
+    st.altair_chart(chart2 + text2, use_container_width=True)
 
-    st.markdown("---")
-
-    # =================================================
     # CONTA
-    # =================================================
 
     conta = (
         base.groupby("Conta")["Custo Total"]
         .sum()
+        .sort_values(ascending=False)
         .reset_index()
-        .sort_values("Custo Total", ascending=False)
     )
 
-    conta["perc"] = conta["Custo Total"] / total_estoque
+    conta["%"] = conta["Custo Total"] / conta["Custo Total"].sum()
 
-    conta["label"] = conta.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["perc"]*100:.1f}%)',
+    conta["Label"] = conta.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
         axis=1
     )
 
-    bars = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
-        x="Custo Total:Q",
-        y=alt.Y("Conta:N", sort="-x")
+    chart3 = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
+        x="Custo Total",
+        y=alt.Y("Conta", sort="-x")
     )
 
-    text = alt.Chart(conta).mark_text(
+    text3 = alt.Chart(conta).mark_text(
         align="left",
-        dx=3,
+        dx=5,
         color="white"
     ).encode(
-        x="Custo Total:Q",
-        y=alt.Y("Conta:N", sort="-x"),
-        text="label"
+        x="Custo Total",
+        y=alt.Y("Conta", sort="-x"),
+        text="Label"
     )
 
-    st.altair_chart((bars + text).properties(height=300), use_container_width=True)
+    st.altair_chart(chart3 + text3, use_container_width=True)
