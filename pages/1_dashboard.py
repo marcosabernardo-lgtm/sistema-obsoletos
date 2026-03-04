@@ -11,21 +11,16 @@ st.title("📊 Dashboard de Estoque Obsoleto")
 st.markdown("---")
 
 # -------------------------------------------------
-# CSS (cores filtros)
+# CSS (cor azul nos filtros)
 # -------------------------------------------------
 
-st.markdown(
-    """
+st.markdown("""
 <style>
-
 span[data-baseweb="tag"]{
     background-color:#1f77b4 !important;
 }
-
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
 # -------------------------------------------------
 # FORMATAÇÃO BR
@@ -76,7 +71,7 @@ with open("data/base_historica.parquet", "rb") as f:
 st.sidebar.header("Filtros")
 
 # -------------------------------------------------
-# FILTRO EMPRESA
+# FILTRO EMPRESA / FILIAL
 # -------------------------------------------------
 
 empresas = sorted(df_hist["Empresa / Filial"].dropna().unique())
@@ -100,14 +95,14 @@ contas_sel = st.sidebar.multiselect(
 )
 
 # -------------------------------------------------
-# FILTRO STATUS ESTOQUE
+# FILTRO STATUS DO MOVIMENTO
 # -------------------------------------------------
 
-status_opcoes = ["Todos"] + sorted(df_hist["Status Estoque"].dropna().unique())
+status_mov_opcoes = ["Todos"] + sorted(df_hist["Status do Movimento"].dropna().unique())
 
-status_sel = st.sidebar.selectbox(
-    "Status do Estoque",
-    status_opcoes
+status_mov_sel = st.sidebar.selectbox(
+    "Status do Movimento",
+    status_mov_opcoes
 )
 
 # -------------------------------------------------
@@ -122,8 +117,11 @@ if empresas_sel:
 if contas_sel:
     df_filtrado = df_filtrado[df_filtrado["Conta"].isin(contas_sel)]
 
+if status_mov_sel != "Todos":
+    df_filtrado = df_filtrado[df_filtrado["Status do Movimento"] == status_mov_sel]
+
 # -------------------------------------------------
-# SEM DADOS
+# SE NÃO HOUVER DADOS
 # -------------------------------------------------
 
 if df_filtrado.empty:
@@ -230,6 +228,8 @@ with tab2:
 
     df_chart["Data Fechamento"] = pd.to_datetime(df_chart["Data Fechamento"])
 
+    df_chart = df_chart.sort_values("Data Fechamento")
+
     df_chart["Fechamento"] = df_chart["Data Fechamento"].dt.strftime("%m/%Y")
 
     df_chart = df_chart.melt(
@@ -245,10 +245,17 @@ with tab2:
         x=alt.X(
             "Fechamento:N",
             sort=ordem,
-            axis=alt.Axis(labelAngle=0)
+            axis=alt.Axis(labelAngle=0),
+            title="Fechamento"
         ),
-        y="Valor:Q",
-        color="Tipo:N"
+        y=alt.Y(
+            "Valor:Q",
+            title="Valor"
+        ),
+        color=alt.Color(
+            "Tipo:N",
+            title="Tipo"
+        )
     ).properties(
         height=280
     )
