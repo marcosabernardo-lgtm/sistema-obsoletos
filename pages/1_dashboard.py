@@ -42,7 +42,7 @@ except:
     st.stop()
 
 # -------------------------------------------------
-# Download histórico
+# DOWNLOAD HISTÓRICO
 # -------------------------------------------------
 
 with open("data/base_historica.parquet", "rb") as f:
@@ -51,6 +51,22 @@ with open("data/base_historica.parquet", "rb") as f:
         data=f,
         file_name="base_historica.parquet"
     )
+
+# -------------------------------------------------
+# FILTRO POR EMPRESA
+# -------------------------------------------------
+
+st.sidebar.header("Filtros")
+
+empresas = sorted(df_hist["Empresa / Filial"].dropna().unique())
+
+empresa_selecionada = st.sidebar.selectbox(
+    "Empresa",
+    ["Todas"] + empresas
+)
+
+if empresa_selecionada != "Todas":
+    df_hist = df_hist[df_hist["Empresa / Filial"] == empresa_selecionada]
 
 st.markdown("---")
 
@@ -77,7 +93,6 @@ with tab1:
         df_base["Data Fechamento"]
     ).dt.date
 
-    # formatação valores
     if "Custo Total" in df_base.columns:
         df_base["Custo Total"] = df_base["Custo Total"].apply(moeda_br)
 
