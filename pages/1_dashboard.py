@@ -39,6 +39,27 @@ tbody tr{
     background-color:#0f5a60 !important;
 }
 
+/* KPI CARDS */
+
+.kpi-card {
+    background-color:#005562;
+    border:2px solid #EC6E21;
+    padding:18px;
+    border-radius:10px;
+    text-align:center;
+}
+
+.kpi-title {
+    color:#FFFFFF;
+    font-size:16px;
+}
+
+.kpi-value {
+    color:#FFFFFF;
+    font-size:34px;
+    font-weight:bold;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -112,7 +133,7 @@ contas_sel = st.sidebar.multiselect(
 )
 
 # -------------------------------------------------
-# BASE KPI (SEM FILTRO DE OBSOLETO)
+# BASE KPI
 # -------------------------------------------------
 
 df_kpi = df_hist.copy()
@@ -124,7 +145,7 @@ if contas_sel:
     df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
 
 # -------------------------------------------------
-# BASE FILTRADA (PARA GRÁFICOS)
+# BASE FILTRADA
 # -------------------------------------------------
 
 df_filtrado = df_kpi.copy()
@@ -162,25 +183,33 @@ itens_obsoletos = base_kpi[
 
 col1, col2, col3, col4 = st.columns(4)
 
-col1.metric(
-    "Estoque Total",
-    moeda_br(estoque_total)
-)
+col1.markdown(f"""
+<div class="kpi-card">
+<div class="kpi-title">Valor Estoque</div>
+<div class="kpi-value">{moeda_br(estoque_total)}</div>
+</div>
+""", unsafe_allow_html=True)
 
-col2.metric(
-    "Estoque Obsoleto",
-    moeda_br(estoque_obsoleto)
-)
+col2.markdown(f"""
+<div class="kpi-card">
+<div class="kpi-title">Estoque Obsoleto</div>
+<div class="kpi-value">{moeda_br(estoque_obsoleto)}</div>
+</div>
+""", unsafe_allow_html=True)
 
-col3.metric(
-    "% Obsolescência",
-    f"{percentual_obsoleto*100:.2f}%"
-)
+col3.markdown(f"""
+<div class="kpi-card">
+<div class="kpi-title">% Estoque Obsoleto</div>
+<div class="kpi-value">{percentual_obsoleto*100:.2f}%</div>
+</div>
+""", unsafe_allow_html=True)
 
-col4.metric(
-    "Itens Obsoletos",
-    f"{itens_obsoletos:,}".replace(",", ".")
-)
+col4.markdown(f"""
+<div class="kpi-card">
+<div class="kpi-title">Itens Obsoletos</div>
+<div class="kpi-value">{itens_obsoletos:,}".replace(",", ".")}</div>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown("---")
 
