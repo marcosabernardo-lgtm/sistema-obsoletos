@@ -11,6 +11,13 @@ st.title("📊 Dashboard de Estoque Obsoleto")
 st.markdown("---")
 
 # -------------------------------------------------
+# FUNÇÃO FORMATAÇÃO MOEDA BRASILEIRA
+# -------------------------------------------------
+
+def moeda_br(valor):
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+# -------------------------------------------------
 # Upload manual do histórico
 # -------------------------------------------------
 
@@ -48,7 +55,7 @@ with open("data/base_historica.parquet", "rb") as f:
 st.markdown("---")
 
 # -------------------------------------------------
-# Criar abas
+# ABAS
 # -------------------------------------------------
 
 tab1, tab2 = st.tabs([
@@ -64,11 +71,20 @@ with tab1:
 
     st.subheader("Base Histórica")
 
-    df_hist["Data Fechamento"] = pd.to_datetime(
-        df_hist["Data Fechamento"]
+    df_base = df_hist.copy()
+
+    df_base["Data Fechamento"] = pd.to_datetime(
+        df_base["Data Fechamento"]
     ).dt.date
 
-    st.dataframe(df_hist)
+    # formatação valores
+    if "Custo Total" in df_base.columns:
+        df_base["Custo Total"] = df_base["Custo Total"].apply(moeda_br)
+
+    if "Vlr Unit" in df_base.columns:
+        df_base["Vlr Unit"] = df_base["Vlr Unit"].apply(moeda_br)
+
+    st.dataframe(df_base, use_container_width=True)
 
 # =================================================
 # ABA 2 - EVOLUÇÃO DO ESTOQUE
@@ -97,10 +113,10 @@ with tab2:
 
     col1, col2, col3, col4 = st.columns(4)
 
-    col1.metric("Estoque Total", f"R$ {estoque_total:,.0f}")
-    col2.metric("Estoque Obsoleto", f"R$ {estoque_obsoleto:,.0f}")
+    col1.metric("Estoque Total", moeda_br(estoque_total))
+    col2.metric("Estoque Obsoleto", moeda_br(estoque_obsoleto))
     col3.metric("% Obsolescência", f"{percentual*100:.2f}%")
-    col4.metric("Itens Obsoletos", f"{itens_obsoletos:,}")
+    col4.metric("Itens Obsoletos", f"{itens_obsoletos:,}".replace(",", "."))
 
     st.markdown("---")
 
@@ -114,13 +130,8 @@ with tab2:
         df_tabela["Data Fechamento"]
     ).dt.strftime("%m/%Y")
 
-    df_tabela["Estoque Total"] = df_tabela["Estoque Total"].map(
-        lambda x: f"R$ {x:,.2f}"
-    )
-
-    df_tabela["Estoque Obsoleto"] = df_tabela["Estoque Obsoleto"].map(
-        lambda x: f"R$ {x:,.2f}"
-    )
+    df_tabela["Estoque Total"] = df_tabela["Estoque Total"].apply(moeda_br)
+    df_tabela["Estoque Obsoleto"] = df_tabela["Estoque Obsoleto"].apply(moeda_br)
 
     df_tabela["% Obsoleto"] = (
         df_tabela["% Obsoleto"] * 100
@@ -137,7 +148,7 @@ with tab2:
 
     st.subheader("Evolução do Estoque")
 
-    st.dataframe(df_tabela)
+    st.dataframe(df_tabela, use_container_width=True)
 
     # -----------------------------
     # GRÁFICO
