@@ -1,5 +1,10 @@
 import streamlit as st
 import pandas as pd
+import streamlit as st
+
+st.title("📊 Dashboard de Estoque")
+
+st.write("Página de dashboard funcionando.")
 
 from base_historica import atualizar_base_historica
 from analises import evolucao_estoque
