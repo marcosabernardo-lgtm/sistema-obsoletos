@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import plotly.express as px
 
 from analises import evolucao_estoque
 
@@ -70,10 +71,6 @@ with open("data/base_historica.parquet", "rb") as f:
 
 st.sidebar.header("Filtros")
 
-# -------------------------------------------------
-# FILTRO EMPRESA / FILIAL
-# -------------------------------------------------
-
 empresas_lista = sorted(df_hist["Empresa / Filial"].dropna().unique())
 
 empresas_sel = st.sidebar.multiselect(
@@ -82,10 +79,6 @@ empresas_sel = st.sidebar.multiselect(
     default=[]
 )
 
-# -------------------------------------------------
-# FILTRO CONTA
-# -------------------------------------------------
-
 contas_lista = sorted(df_hist["Conta"].dropna().unique())
 
 contas_sel = st.sidebar.multiselect(
@@ -93,9 +86,6 @@ contas_sel = st.sidebar.multiselect(
     options=contas_lista,
     default=[]
 )
-# -------------------------------------------------
-# FILTRO STATUS DO MOVIMENTO
-# -------------------------------------------------
 
 status_mov_opcoes = ["Todos"] + sorted(df_hist["Status do Movimento"].dropna().unique())
 
@@ -118,10 +108,6 @@ if contas_sel:
 
 if status_mov_sel != "Todos":
     df_filtrado = df_filtrado[df_filtrado["Status do Movimento"] == status_mov_sel]
-
-# -------------------------------------------------
-# SE NÃO HOUVER DADOS
-# -------------------------------------------------
 
 if df_filtrado.empty:
     st.warning("Sem dados para os filtros selecionados.")
@@ -220,7 +206,7 @@ with tab2:
     st.dataframe(df_tabela, use_container_width=True)
 
     # -------------------------------------------------
-    # GRÁFICO
+    # GRÁFICO EVOLUÇÃO
     # -------------------------------------------------
 
     df_chart = df_evolucao.copy()
@@ -260,3 +246,76 @@ with tab2:
     )
 
     st.altair_chart(chart, use_container_width=True)
+
+    st.markdown("---")
+
+    # =================================================
+    # TOP 20 PRODUTOS OBSOLETOS
+    # =================================================
+
+    st.subheader("Top 20 Produtos Obsoletos")
+
+    top_produtos = (
+        df_filtrado[df_filtrado["Status Estoque"] == "Obsoleto"]
+        .groupby(["Produto", "Descricao"], as_index=False)["Custo Total"]
+        .sum()
+        .sort_values("Custo Total", ascending=False)
+        .head(20)
+    )
+
+    fig_prod = px.bar(
+        top_produtos,
+        x="Custo Total",
+        y="Descricao",
+        orientation="h"
+    )
+
+    fig_prod.update_layout(height=600)
+
+    st.plotly_chart(fig_prod, use_container_width=True)
+
+    # =================================================
+    # TOP 5 EMPRESAS
+    # =================================================
+
+    st.subheader("Top 5 Empresas com Maior Estoque Obsoleto")
+
+    top_empresas = (
+        df_filtrado[df_filtrado["Status Estoque"] == "Obsoleto"]
+        .groupby("Empresa / Filial", as_index=False)["Custo Total"]
+        .sum()
+        .sort_values("Custo Total", ascending=False)
+        .head(5)
+    )
+
+    fig_emp = px.bar(
+        top_empresas,
+        x="Empresa / Filial",
+        y="Custo Total"
+    )
+
+    fig_emp.update_layout(height=400)
+
+    st.plotly_chart(fig_emp, use_container_width=True)
+
+    # =================================================
+    # CURVA DE ENVELHECIMENTO
+    # =================================================
+
+    st.subheader("Curva de Envelhecimento do Estoque")
+
+    curva = (
+        df_filtrado.groupby("Status do Movimento", as_index=False)["Custo Total"]
+        .sum()
+        .sort_values("Custo Total", ascending=False)
+    )
+
+    fig_curva = px.bar(
+        curva,
+        x="Status do Movimento",
+        y="Custo Total"
+    )
+
+    fig_curva.update_layout(height=400)
+
+    st.plotly_chart(fig_curva, use_container_width=True)
