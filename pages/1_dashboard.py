@@ -117,13 +117,30 @@ with tab2:
     # GRÁFICO
     # -------------------------------------------------
 
-    df_chart = df_evolucao.set_index("Fechamento")
+    import altair as alt
 
-    st.line_chart(
-        df_chart[
-            [
-                "Estoque Total",
-                "Estoque Obsoleto"
-            ]
-        ]
-    )
+# preparar dados do gráfico
+df_chart = df_evolucao.copy()
+
+df_chart["Fechamento"] = pd.to_datetime(
+    df_chart["Data Fechamento"]
+).dt.strftime("%m/%Y")
+
+df_chart = df_chart.melt(
+    id_vars="Fechamento",
+    value_vars=["Estoque Total", "Estoque Obsoleto"],
+    var_name="Tipo",
+    value_name="Valor"
+)
+
+# gráfico
+chart = alt.Chart(df_chart).mark_line(point=True).encode(
+    x=alt.X("Fechamento:N", title="Fechamento"),
+    y=alt.Y("Valor:Q", title="Valor"),
+    color="Tipo:N"
+).properties(
+    width=800,
+    height=400
+)
+
+st.altair_chart(chart, use_container_width=True)
