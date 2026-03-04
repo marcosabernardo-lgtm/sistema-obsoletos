@@ -35,7 +35,7 @@ except:
     st.stop()
 
 # -------------------------------------------------
-# Download do histórico
+# Download histórico
 # -------------------------------------------------
 
 with open("data/base_historica.parquet", "rb") as f:
@@ -48,7 +48,7 @@ with open("data/base_historica.parquet", "rb") as f:
 st.markdown("---")
 
 # -------------------------------------------------
-# ABAS
+# Criar abas
 # -------------------------------------------------
 
 tab1, tab2 = st.tabs([
@@ -56,30 +56,30 @@ tab1, tab2 = st.tabs([
     "📈 Evolução do Estoque"
 ])
 
-# -------------------------------------------------
+# =================================================
 # ABA 1 - BASE HISTÓRICA
-# -------------------------------------------------
+# =================================================
 
 with tab1:
+
+    st.subheader("Base Histórica")
 
     df_hist["Data Fechamento"] = pd.to_datetime(
         df_hist["Data Fechamento"]
     ).dt.date
 
-    st.subheader("Base Histórica")
-
     st.dataframe(df_hist)
 
-# -------------------------------------------------
-# ABA 2 - EVOLUÇÃO
-# -------------------------------------------------
+# =================================================
+# ABA 2 - EVOLUÇÃO DO ESTOQUE
+# =================================================
 
 with tab2:
 
     df_evolucao = evolucao_estoque(df_hist)
 
     # -----------------------------
-    # KPIs DO ÚLTIMO FECHAMENTO
+    # KPIs
     # -----------------------------
 
     ultimo = df_evolucao.sort_values("Data Fechamento").iloc[-1]
@@ -97,30 +97,15 @@ with tab2:
 
     col1, col2, col3, col4 = st.columns(4)
 
-    col1.metric(
-        "Estoque Total",
-        f"R$ {estoque_total:,.0f}"
-    )
-
-    col2.metric(
-        "Estoque Obsoleto",
-        f"R$ {estoque_obsoleto:,.0f}"
-    )
-
-    col3.metric(
-        "% Obsolescência",
-        f"{percentual*100:.2f}%"
-    )
-
-    col4.metric(
-        "Itens Obsoletos",
-        f"{itens_obsoletos:,}"
-    )
+    col1.metric("Estoque Total", f"R$ {estoque_total:,.0f}")
+    col2.metric("Estoque Obsoleto", f"R$ {estoque_obsoleto:,.0f}")
+    col3.metric("% Obsolescência", f"{percentual*100:.2f}%")
+    col4.metric("Itens Obsoletos", f"{itens_obsoletos:,}")
 
     st.markdown("---")
 
     # -----------------------------
-    # TABELA DE EVOLUÇÃO
+    # TABELA EVOLUÇÃO
     # -----------------------------
 
     df_tabela = df_evolucao.copy()
