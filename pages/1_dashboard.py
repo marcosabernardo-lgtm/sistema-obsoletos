@@ -112,7 +112,7 @@ contas_sel = st.sidebar.multiselect(
 )
 
 # -------------------------------------------------
-# BASE KPI
+# BASE KPI (SEM FILTRO DE OBSOLETO)
 # -------------------------------------------------
 
 df_kpi = df_hist.copy()
@@ -124,7 +124,7 @@ if contas_sel:
     df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
 
 # -------------------------------------------------
-# BASE FILTRADA
+# BASE FILTRADA (PARA GRÁFICOS)
 # -------------------------------------------------
 
 df_filtrado = df_kpi.copy()
@@ -137,6 +137,50 @@ if status_estoque == "Obsoletos":
 if df_filtrado.empty:
     st.warning("Sem dados para os filtros selecionados.")
     st.stop()
+
+# -------------------------------------------------
+# KPIs
+# -------------------------------------------------
+
+ultima_data = df_kpi["Data Fechamento"].max()
+
+base_kpi = df_kpi[df_kpi["Data Fechamento"] == ultima_data]
+
+estoque_total = base_kpi["Custo Total"].sum()
+
+estoque_obsoleto = base_kpi[
+    base_kpi["Status do Movimento"] != "Até 6 meses"
+]["Custo Total"].sum()
+
+percentual_obsoleto = (
+    estoque_obsoleto / estoque_total if estoque_total > 0 else 0
+)
+
+itens_obsoletos = base_kpi[
+    base_kpi["Status do Movimento"] != "Até 6 meses"
+]["Produto"].nunique()
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric(
+    "Estoque Total",
+    moeda_br(estoque_total)
+)
+
+col2.metric(
+    "Estoque Obsoleto",
+    moeda_br(estoque_obsoleto)
+)
+
+col3.metric(
+    "% Obsolescência",
+    f"{percentual_obsoleto*100:.2f}%"
+)
+
+col4.metric(
+    "Itens Obsoletos",
+    f"{itens_obsoletos:,}".replace(",", ".")
+)
 
 st.markdown("---")
 
@@ -238,10 +282,6 @@ with tab4:
         df_filtrado["Data Fechamento"] == ultima_data
     ]
 
-    # -------------------------------------------------
-    # EMPRESA
-    # -------------------------------------------------
-
     st.subheader("Obsoleto por Empresa / Filial")
 
     empresa = (
@@ -258,22 +298,12 @@ with tab4:
         axis=1
     )
 
-    max_x = empresa["Custo Total"].max() * 1.15
-
-    chart1 = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
-        x=alt.X(
-            "Custo Total",
-            scale=alt.Scale(domain=[0,max_x]),
-            axis=None
-        ),
-        y=alt.Y(
-            "Empresa / Filial",
-            sort="-x",
-            axis=alt.Axis(title=None,labelLimit=400)
-        )
+    chart = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
+        x=alt.X("Custo Total", axis=None),
+        y=alt.Y("Empresa / Filial", sort="-x", axis=alt.Axis(title=None)),
     )
 
-    text1 = alt.Chart(empresa).mark_text(
+    text = alt.Chart(empresa).mark_text(
         align="left",
         dx=5,
         color="white"
@@ -283,98 +313,4 @@ with tab4:
         text="Label"
     )
 
-    st.altair_chart(chart1 + text1, use_container_width=True)
-
-    # -------------------------------------------------
-    # STATUS MOVIMENTO
-    # -------------------------------------------------
-
-    st.subheader("Obsoleto por Status do Movimento")
-
-    status = (
-        base.groupby("Status do Movimento")["Custo Total"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-    )
-
-    status["%"] = status["Custo Total"] / status["Custo Total"].sum()
-
-    status["Label"] = status.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
-        axis=1
-    )
-
-    max_x = status["Custo Total"].max() * 1.15
-
-    chart2 = alt.Chart(status).mark_bar(color="#EC6E21").encode(
-        x=alt.X(
-            "Custo Total",
-            scale=alt.Scale(domain=[0,max_x]),
-            axis=None
-        ),
-        y=alt.Y(
-            "Status do Movimento",
-            sort="-x",
-            axis=alt.Axis(title=None,labelLimit=400)
-        )
-    )
-
-    text2 = alt.Chart(status).mark_text(
-        align="left",
-        dx=5,
-        color="white"
-    ).encode(
-        x="Custo Total",
-        y=alt.Y("Status do Movimento",sort="-x"),
-        text="Label"
-    )
-
-    st.altair_chart(chart2 + text2, use_container_width=True)
-
-    # -------------------------------------------------
-    # CONTA
-    # -------------------------------------------------
-
-    st.subheader("Obsoleto por Conta")
-
-    conta = (
-        base.groupby("Conta")["Custo Total"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-    )
-
-    conta["%"] = conta["Custo Total"] / conta["Custo Total"].sum()
-
-    conta["Label"] = conta.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
-        axis=1
-    )
-
-    max_x = conta["Custo Total"].max() * 1.15
-
-    chart3 = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
-        x=alt.X(
-            "Custo Total",
-            scale=alt.Scale(domain=[0,max_x]),
-            axis=None
-        ),
-        y=alt.Y(
-            "Conta",
-            sort="-x",
-            axis=alt.Axis(title=None,labelLimit=400)
-        )
-    )
-
-    text3 = alt.Chart(conta).mark_text(
-        align="left",
-        dx=5,
-        color="white"
-    ).encode(
-        x="Custo Total",
-        y=alt.Y("Conta",sort="-x"),
-        text="Label"
-    )
-
-    st.altair_chart(chart3 + text3, use_container_width=True)
+    st.altair_chart(chart + text, use_container_width=True)
