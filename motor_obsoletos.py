@@ -63,6 +63,30 @@ def executar_estoque(z):
     df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce")
     df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce")
 
+    # ==========================================================
+    # MAQUINAS USADAS — lê os CSVs de 06_Usadas/ e marca a Conta
+    # ==========================================================
+    arquivos_usadas = [
+        n for n in z.namelist()
+        if "06_Usadas/" in n and n.lower().endswith(".csv")
+    ]
+
+    if arquivos_usadas:
+        lista_usadas = []
+        for nome in arquivos_usadas:
+            with z.open(nome) as f:
+                df_csv = pd.read_csv(f, dtype=str)
+            lista_usadas.append(df_csv)
+
+        df_usadas = pd.concat(lista_usadas, ignore_index=True)
+        codigos_usadas = set(
+            df_usadas["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
+        )
+
+        df.loc[df["Produto"].isin(codigos_usadas), "Conta"] = "Maquina Usada"
+
+    # ==========================================================
+
     df = df.drop(columns=["Empresa", "Filial"])
 
     colunas = df.columns.tolist()
