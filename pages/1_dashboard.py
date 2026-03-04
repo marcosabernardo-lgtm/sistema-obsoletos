@@ -44,22 +44,25 @@ tbody tr{
 .kpi-card{
     background-color:#005562;
     border:2px solid #EC6E21;
-    padding:22px;
+    padding:20px;
     border-radius:12px;
     text-align:center;
+    min-height:120px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
 }
 
 .kpi-title{
     color:white;
-    font-size:16px;
+    font-size:15px;
     margin-bottom:6px;
 }
 
 .kpi-value{
     color:white;
-    font-size:36px;
+    font-size:30px;
     font-weight:700;
-    white-space:nowrap;
 }
 
 </style>
