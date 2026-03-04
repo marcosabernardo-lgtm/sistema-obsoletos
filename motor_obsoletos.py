@@ -21,6 +21,47 @@ def normalizar_empresa(nome):
     return nome
 
 
+def ler_codigos_usadas(z):
+    """Lê os CSVs de 06_Usadas/ e retorna um set com os códigos."""
+    arquivos = [
+        n for n in z.namelist()
+        if "06_Usadas/" in n and n.lower().endswith(".csv")
+    ]
+
+    if not arquivos:
+        return set()
+
+    lista = []
+    for nome in arquivos:
+        with z.open(nome) as f:
+            conteudo = f.read().decode("utf-8", errors="ignore")
+
+        # Remove aspas externas de cada linha (formato com duplo encapsulamento)
+        linhas = []
+        for linha in conteudo.splitlines():
+            linha = linha.strip()
+            if linha.startswith('"') and linha.endswith('"'):
+                linha = linha[1:-1]
+            linhas.append(linha)
+        conteudo_limpo = "\n".join(linhas)
+
+        df_csv = pd.read_csv(
+            io.StringIO(conteudo_limpo),
+            dtype=str,
+            sep=",",
+            quotechar='"',
+            engine="python"
+        )
+        df_csv.columns = df_csv.columns.str.strip().str.replace('"', '', regex=False)
+        lista.append(df_csv)
+
+    df_usadas = pd.concat(lista, ignore_index=True)
+
+    return set(
+        df_usadas["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
+    )
+
+
 def executar_estoque(z):
 
     arquivo_estoque = next(
@@ -63,49 +104,10 @@ def executar_estoque(z):
     df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce")
     df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce")
 
-    # ==========================================================
-    # MAQUINAS USADAS — lê os CSVs de 06_Usadas/ e marca a Conta
-    # ==========================================================
-    arquivos_usadas = [
-        n for n in z.namelist()
-        if "06_Usadas/" in n and n.lower().endswith(".csv")
-    ]
-
-    if arquivos_usadas:
-        lista_usadas = []
-        for nome in arquivos_usadas:
-            with z.open(nome) as f:
-                conteudo = f.read().decode("utf-8", errors="ignore")
-
-            # Remove aspas externas de cada linha (formato com duplo encapsulamento)
-            linhas = []
-            for linha in conteudo.splitlines():
-                linha = linha.strip()
-                if linha.startswith('"') and linha.endswith('"'):
-                    linha = linha[1:-1]
-                linhas.append(linha)
-            conteudo_limpo = "
-".join(linhas)
-
-            df_csv = pd.read_csv(
-                io.StringIO(conteudo_limpo),
-                dtype=str,
-                sep=",",
-                quotechar='"',
-                engine="python"
-            )
-            df_csv.columns = df_csv.columns.str.strip().str.replace('"', '', regex=False)
-            lista_usadas.append(df_csv)
-
-        df_usadas = pd.concat(lista_usadas, ignore_index=True)
-
-        codigos_usadas = set(
-            df_usadas["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
-        )
-
+    # Maquinas Usadas
+    codigos_usadas = ler_codigos_usadas(z)
+    if codigos_usadas:
         df.loc[df["Produto"].isin(codigos_usadas), "Conta"] = "Maquina Usada"
-
-    # ==========================================================
 
     df = df.drop(columns=["Empresa", "Filial"])
 
@@ -360,10 +362,10 @@ def executar_motor(uploaded_file):
     )
 
     # Ano Meses Dias — vetorizado
-    dias_total  = (DataBase - df_final["Ult_Movimentacao"]).dt.days
-    anos        = (dias_total // 365).astype("Int64")
-    meses_calc  = ((dias_total % 365) // 30).astype("Int64")
-    dias_rest   = ((dias_total % 365) % 30).astype("Int64")
+    dias_total = (DataBase - df_final["Ult_Movimentacao"]).dt.days
+    anos       = (dias_total // 365).astype("Int64")
+    meses_calc = ((dias_total % 365) // 30).astype("Int64")
+    dias_rest  = ((dias_total % 365) % 30).astype("Int64")
 
     texto_tempo = (
         anos.astype(str)       + " anos " +
