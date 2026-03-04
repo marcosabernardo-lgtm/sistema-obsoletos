@@ -28,7 +28,6 @@ if uploaded_file is not None:
 
         if df_final is not None:
 
-            # Atualiza base histórica
             df_hist = atualizar_base_historica(df_final)
 
             st.success("Processamento concluído com sucesso!")
@@ -38,6 +37,9 @@ if uploaded_file is not None:
             st.markdown("---")
 
             st.subheader("Base Processada")
+
+            # tirar horas da data
+            df_final["Data Fechamento"] = pd.to_datetime(df_final["Data Fechamento"]).dt.date
 
             st.dataframe(df_final)
 
@@ -52,6 +54,8 @@ if uploaded_file is not None:
 
             st.subheader("📚 Base Histórica Acumulada")
 
+            df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"]).dt.date
+
             st.dataframe(df_hist)
 
             st.markdown("---")
@@ -60,10 +64,22 @@ if uploaded_file is not None:
 
             df_evolucao = evolucao_estoque(df_hist)
 
+            df_evolucao["Data Fechamento"] = pd.to_datetime(df_evolucao["Data Fechamento"]).dt.date
+
+            # formatação monetária
+            df_evolucao["Estoque Total"] = df_evolucao["Estoque Total"].map(lambda x: f"R$ {x:,.2f}")
+            df_evolucao["Estoque Obsoleto"] = df_evolucao["Estoque Obsoleto"].map(lambda x: f"R$ {x:,.2f}")
+
+            # percentual
+            df_evolucao["% Obsoleto"] = (df_evolucao["% Obsoleto"] * 100).map(lambda x: f"{x:.2f}%")
+
             st.dataframe(df_evolucao)
 
+            # gráfico continua usando valores originais
+            df_chart = evolucao_estoque(df_hist)
+
             st.line_chart(
-                df_evolucao.set_index("Data Fechamento")[
+                df_chart.set_index("Data Fechamento")[
                     ["Estoque Total", "Estoque Obsoleto"]
                 ]
             )
