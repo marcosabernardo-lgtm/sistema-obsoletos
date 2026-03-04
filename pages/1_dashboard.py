@@ -65,6 +65,12 @@ tbody tr{
     font-weight:700;
 }
 
+.kpi-value-small{
+    color:white;
+    font-size:26px;
+    font-weight:700;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -203,14 +209,14 @@ col2.markdown(f"""
 col3.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">% Estoque Obsoleto</div>
-<div class="kpi-value">{percentual_obsoleto*100:.2f}%</div>
+<div class="kpi-value-small">{percentual_obsoleto*100:.2f}%</div>
 </div>
 """, unsafe_allow_html=True)
 
 col4.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">Itens Obsoletos</div>
-<div class="kpi-value">{format(itens_obsoletos, ",").replace(",", ".")}</div>
+<div class="kpi-value-small">{format(itens_obsoletos, ",").replace(",", ".")}</div>
 </div>
 """, unsafe_allow_html=True)
 
