@@ -311,17 +311,25 @@ def executar_motor(uploaded_file):
     )
 
     def status_mov(row):
-        if row["Tipo de Estoque"] == "EM FABRICACAO":
-            return "Até 6 meses"
-        if pd.isna(row["Meses Ult Mov"]):
-            return "Sem Movimento"
-        if row["Meses Ult Mov"] <= 6:
-            return "Até 6 meses"
-        if row["Meses Ult Mov"] <= 12:
-            return "Até 1 ano"
-        if row["Meses Ult Mov"] <= 24:
-            return "Até 2 anos"
-        return "+ 2 anos"
+
+    # PRIORIDADE 1
+    if row["Tipo de Estoque"] == "EM FABRICACAO":
+        return "Em fabricação"
+
+    # PRIORIDADE 2
+    if pd.isna(row["Meses Ult Mov"]):
+        return "Sem movimento"
+
+    if row["Meses Ult Mov"] <= 6:
+        return "Até 6 meses"
+
+    if row["Meses Ult Mov"] <= 12:
+        return "Até 1 ano"
+
+    if row["Meses Ult Mov"] <= 24:
+        return "Até 2 anos"
+
+    return "+ 2 anos"
 
     df_final["Status do Movimento"] = df_final.apply(status_mov, axis=1)
 
