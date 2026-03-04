@@ -33,8 +33,6 @@ thead tr th{
     font-weight:600 !important;
 }
 
-/* remove zebra */
-
 tbody tr{
     background-color:#0f5a60 !important;
 }
@@ -44,31 +42,21 @@ tbody tr{
 .kpi-card{
     background-color:#005562;
     border:2px solid #EC6E21;
-    padding:20px;
+    padding:18px;
     border-radius:12px;
     text-align:center;
-    min-height:120px;
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
 }
 
 .kpi-title{
+    font-size:14px;
     color:white;
-    font-size:15px;
-    margin-bottom:6px;
 }
 
 .kpi-value{
-    color:white;
-    font-size:30px;
-    font-weight:700;
-}
-
-.kpi-value-small{
-    color:white;
     font-size:26px;
+    color:white;
     font-weight:700;
+    margin-top:6px;
 }
 
 </style>
@@ -209,14 +197,14 @@ col2.markdown(f"""
 col3.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">% Estoque Obsoleto</div>
-<div class="kpi-value-small">{percentual_obsoleto*100:.2f}%</div>
+<div class="kpi-value">{percentual_obsoleto*100:.2f}%</div>
 </div>
 """, unsafe_allow_html=True)
 
 col4.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">Itens Obsoletos</div>
-<div class="kpi-value-small">{format(itens_obsoletos, ",").replace(",", ".")}</div>
+<div class="kpi-value">{format(itens_obsoletos, ",").replace(",", ".")}</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -239,16 +227,9 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 with tab1:
 
-    st.subheader("Base Histórica")
-
     df_base = df_filtrado.copy()
 
-    df_base["Data Fechamento"] = pd.to_datetime(
-        df_base["Data Fechamento"]
-    ).dt.date
-
     df_base["Custo Total"] = df_base["Custo Total"].apply(moeda_br)
-    df_base["Vlr Unit"] = df_base["Vlr Unit"].apply(moeda_br)
 
     st.dataframe(df_base, use_container_width=True)
 
@@ -262,21 +243,60 @@ with tab2:
 
     df_evolucao = df_evolucao.sort_values("Data Fechamento")
 
-    df_tabela = df_evolucao.copy()
+    df_evolucao["Estoque Total"] = df_evolucao["Estoque Total"].apply(moeda_br)
+    df_evolucao["Estoque Obsoleto"] = df_evolucao["Estoque Obsoleto"].apply(moeda_br)
 
-    df_tabela["Fechamento"] = pd.to_datetime(
-        df_tabela["Data Fechamento"]
-    ).dt.strftime("%m/%Y")
+    st.dataframe(df_evolucao, use_container_width=True)
 
-    df_tabela["Estoque Total"] = df_tabela["Estoque Total"].apply(moeda_br)
-    df_tabela["Estoque Obsoleto"] = df_tabela["Estoque Obsoleto"].apply(moeda_br)
+# =================================================
+# TOP 20
+# =================================================
 
-    df_tabela["% Obsoleto"] = (
-        df_tabela["% Obsoleto"] * 100
-    ).map(lambda x: f"{x:.2f}%")
+with tab3:
 
-    df_tabela = df_tabela[
-        ["Fechamento","Estoque Total","Estoque Obsoleto","% Obsoleto"]
+    st.subheader("Top 20 Produtos Obsoletos")
+
+    ultima_data = df_filtrado["Data Fechamento"].max()
+
+    top20 = (
+        df_filtrado[df_filtrado["Data Fechamento"] == ultima_data]
+        .groupby(["Empresa / Filial","Produto","Descricao"],as_index=False)
+        .agg(
+            Quantidade=("Saldo Atual","sum"),
+            Custo_Total=("Custo Total","sum")
+        )
+        .sort_values("Custo_Total",ascending=False)
+        .head(20)
+    )
+
+    top20 = top20.rename(columns={"Custo_Total":"Custo Total"})
+
+    top20["Custo Total"] = top20["Custo Total"].apply(moeda_br)
+
+    st.dataframe(top20, use_container_width=True)
+
+# =================================================
+# GRÁFICOS
+# =================================================
+
+with tab4:
+
+    ultima_data = df_filtrado["Data Fechamento"].max()
+
+    base = df_filtrado[
+        df_filtrado["Data Fechamento"] == ultima_data
     ]
 
-    st.dataframe(df_tabela, use_container_width=True)
+    empresa = (
+        base.groupby("Empresa / Filial")["Custo Total"]
+        .sum()
+        .sort_values(ascending=False)
+        .reset_index()
+    )
+
+    chart = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
+        x="Custo Total",
+        y=alt.Y("Empresa / Filial", sort="-x")
+    )
+
+    st.altair_chart(chart, use_container_width=True)
