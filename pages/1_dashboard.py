@@ -11,14 +11,25 @@ st.title("📊 Dashboard de Estoque Obsoleto")
 st.markdown("---")
 
 # -------------------------------------------------
-# CSS (cor azul nos filtros)
+# CSS
 # -------------------------------------------------
 
 st.markdown("""
 <style>
+
 span[data-baseweb="tag"]{
     background-color:#1f77b4 !important;
 }
+
+[data-baseweb="select"]{
+    border:1px solid #EC6E21 !important;
+    border-radius:6px !important;
+}
+
+[data-baseweb="popover"]{
+    border:1px solid #EC6E21 !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -71,7 +82,16 @@ with open("data/base_historica.parquet", "rb") as f:
 st.sidebar.header("Filtros")
 
 # -------------------------------------------------
-# FILTRO EMPRESA / FILIAL
+# STATUS DO ESTOQUE
+# -------------------------------------------------
+
+status_estoque = st.sidebar.selectbox(
+    "Status do Estoque",
+    ["Geral", "Obsoletos"]
+)
+
+# -------------------------------------------------
+# EMPRESA / FILIAL
 # -------------------------------------------------
 
 empresas_lista = sorted(df_hist["Empresa / Filial"].dropna().unique())
@@ -83,7 +103,7 @@ empresas_sel = st.sidebar.multiselect(
 )
 
 # -------------------------------------------------
-# FILTRO CONTA
+# CONTA
 # -------------------------------------------------
 
 contas_lista = sorted(df_hist["Conta"].dropna().unique())
@@ -95,30 +115,21 @@ contas_sel = st.sidebar.multiselect(
 )
 
 # -------------------------------------------------
-# FILTRO STATUS MOVIMENTO
-# -------------------------------------------------
-
-status_mov_opcoes = ["Todos"] + sorted(df_hist["Status do Movimento"].dropna().unique())
-
-status_mov_sel = st.sidebar.selectbox(
-    "Status do Movimento",
-    status_mov_opcoes
-)
-
-# -------------------------------------------------
 # APLICAR FILTROS
 # -------------------------------------------------
 
 df_filtrado = df_hist.copy()
+
+if status_estoque == "Obsoletos":
+    df_filtrado = df_filtrado[
+        df_filtrado["Status do Movimento"] != "Até 6 meses"
+    ]
 
 if empresas_sel:
     df_filtrado = df_filtrado[df_filtrado["Empresa / Filial"].isin(empresas_sel)]
 
 if contas_sel:
     df_filtrado = df_filtrado[df_filtrado["Conta"].isin(contas_sel)]
-
-if status_mov_sel != "Todos":
-    df_filtrado = df_filtrado[df_filtrado["Status do Movimento"] == status_mov_sel]
 
 # -------------------------------------------------
 # SEM DADOS
@@ -192,30 +203,10 @@ with tab2:
 
     st.markdown("---")
 
-    df_tabela = df_evolucao.copy()
-
-    df_tabela["Fechamento"] = pd.to_datetime(
-        df_tabela["Data Fechamento"]
-    ).dt.strftime("%m/%Y")
-
-    df_tabela["Estoque Total"] = df_tabela["Estoque Total"].apply(moeda_br)
-    df_tabela["Estoque Obsoleto"] = df_tabela["Estoque Obsoleto"].apply(moeda_br)
-
-    df_tabela["% Obsoleto"] = (
-        df_tabela["% Obsoleto"] * 100
-    ).map(lambda x: f"{x:.2f}%")
-
-    df_tabela = df_tabela[
-        ["Fechamento", "Estoque Total", "Estoque Obsoleto", "% Obsoleto"]
-    ]
-
-    st.subheader("Evolução do Estoque")
-
-    st.dataframe(df_tabela, use_container_width=True)
-
     df_chart = df_evolucao.copy()
 
     df_chart["Data Fechamento"] = pd.to_datetime(df_chart["Data Fechamento"])
+
     df_chart = df_chart.sort_values("Data Fechamento")
 
     df_chart["Fechamento"] = df_chart["Data Fechamento"].dt.strftime("%m/%Y")
@@ -290,7 +281,7 @@ with tab4:
     total_estoque = base["Custo Total"].sum()
 
     # =================================================
-    # ESTOQUE POR EMPRESA
+    # EMPRESA
     # =================================================
 
     empresa = (
@@ -308,7 +299,7 @@ with tab4:
     )
 
     bars = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
-        x=alt.X("Custo Total:Q", title="Custo Total"),
+        x="Custo Total:Q",
         y=alt.Y("Empresa / Filial:N", sort="-x")
     )
 
@@ -322,12 +313,7 @@ with tab4:
         text="label"
     )
 
-    chart_empresa = (bars + text).properties(
-        title="Estoque - Empresa / Filial",
-        height=400
-    )
-
-    st.altair_chart(chart_empresa, use_container_width=True)
+    st.altair_chart((bars + text).properties(height=400), use_container_width=True)
 
     st.markdown("---")
 
@@ -350,7 +336,7 @@ with tab4:
     )
 
     bars = alt.Chart(status).mark_bar(color="#EC6E21").encode(
-        x=alt.X("Custo Total:Q", title="Custo Total"),
+        x="Custo Total:Q",
         y=alt.Y("Status do Movimento:N", sort="-x")
     )
 
@@ -364,17 +350,12 @@ with tab4:
         text="label"
     )
 
-    chart_status = (bars + text).properties(
-        title="Estoque - Status do Movimento",
-        height=300
-    )
-
-    st.altair_chart(chart_status, use_container_width=True)
+    st.altair_chart((bars + text).properties(height=300), use_container_width=True)
 
     st.markdown("---")
 
     # =================================================
-    # ESTOQUE POR CONTA
+    # CONTA
     # =================================================
 
     conta = (
@@ -392,7 +373,7 @@ with tab4:
     )
 
     bars = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
-        x=alt.X("Custo Total:Q", title="Custo Total"),
+        x="Custo Total:Q",
         y=alt.Y("Conta:N", sort="-x")
     )
 
@@ -406,9 +387,4 @@ with tab4:
         text="label"
     )
 
-    chart_conta = (bars + text).properties(
-        title="Estoque - Conta",
-        height=300
-    )
-
-    st.altair_chart(chart_conta, use_container_width=True)
+    st.altair_chart((bars + text).properties(height=300), use_container_width=True)
