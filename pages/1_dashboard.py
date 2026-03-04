@@ -124,26 +124,27 @@ df_chart = df_evolucao.copy()
 
 df_chart["Data Fechamento"] = pd.to_datetime(df_chart["Data Fechamento"])
 
+# ordenar corretamente
 df_chart = df_chart.sort_values("Data Fechamento")
 
+# criar coluna de exibição
+df_chart["Fechamento"] = df_chart["Data Fechamento"].dt.strftime("%m/%Y")
+
+# formato longo
 df_chart = df_chart.melt(
-    id_vars="Data Fechamento",
+    id_vars=["Data Fechamento", "Fechamento"],
     value_vars=["Estoque Total", "Estoque Obsoleto"],
     var_name="Tipo",
     value_name="Valor"
 )
 
-# altura dinâmica do gráfico
-num_pontos = df_chart["Data Fechamento"].nunique()
-
-altura = max(250, min(450, num_pontos * 60))
-
 # gráfico
 chart = alt.Chart(df_chart).mark_line(point=True).encode(
     x=alt.X(
-        "Data Fechamento:T",
+        "Fechamento:N",
+        sort=list(df_chart["Fechamento"].unique()),
         title="Fechamento",
-        axis=alt.Axis(format="%m/%Y", labelAngle=0)
+        axis=alt.Axis(labelAngle=0)
     ),
     y=alt.Y(
         "Valor:Q",
@@ -154,7 +155,7 @@ chart = alt.Chart(df_chart).mark_line(point=True).encode(
         title="Tipo"
     )
 ).properties(
-    height=altura
+    height=260
 )
 
 st.altair_chart(chart, use_container_width=True)
