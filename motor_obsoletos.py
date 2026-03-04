@@ -75,7 +75,15 @@ def executar_estoque(z):
         lista_usadas = []
         for nome in arquivos_usadas:
             with z.open(nome) as f:
-                df_csv = pd.read_csv(f, dtype=str)
+                conteudo = f.read().decode("utf-8", errors="ignore")
+            df_csv = pd.read_csv(
+                io.StringIO(conteudo),
+                dtype=str,
+                sep=",",
+                quotechar='"',
+                engine="python"
+            )
+            df_csv.columns = df_csv.columns.str.strip()
             lista_usadas.append(df_csv)
 
         df_usadas = pd.concat(lista_usadas, ignore_index=True)
