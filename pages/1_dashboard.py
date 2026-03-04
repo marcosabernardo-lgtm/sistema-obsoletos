@@ -11,14 +11,31 @@ st.title("📊 Dashboard de Estoque Obsoleto")
 st.markdown("---")
 
 # -------------------------------------------------
-# FUNÇÃO FORMATAÇÃO MOEDA BRASILEIRA
+# CSS (cores filtros)
+# -------------------------------------------------
+
+st.markdown(
+    """
+<style>
+
+span[data-baseweb="tag"]{
+    background-color:#1f77b4 !important;
+}
+
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# -------------------------------------------------
+# FORMATAÇÃO BR
 # -------------------------------------------------
 
 def moeda_br(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # -------------------------------------------------
-# Upload manual do histórico
+# Upload histórico
 # -------------------------------------------------
 
 uploaded_hist = st.file_uploader(
@@ -32,7 +49,7 @@ if uploaded_hist is not None:
     st.success("Histórico carregado com sucesso!")
 
 # -------------------------------------------------
-# Carregar histórico
+# Carregar base
 # -------------------------------------------------
 
 try:
@@ -58,19 +75,49 @@ with open("data/base_historica.parquet", "rb") as f:
 
 st.sidebar.header("Filtros")
 
-# -----------------------------
-# FILTRO EMPRESA / FILIAL
-# -----------------------------
+# -------------------------------------------------
+# FILTRO EMPRESA
+# -------------------------------------------------
 
 empresas = sorted(df_hist["Empresa / Filial"].dropna().unique())
 
-empresas_selecionadas = st.sidebar.multiselect(
+empresas_sel = st.sidebar.multiselect(
     "Empresa / Filial",
     empresas,
     default=empresas
 )
 
-df_hist = df_hist[df_hist["Empresa / Filial"].isin(empresas_selecionadas)]
+# -------------------------------------------------
+# FILTRO CONTA
+# -------------------------------------------------
+
+contas = sorted(df_hist["Conta"].dropna().unique())
+
+contas_sel = st.sidebar.multiselect(
+    "Conta",
+    contas,
+    default=contas
+)
+
+# -------------------------------------------------
+# APLICAR FILTROS
+# -------------------------------------------------
+
+df_filtrado = df_hist.copy()
+
+if empresas_sel:
+    df_filtrado = df_filtrado[df_filtrado["Empresa / Filial"].isin(empresas_sel)]
+
+if contas_sel:
+    df_filtrado = df_filtrado[df_filtrado["Conta"].isin(contas_sel)]
+
+# -------------------------------------------------
+# SEM DADOS
+# -------------------------------------------------
+
+if df_filtrado.empty:
+    st.warning("Sem dados para os filtros selecionados.")
+    st.stop()
 
 st.markdown("---")
 
@@ -84,50 +131,45 @@ tab1, tab2 = st.tabs([
 ])
 
 # =================================================
-# ABA 1 - BASE HISTÓRICA
+# BASE HISTÓRICA
 # =================================================
 
 with tab1:
 
     st.subheader("Base Histórica")
 
-    df_base = df_hist.copy()
+    df_base = df_filtrado.copy()
 
     df_base["Data Fechamento"] = pd.to_datetime(
         df_base["Data Fechamento"]
     ).dt.date
 
-    if "Custo Total" in df_base.columns:
-        df_base["Custo Total"] = df_base["Custo Total"].apply(moeda_br)
-
-    if "Vlr Unit" in df_base.columns:
-        df_base["Vlr Unit"] = df_base["Vlr Unit"].apply(moeda_br)
+    df_base["Custo Total"] = df_base["Custo Total"].apply(moeda_br)
+    df_base["Vlr Unit"] = df_base["Vlr Unit"].apply(moeda_br)
 
     st.dataframe(df_base, use_container_width=True)
 
 # =================================================
-# ABA 2 - EVOLUÇÃO DO ESTOQUE
+# EVOLUÇÃO DO ESTOQUE
 # =================================================
 
 with tab2:
 
-    df_evolucao = evolucao_estoque(df_hist)
+    df_evolucao = evolucao_estoque(df_filtrado)
 
-    # -----------------------------
-    # KPIs
-    # -----------------------------
+    df_evolucao = df_evolucao.sort_values("Data Fechamento")
 
-    ultimo = df_evolucao.sort_values("Data Fechamento").iloc[-1]
+    ultimo = df_evolucao.iloc[-1]
 
     estoque_total = ultimo["Estoque Total"]
     estoque_obsoleto = ultimo["Estoque Obsoleto"]
     percentual = ultimo["% Obsoleto"]
 
-    ultima_data = df_hist["Data Fechamento"].max()
+    ultima_data = df_filtrado["Data Fechamento"].max()
 
-    itens_obsoletos = df_hist[
-        (df_hist["Data Fechamento"] == ultima_data) &
-        (df_hist["Status Estoque"] == "Obsoleto")
+    itens_obsoletos = df_filtrado[
+        (df_filtrado["Data Fechamento"] == ultima_data) &
+        (df_filtrado["Status Estoque"] == "Obsoleto")
     ].shape[0]
 
     col1, col2, col3, col4 = st.columns(4)
@@ -139,9 +181,9 @@ with tab2:
 
     st.markdown("---")
 
-    # -----------------------------
+    # -------------------------------------------------
     # TABELA EVOLUÇÃO
-    # -----------------------------
+    # -------------------------------------------------
 
     df_tabela = df_evolucao.copy()
 
@@ -169,15 +211,13 @@ with tab2:
 
     st.dataframe(df_tabela, use_container_width=True)
 
-    # -----------------------------
+    # -------------------------------------------------
     # GRÁFICO
-    # -----------------------------
+    # -------------------------------------------------
 
     df_chart = df_evolucao.copy()
 
     df_chart["Data Fechamento"] = pd.to_datetime(df_chart["Data Fechamento"])
-
-    df_chart = df_chart.sort_values("Data Fechamento")
 
     df_chart["Fechamento"] = df_chart["Data Fechamento"].dt.strftime("%m/%Y")
 
@@ -188,25 +228,18 @@ with tab2:
         value_name="Valor"
     )
 
-    ordem_fechamentos = df_chart["Fechamento"].drop_duplicates().tolist()
+    ordem = df_chart["Fechamento"].drop_duplicates().tolist()
 
     chart = alt.Chart(df_chart).mark_line(point=True).encode(
         x=alt.X(
             "Fechamento:N",
-            sort=ordem_fechamentos,
-            title="Fechamento",
+            sort=ordem,
             axis=alt.Axis(labelAngle=0)
         ),
-        y=alt.Y(
-            "Valor:Q",
-            title="Valor"
-        ),
-        color=alt.Color(
-            "Tipo:N",
-            title="Tipo"
-        )
+        y="Valor:Q",
+        color="Tipo:N"
     ).properties(
-        height=260
+        height=280
     )
 
     st.altair_chart(chart, use_container_width=True)
