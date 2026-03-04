@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import altair as alt
 
 from analises import evolucao_estoque
 
@@ -10,7 +11,7 @@ st.title("📊 Dashboard de Estoque Obsoleto")
 st.markdown("---")
 
 # -------------------------------------------------
-# Upload manual do histórico (caso servidor reinicie)
+# Upload manual do histórico
 # -------------------------------------------------
 
 uploaded_hist = st.file_uploader(
@@ -24,7 +25,7 @@ if uploaded_hist is not None:
     st.success("Histórico carregado com sucesso!")
 
 # -------------------------------------------------
-# Tentar carregar histórico
+# Carregar histórico
 # -------------------------------------------------
 
 try:
@@ -47,7 +48,7 @@ with open("data/base_historica.parquet", "rb") as f:
 st.markdown("---")
 
 # -------------------------------------------------
-# Criar abas
+# ABAS
 # -------------------------------------------------
 
 tab1, tab2 = st.tabs([
@@ -56,7 +57,7 @@ tab1, tab2 = st.tabs([
 ])
 
 # -------------------------------------------------
-# ABA 1 - BASE HISTORICA
+# ABA 1 - BASE HISTÓRICA
 # -------------------------------------------------
 
 with tab1:
@@ -77,16 +78,56 @@ with tab2:
 
     df_evolucao = evolucao_estoque(df_hist)
 
-    # criar coluna de fechamento mensal
-    df_evolucao["Fechamento"] = pd.to_datetime(
-        df_evolucao["Data Fechamento"]
-    ).dt.strftime("%m/%Y")
+    # -----------------------------
+    # KPIs DO ÚLTIMO FECHAMENTO
+    # -----------------------------
 
-    # -------------------------------------------------
-    # TABELA FORMATADA
-    # -------------------------------------------------
+    ultimo = df_evolucao.sort_values("Data Fechamento").iloc[-1]
+
+    estoque_total = ultimo["Estoque Total"]
+    estoque_obsoleto = ultimo["Estoque Obsoleto"]
+    percentual = ultimo["% Obsoleto"]
+
+    ultima_data = df_hist["Data Fechamento"].max()
+
+    itens_obsoletos = df_hist[
+        (df_hist["Data Fechamento"] == ultima_data) &
+        (df_hist["Status Estoque"] == "Obsoleto")
+    ].shape[0]
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric(
+        "Estoque Total",
+        f"R$ {estoque_total:,.0f}"
+    )
+
+    col2.metric(
+        "Estoque Obsoleto",
+        f"R$ {estoque_obsoleto:,.0f}"
+    )
+
+    col3.metric(
+        "% Obsolescência",
+        f"{percentual*100:.2f}%"
+    )
+
+    col4.metric(
+        "Itens Obsoletos",
+        f"{itens_obsoletos:,}"
+    )
+
+    st.markdown("---")
+
+    # -----------------------------
+    # TABELA DE EVOLUÇÃO
+    # -----------------------------
 
     df_tabela = df_evolucao.copy()
+
+    df_tabela["Fechamento"] = pd.to_datetime(
+        df_tabela["Data Fechamento"]
+    ).dt.strftime("%m/%Y")
 
     df_tabela["Estoque Total"] = df_tabela["Estoque Total"].map(
         lambda x: f"R$ {x:,.2f}"
@@ -113,49 +154,44 @@ with tab2:
 
     st.dataframe(df_tabela)
 
-    # -------------------------------------------------
+    # -----------------------------
     # GRÁFICO
-    # -------------------------------------------------
+    # -----------------------------
 
-import altair as alt
+    df_chart = df_evolucao.copy()
 
-# preparar dados
-df_chart = df_evolucao.copy()
+    df_chart["Data Fechamento"] = pd.to_datetime(df_chart["Data Fechamento"])
 
-df_chart["Data Fechamento"] = pd.to_datetime(df_chart["Data Fechamento"])
+    df_chart = df_chart.sort_values("Data Fechamento")
 
-# ordenar corretamente
-df_chart = df_chart.sort_values("Data Fechamento")
+    df_chart["Fechamento"] = df_chart["Data Fechamento"].dt.strftime("%m/%Y")
 
-# criar coluna de exibição
-df_chart["Fechamento"] = df_chart["Data Fechamento"].dt.strftime("%m/%Y")
-
-# formato longo
-df_chart = df_chart.melt(
-    id_vars=["Data Fechamento", "Fechamento"],
-    value_vars=["Estoque Total", "Estoque Obsoleto"],
-    var_name="Tipo",
-    value_name="Valor"
-)
-
-# gráfico
-chart = alt.Chart(df_chart).mark_line(point=True).encode(
-    x=alt.X(
-        "Fechamento:N",
-        sort=list(df_chart["Fechamento"].unique()),
-        title="Fechamento",
-        axis=alt.Axis(labelAngle=0)
-    ),
-    y=alt.Y(
-        "Valor:Q",
-        title="Valor"
-    ),
-    color=alt.Color(
-        "Tipo:N",
-        title="Tipo"
+    df_chart = df_chart.melt(
+        id_vars=["Data Fechamento", "Fechamento"],
+        value_vars=["Estoque Total", "Estoque Obsoleto"],
+        var_name="Tipo",
+        value_name="Valor"
     )
-).properties(
-    height=260
-)
 
-st.altair_chart(chart, use_container_width=True)
+    ordem_fechamentos = df_chart["Fechamento"].drop_duplicates().tolist()
+
+    chart = alt.Chart(df_chart).mark_line(point=True).encode(
+        x=alt.X(
+            "Fechamento:N",
+            sort=ordem_fechamentos,
+            title="Fechamento",
+            axis=alt.Axis(labelAngle=0)
+        ),
+        y=alt.Y(
+            "Valor:Q",
+            title="Valor"
+        ),
+        color=alt.Color(
+            "Tipo:N",
+            title="Tipo"
+        )
+    ).properties(
+        height=260
+    )
+
+    st.altair_chart(chart, use_container_width=True)
