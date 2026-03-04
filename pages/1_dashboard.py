@@ -100,6 +100,17 @@ contas_sel = st.sidebar.multiselect(
 )
 
 # -------------------------------------------------
+# FILTRO STATUS ESTOQUE
+# -------------------------------------------------
+
+status_opcoes = ["Todos"] + sorted(df_hist["Status Estoque"].dropna().unique())
+
+status_sel = st.sidebar.selectbox(
+    "Status do Estoque",
+    status_opcoes
+)
+
+# -------------------------------------------------
 # APLICAR FILTROS
 # -------------------------------------------------
 
