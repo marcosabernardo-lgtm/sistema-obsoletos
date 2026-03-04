@@ -87,8 +87,16 @@ def executar_estoque(z):
             lista_usadas.append(df_csv)
 
         df_usadas = pd.concat(lista_usadas, ignore_index=True)
+
+        # Busca flexível pela coluna de código (ignora acentos e espaços)
+        col_codigo = next(
+            (c for c in df_usadas.columns
+             if c.strip().upper().replace("Ó", "O").replace("Ô", "O") in ["CODIGO", "CÓDIGO", "COD", "CODPROD"]),
+            df_usadas.columns[0]  # fallback: usa a primeira coluna
+        )
+
         codigos_usadas = set(
-            df_usadas["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
+            df_usadas[col_codigo].astype(str).str.strip().str.replace(".0", "", regex=False)
         )
 
         df.loc[df["Produto"].isin(codigos_usadas), "Conta"] = "Maquina Usada"
