@@ -245,11 +245,17 @@ with tab3:
 
 with tab4:
 
-    st.subheader("Estoque - Empresa / Filial")
-
     ultima_data = df_filtrado["Data Fechamento"].max()
 
-    base = df_filtrado[df_filtrado["Data Fechamento"] == ultima_data]
+    base = df_filtrado[
+        df_filtrado["Data Fechamento"] == ultima_data
+    ]
+
+    # =================================================
+    # OBSOLETO POR EMPRESA
+    # =================================================
+
+    st.subheader("Obsoleto por Empresa / Filial")
 
     empresa = (
         base.groupby("Empresa / Filial")["Custo Total"]
@@ -258,17 +264,28 @@ with tab4:
         .reset_index()
     )
 
-    empresa["%"] = empresa["Custo Total"]/empresa["Custo Total"].sum()
+    empresa["%"] = empresa["Custo Total"] / empresa["Custo Total"].sum()
 
     empresa["Label"] = empresa.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',axis=1
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
+        axis=1
     )
 
-    max_x = empresa["Custo Total"].max()*1.1
+    max_x = empresa["Custo Total"].max() * 1.15
 
-    chart1 = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
-        x=alt.X("Custo Total", scale=alt.Scale(domain=[0,max_x])),
-        y=alt.Y("Empresa / Filial",sort="-x")
+    chart1 = alt.Chart(empresa).mark_bar(
+        color="#EC6E21"
+    ).encode(
+        x=alt.X(
+            "Custo Total",
+            scale=alt.Scale(domain=[0, max_x]),
+            axis=None
+        ),
+        y=alt.Y(
+            "Empresa / Filial",
+            sort="-x",
+            axis=alt.Axis(labelLimit=400)
+        )
     )
 
     text1 = alt.Chart(empresa).mark_text(
@@ -277,15 +294,17 @@ with tab4:
         color="white"
     ).encode(
         x="Custo Total",
-        y=alt.Y("Empresa / Filial",sort="-x"),
+        y=alt.Y("Empresa / Filial", sort="-x"),
         text="Label"
     )
 
     st.altair_chart(chart1 + text1, use_container_width=True)
 
-    # STATUS MOVIMENTO
+    # =================================================
+    # OBSOLETO POR STATUS MOVIMENTO
+    # =================================================
 
-    st.subheader("Estoque - Status do Movimento")
+    st.subheader("Obsoleto por Status do Movimento")
 
     status = (
         base.groupby("Status do Movimento")["Custo Total"]
@@ -294,17 +313,28 @@ with tab4:
         .reset_index()
     )
 
-    status["%"] = status["Custo Total"]/status["Custo Total"].sum()
+    status["%"] = status["Custo Total"] / status["Custo Total"].sum()
 
     status["Label"] = status.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',axis=1
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
+        axis=1
     )
 
-    max_x = status["Custo Total"].max()*1.1
+    max_x = status["Custo Total"].max() * 1.15
 
-    chart2 = alt.Chart(status).mark_bar(color="#EC6E21").encode(
-        x=alt.X("Custo Total",scale=alt.Scale(domain=[0,max_x])),
-        y=alt.Y("Status do Movimento",sort="-x")
+    chart2 = alt.Chart(status).mark_bar(
+        color="#EC6E21"
+    ).encode(
+        x=alt.X(
+            "Custo Total",
+            scale=alt.Scale(domain=[0, max_x]),
+            axis=None
+        ),
+        y=alt.Y(
+            "Status do Movimento",
+            sort="-x",
+            axis=alt.Axis(labelLimit=400)
+        )
     )
 
     text2 = alt.Chart(status).mark_text(
@@ -313,15 +343,17 @@ with tab4:
         color="white"
     ).encode(
         x="Custo Total",
-        y=alt.Y("Status do Movimento",sort="-x"),
+        y=alt.Y("Status do Movimento", sort="-x"),
         text="Label"
     )
 
     st.altair_chart(chart2 + text2, use_container_width=True)
 
-    # CONTA
+    # =================================================
+    # OBSOLETO POR CONTA
+    # =================================================
 
-    st.subheader("Estoque - Conta")
+    st.subheader("Obsoleto por Conta")
 
     conta = (
         base.groupby("Conta")["Custo Total"]
@@ -330,17 +362,28 @@ with tab4:
         .reset_index()
     )
 
-    conta["%"] = conta["Custo Total"]/conta["Custo Total"].sum()
+    conta["%"] = conta["Custo Total"] / conta["Custo Total"].sum()
 
     conta["Label"] = conta.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',axis=1
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
+        axis=1
     )
 
-    max_x = conta["Custo Total"].max()*1.1
+    max_x = conta["Custo Total"].max() * 1.15
 
-    chart3 = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
-        x=alt.X("Custo Total",scale=alt.Scale(domain=[0,max_x])),
-        y=alt.Y("Conta",sort="-x")
+    chart3 = alt.Chart(conta).mark_bar(
+        color="#EC6E21"
+    ).encode(
+        x=alt.X(
+            "Custo Total",
+            scale=alt.Scale(domain=[0, max_x]),
+            axis=None
+        ),
+        y=alt.Y(
+            "Conta",
+            sort="-x",
+            axis=alt.Axis(labelLimit=400)
+        )
     )
 
     text3 = alt.Chart(conta).mark_text(
@@ -349,7 +392,7 @@ with tab4:
         color="white"
     ).encode(
         x="Custo Total",
-        y=alt.Y("Conta",sort="-x"),
+        y=alt.Y("Conta", sort="-x"),
         text="Label"
     )
 
