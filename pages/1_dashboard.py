@@ -117,29 +117,31 @@ with tab2:
     # GRÁFICO
     # -------------------------------------------------
 
-    import altair as alt
+import altair as alt
 
-# preparar dados do gráfico
+# preparar dados
 df_chart = df_evolucao.copy()
 
-df_chart["Fechamento"] = pd.to_datetime(
-    df_chart["Data Fechamento"]
-).dt.strftime("%m/%Y")
+df_chart["Data Fechamento"] = pd.to_datetime(df_chart["Data Fechamento"])
 
+# transformar para formato longo
 df_chart = df_chart.melt(
-    id_vars="Fechamento",
+    id_vars="Data Fechamento",
     value_vars=["Estoque Total", "Estoque Obsoleto"],
     var_name="Tipo",
     value_name="Valor"
 )
 
-# gráfico
+# criar gráfico
 chart = alt.Chart(df_chart).mark_line(point=True).encode(
-    x=alt.X("Fechamento:N", title="Fechamento"),
+    x=alt.X(
+        "yearmonth(Data Fechamento):T",
+        title="Fechamento",
+        axis=alt.Axis(format="%m/%Y", labelAngle=0)
+    ),
     y=alt.Y("Valor:Q", title="Valor"),
-    color="Tipo:N"
+    color=alt.Color("Tipo:N", title="Tipo")
 ).properties(
-    width=800,
     height=400
 )
 
