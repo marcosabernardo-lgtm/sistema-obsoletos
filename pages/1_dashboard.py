@@ -42,7 +42,7 @@ except:
     st.stop()
 
 # -------------------------------------------------
-# DOWNLOAD HISTÓRICO
+# Download histórico
 # -------------------------------------------------
 
 with open("data/base_historica.parquet", "rb") as f:
@@ -53,20 +53,24 @@ with open("data/base_historica.parquet", "rb") as f:
     )
 
 # -------------------------------------------------
-# FILTRO POR EMPRESA
+# FILTROS
 # -------------------------------------------------
 
 st.sidebar.header("Filtros")
 
+# -----------------------------
+# FILTRO EMPRESA / FILIAL
+# -----------------------------
+
 empresas = sorted(df_hist["Empresa / Filial"].dropna().unique())
 
-empresa_selecionada = st.sidebar.selectbox(
-    "Empresa",
-    ["Todas"] + empresas
+empresas_selecionadas = st.sidebar.multiselect(
+    "Empresa / Filial",
+    empresas,
+    default=empresas
 )
 
-if empresa_selecionada != "Todas":
-    df_hist = df_hist[df_hist["Empresa / Filial"] == empresa_selecionada]
+df_hist = df_hist[df_hist["Empresa / Filial"].isin(empresas_selecionadas)]
 
 st.markdown("---")
 
