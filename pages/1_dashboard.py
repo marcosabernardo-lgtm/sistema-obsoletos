@@ -33,7 +33,7 @@ thead tr th{
     font-weight:600 !important;
 }
 
-/* remove zebra default */
+/* remove zebra */
 
 tbody tr{
     background-color:#0f5a60 !important;
@@ -41,21 +41,21 @@ tbody tr{
 
 /* KPI CARDS */
 
-.kpi-card {
+.kpi-card{
     background-color:#005562;
     border:2px solid #EC6E21;
-    padding:18px;
+    padding:20px;
     border-radius:10px;
     text-align:center;
 }
 
-.kpi-title {
-    color:#FFFFFF;
-    font-size:16px;
+.kpi-title{
+    color:white;
+    font-size:15px;
 }
 
-.kpi-value {
-    color:#FFFFFF;
+.kpi-value{
+    color:white;
     font-size:34px;
     font-weight:bold;
 }
@@ -120,16 +120,14 @@ empresas_lista = sorted(df_hist["Empresa / Filial"].dropna().unique())
 
 empresas_sel = st.sidebar.multiselect(
     "Empresa / Filial",
-    options=empresas_lista,
-    default=[]
+    options=empresas_lista
 )
 
 contas_lista = sorted(df_hist["Conta"].dropna().unique())
 
 contas_sel = st.sidebar.multiselect(
     "Conta",
-    options=contas_lista,
-    default=[]
+    options=contas_lista
 )
 
 # -------------------------------------------------
@@ -207,7 +205,7 @@ col3.markdown(f"""
 col4.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">Itens Obsoletos</div>
-<div class="kpi-value">{itens_obsoletos:,}".replace(",", ".")}</div>
+<div class="kpi-value">{format(itens_obsoletos, ',').replace(',', '.')}</div>
 </div>
 """, unsafe_allow_html=True)
 
