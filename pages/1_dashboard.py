@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import plotly.express as px
 
 from analises import evolucao_estoque
 
@@ -71,6 +70,10 @@ with open("data/base_historica.parquet", "rb") as f:
 
 st.sidebar.header("Filtros")
 
+# -------------------------------------------------
+# FILTRO EMPRESA / FILIAL
+# -------------------------------------------------
+
 empresas_lista = sorted(df_hist["Empresa / Filial"].dropna().unique())
 
 empresas_sel = st.sidebar.multiselect(
@@ -79,6 +82,10 @@ empresas_sel = st.sidebar.multiselect(
     default=[]
 )
 
+# -------------------------------------------------
+# FILTRO CONTA
+# -------------------------------------------------
+
 contas_lista = sorted(df_hist["Conta"].dropna().unique())
 
 contas_sel = st.sidebar.multiselect(
@@ -86,6 +93,10 @@ contas_sel = st.sidebar.multiselect(
     options=contas_lista,
     default=[]
 )
+
+# -------------------------------------------------
+# FILTRO STATUS MOVIMENTO
+# -------------------------------------------------
 
 status_mov_opcoes = ["Todos"] + sorted(df_hist["Status do Movimento"].dropna().unique())
 
@@ -109,6 +120,10 @@ if contas_sel:
 if status_mov_sel != "Todos":
     df_filtrado = df_filtrado[df_filtrado["Status do Movimento"] == status_mov_sel]
 
+# -------------------------------------------------
+# SEM DADOS
+# -------------------------------------------------
+
 if df_filtrado.empty:
     st.warning("Sem dados para os filtros selecionados.")
     st.stop()
@@ -119,9 +134,11 @@ st.markdown("---")
 # ABAS
 # -------------------------------------------------
 
-tab1, tab2 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📚 Base Histórica",
-    "📈 Evolução do Estoque"
+    "📈 Evolução do Estoque",
+    "🏆 Top 20 Produtos",
+    "📊 Gráficos"
 ])
 
 # =================================================
@@ -175,10 +192,6 @@ with tab2:
 
     st.markdown("---")
 
-    # -------------------------------------------------
-    # TABELA EVOLUÇÃO
-    # -------------------------------------------------
-
     df_tabela = df_evolucao.copy()
 
     df_tabela["Fechamento"] = pd.to_datetime(
@@ -193,26 +206,16 @@ with tab2:
     ).map(lambda x: f"{x:.2f}%")
 
     df_tabela = df_tabela[
-        [
-            "Fechamento",
-            "Estoque Total",
-            "Estoque Obsoleto",
-            "% Obsoleto"
-        ]
+        ["Fechamento", "Estoque Total", "Estoque Obsoleto", "% Obsoleto"]
     ]
 
     st.subheader("Evolução do Estoque")
 
     st.dataframe(df_tabela, use_container_width=True)
 
-    # -------------------------------------------------
-    # GRÁFICO EVOLUÇÃO
-    # -------------------------------------------------
-
     df_chart = df_evolucao.copy()
 
     df_chart["Data Fechamento"] = pd.to_datetime(df_chart["Data Fechamento"])
-
     df_chart = df_chart.sort_values("Data Fechamento")
 
     df_chart["Fechamento"] = df_chart["Data Fechamento"].dt.strftime("%m/%Y")
@@ -227,122 +230,118 @@ with tab2:
     ordem = df_chart["Fechamento"].drop_duplicates().tolist()
 
     chart = alt.Chart(df_chart).mark_line(point=True).encode(
-        x=alt.X(
-            "Fechamento:N",
-            sort=ordem,
-            axis=alt.Axis(labelAngle=0),
-            title="Fechamento"
-        ),
-        y=alt.Y(
-            "Valor:Q",
-            title="Valor"
-        ),
-        color=alt.Color(
-            "Tipo:N",
-            title="Tipo"
-        )
-    ).properties(
-        height=280
-    )
+        x=alt.X("Fechamento:N", sort=ordem),
+        y="Valor:Q",
+        color="Tipo:N"
+    ).properties(height=280)
 
     st.altair_chart(chart, use_container_width=True)
 
-    st.markdown("---")
+# =================================================
+# TOP 20 PRODUTOS
+# =================================================
 
-    # =================================================
-    # TOP 20 PRODUTOS OBSOLETOS
-    # =================================================
+with tab3:
 
-    # -------------------------------------------------
-# TOP 20 PRODUTOS OBSOLETOS
-# -------------------------------------------------
-
-    # -------------------------------------------------
-    # TOP 20 PRODUTOS OBSOLETOS
-    # -------------------------------------------------
-
-    st.markdown("---")
     st.subheader("Top 20 Produtos Obsoletos")
 
     ultima_data = df_filtrado["Data Fechamento"].max()
 
-    top_produtos = (
+    top20 = (
         df_filtrado[
             (df_filtrado["Data Fechamento"] == ultima_data) &
             (df_filtrado["Status Estoque"] == "Obsoleto")
         ]
-        .groupby("Descricao", as_index=False)["Custo Total"]
-        .sum()
         .sort_values("Custo Total", ascending=False)
         .head(20)
     )
 
-    chart = alt.Chart(top_produtos).mark_bar(
+    tabela_top20 = top20[
+        [
+            "Empresa / Filial",
+            "Conta",
+            "Produto",
+            "Descricao",
+            "Saldo Atual",
+            "Vlr Unit",
+            "Custo Total",
+            "Meses Ult Mov",
+            "Status do Movimento"
+        ]
+    ].copy()
+
+    tabela_top20["Vlr Unit"] = tabela_top20["Vlr Unit"].apply(moeda_br)
+    tabela_top20["Custo Total"] = tabela_top20["Custo Total"].apply(moeda_br)
+
+    st.dataframe(tabela_top20, use_container_width=True)
+
+# =================================================
+# GRÁFICOS
+# =================================================
+
+with tab4:
+
+    st.subheader("Gráficos de Análise")
+
+    ultima_data = df_filtrado["Data Fechamento"].max()
+
+    base = df_filtrado[df_filtrado["Data Fechamento"] == ultima_data]
+
+    col1, col2 = st.columns(2)
+
+    empresa = (
+        base.groupby("Empresa / Filial")["Custo Total"]
+        .sum()
+        .reset_index()
+        .sort_values("Custo Total", ascending=False)
+    )
+
+    chart_empresa = alt.Chart(empresa).mark_bar(
         color="#EC6E21"
     ).encode(
-        x=alt.X(
-            "Custo Total:Q",
-            title="Custo Total"
-        ),
-        y=alt.Y(
-            "Descricao:N",
-            sort="-x",
-            title="Descrição"
-        )
+        x="Custo Total:Q",
+        y=alt.Y("Empresa / Filial:N", sort="-x")
     ).properties(
-        height=500
-    ).configure_axis(
-        labelColor="#FFFFFF",
-        titleColor="#FFFFFF",
-        gridColor="#005562"
-    ).configure_view(
-        strokeWidth=0
+        title="Estoque - Empresa / Filial",
+        height=400
     )
 
-    st.altair_chart(chart, use_container_width=True)
+    col1.altair_chart(chart_empresa, use_container_width=True)
 
-    # =================================================
-    # TOP 5 EMPRESAS
-    # =================================================
-
-    st.subheader("Top 5 Empresas com Maior Estoque Obsoleto")
-
-    top_empresas = (
-        df_filtrado[df_filtrado["Status Estoque"] == "Obsoleto"]
-        .groupby("Empresa / Filial", as_index=False)["Custo Total"]
+    status = (
+        base.groupby("Status do Movimento")["Custo Total"]
         .sum()
-        .sort_values("Custo Total", ascending=False)
-        .head(5)
-    )
-
-    fig_emp = px.bar(
-        top_empresas,
-        x="Empresa / Filial",
-        y="Custo Total"
-    )
-
-    fig_emp.update_layout(height=400)
-
-    st.plotly_chart(fig_emp, use_container_width=True)
-
-    # =================================================
-    # CURVA DE ENVELHECIMENTO
-    # =================================================
-
-    st.subheader("Curva de Envelhecimento do Estoque")
-
-    curva = (
-        df_filtrado.groupby("Status do Movimento", as_index=False)["Custo Total"]
-        .sum()
+        .reset_index()
         .sort_values("Custo Total", ascending=False)
     )
 
-    fig_curva = px.bar(
-        curva,
-        x="Status do Movimento",
-        y="Custo Total"
+    chart_status = alt.Chart(status).mark_bar(
+        color="#EC6E21"
+    ).encode(
+        x="Custo Total:Q",
+        y=alt.Y("Status do Movimento:N", sort="-x")
+    ).properties(
+        title="Estoque - Status do Movimento",
+        height=200
     )
 
-    fig_curva.update_layout(height=400)
+    col2.altair_chart(chart_status, use_container_width=True)
 
-    st.plotly_chart(fig_curva, use_container_width=True)
+    conta = (
+        base.groupby("Conta")["Custo Total"]
+        .sum()
+        .reset_index()
+        .sort_values("Custo Total", ascending=False)
+    )
+
+    chart_conta = alt.Chart(conta).mark_bar(
+        color="#EC6E21"
+    ).encode(
+        x="Custo Total:Q",
+        y=alt.Y("Conta:N", sort="-x")
+    ).properties(
+        title="Estoque - Conta",
+        height=200
+    )
+
+    col2.altair_chart(chart_conta, use_container_width=True)
