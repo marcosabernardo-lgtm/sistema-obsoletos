@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from motor_obsoletos import executar_motor
 from base_historica import atualizar_base_historica
 
@@ -25,13 +26,14 @@ if uploaded_file is not None:
 
         if df_final is not None:
 
-            # Salva no histórico
+            # salva no histórico
             df_hist = atualizar_base_historica(df_final)
 
-            # Mostra quantidade de registros no histórico
+            st.success("Processamento concluído com sucesso!")
+
             st.write("Registros no histórico:", len(df_hist))
 
-            st.success("Processamento concluído com sucesso!")
+            st.subheader("Base Processada")
 
             st.dataframe(df_final)
 
@@ -41,6 +43,12 @@ if uploaded_file is not None:
                 file_name="Base_Obsoletos_Final.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
+            st.markdown("---")
+
+            st.subheader("📚 Base Histórica Acumulada")
+
+            st.dataframe(df_hist)
 
         else:
 
