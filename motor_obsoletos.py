@@ -2,6 +2,12 @@ import pandas as pd
 import zipfile
 import io
 import numpy as np
+import unicodedata
+
+
+def _norm(texto):
+    """Remove acentos e coloca em maiúsculo para comparação segura."""
+    return unicodedata.normalize("NFKD", str(texto)).encode("ASCII", "ignore").decode("ASCII").upper().strip()
 
 
 # ==========================================================
@@ -277,11 +283,19 @@ def executar_motor(uploaded_file):
 
     df_final["Origem Mov"] = df_final.apply(origem, axis=1)
 
-    df_final = df_final.drop(columns=["Ult_Mov", "Ult_Entrada", "Ult_Saida"])
+    df_final = df_final.drop(
+        columns=["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
+    )
 
+    # Ajustes pedidos
     df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].str.title()
     df_final["Conta"] = df_final["Conta"].str.title()
     df_final = df_final.drop(columns=["ID_UNICO"])
+
+
+    # ==========================================================
+    # BLOCO FINAL (APENAS ACRESCENTADO)
+    # ==========================================================
 
     DataBase = pd.to_datetime(df_final["Data Fechamento"].iloc[0])
 
@@ -296,15 +310,16 @@ def executar_motor(uploaded_file):
         np.nan
     )
 
+    # --- CORREÇÃO: usa _norm() para comparar sem depender de acentuação ---
     df_final["Status Estoque"] = np.where(
-        df_final["Tipo de Estoque"] == "EM FABRICACAO",
-        "Em fabricação",
+        df_final["Tipo de Estoque"].apply(_norm) == "EM FABRICACAO",
+        "Até 6 meses",
         np.where(df_final["Dias Sem Mov"] > 180, "Obsoleto", "Até 6 meses")
     )
 
     def status_mov(row):
-        if row["Tipo de Estoque"] == "EM FABRICACAO":
-            return "Em fabricação"
+        if _norm(row["Tipo de Estoque"]) == "EM FABRICACAO":
+            return "Até 6 meses"
         if pd.isna(row["Meses Ult Mov"]):
             return "Sem Movimento"
         if row["Meses Ult Mov"] <= 6:
@@ -318,7 +333,7 @@ def executar_motor(uploaded_file):
     df_final["Status do Movimento"] = df_final.apply(status_mov, axis=1)
 
     def formatar(row):
-        if row["Tipo de Estoque"] == "EM FABRICACAO":
+        if _norm(row["Tipo de Estoque"]) == "EM FABRICACAO":
             return "Em fabricação"
         if pd.isna(row["Ult_Movimentacao"]):
             return "Sem movimento"
