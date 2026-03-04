@@ -11,7 +11,7 @@ st.title("📊 Dashboard de Estoque Obsoleto")
 st.markdown("---")
 
 # -------------------------------------------------
-# CSS
+# CSS GLOBAL
 # -------------------------------------------------
 
 st.markdown("""
@@ -25,9 +25,18 @@ div[data-baseweb="select"] > div{
     border:1px solid #EC6E21 !important;
 }
 
+/* HEADER DAS TABELAS */
+
 thead tr th{
     background-color:#005562 !important;
     color:white !important;
+    font-weight:600 !important;
+}
+
+/* remove zebra default */
+
+tbody tr{
+    background-color:#0f5a60 !important;
 }
 
 </style>
@@ -171,28 +180,6 @@ with tab2:
 
     df_evolucao = df_evolucao.sort_values("Data Fechamento")
 
-    ultimo = df_evolucao.iloc[-1]
-
-    estoque_total = ultimo["Estoque Total"]
-    estoque_obsoleto = ultimo["Estoque Obsoleto"]
-    percentual = ultimo["% Obsoleto"]
-
-    ultima_data = df_kpi["Data Fechamento"].max()
-
-    itens_obsoletos = df_kpi[
-        (df_kpi["Data Fechamento"] == ultima_data) &
-        (df_kpi["Status Estoque"] == "Obsoleto")
-    ].shape[0]
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric("Estoque Total", moeda_br(estoque_total))
-    col2.metric("Estoque Obsoleto", moeda_br(estoque_obsoleto))
-    col3.metric("% Obsolescência", f"{percentual*100:.2f}%")
-    col4.metric("Itens Obsoletos", f"{itens_obsoletos:,}".replace(",", "."))
-
-    st.markdown("---")
-
     df_tabela = df_evolucao.copy()
 
     df_tabela["Fechamento"] = pd.to_datetime(
@@ -251,9 +238,9 @@ with tab4:
         df_filtrado["Data Fechamento"] == ultima_data
     ]
 
-    # =================================================
-    # OBSOLETO POR EMPRESA
-    # =================================================
+    # -------------------------------------------------
+    # EMPRESA
+    # -------------------------------------------------
 
     st.subheader("Obsoleto por Empresa / Filial")
 
@@ -273,18 +260,16 @@ with tab4:
 
     max_x = empresa["Custo Total"].max() * 1.15
 
-    chart1 = alt.Chart(empresa).mark_bar(
-        color="#EC6E21"
-    ).encode(
+    chart1 = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
         x=alt.X(
             "Custo Total",
-            scale=alt.Scale(domain=[0, max_x]),
+            scale=alt.Scale(domain=[0,max_x]),
             axis=None
         ),
         y=alt.Y(
             "Empresa / Filial",
             sort="-x",
-            axis=alt.Axis(labelLimit=400)
+            axis=alt.Axis(title=None,labelLimit=400)
         )
     )
 
@@ -294,15 +279,15 @@ with tab4:
         color="white"
     ).encode(
         x="Custo Total",
-        y=alt.Y("Empresa / Filial", sort="-x"),
+        y=alt.Y("Empresa / Filial",sort="-x"),
         text="Label"
     )
 
     st.altair_chart(chart1 + text1, use_container_width=True)
 
-    # =================================================
-    # OBSOLETO POR STATUS MOVIMENTO
-    # =================================================
+    # -------------------------------------------------
+    # STATUS MOVIMENTO
+    # -------------------------------------------------
 
     st.subheader("Obsoleto por Status do Movimento")
 
@@ -322,18 +307,16 @@ with tab4:
 
     max_x = status["Custo Total"].max() * 1.15
 
-    chart2 = alt.Chart(status).mark_bar(
-        color="#EC6E21"
-    ).encode(
+    chart2 = alt.Chart(status).mark_bar(color="#EC6E21").encode(
         x=alt.X(
             "Custo Total",
-            scale=alt.Scale(domain=[0, max_x]),
+            scale=alt.Scale(domain=[0,max_x]),
             axis=None
         ),
         y=alt.Y(
             "Status do Movimento",
             sort="-x",
-            axis=alt.Axis(labelLimit=400)
+            axis=alt.Axis(title=None,labelLimit=400)
         )
     )
 
@@ -343,15 +326,15 @@ with tab4:
         color="white"
     ).encode(
         x="Custo Total",
-        y=alt.Y("Status do Movimento", sort="-x"),
+        y=alt.Y("Status do Movimento",sort="-x"),
         text="Label"
     )
 
     st.altair_chart(chart2 + text2, use_container_width=True)
 
-    # =================================================
-    # OBSOLETO POR CONTA
-    # =================================================
+    # -------------------------------------------------
+    # CONTA
+    # -------------------------------------------------
 
     st.subheader("Obsoleto por Conta")
 
@@ -371,18 +354,16 @@ with tab4:
 
     max_x = conta["Custo Total"].max() * 1.15
 
-    chart3 = alt.Chart(conta).mark_bar(
-        color="#EC6E21"
-    ).encode(
+    chart3 = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
         x=alt.X(
             "Custo Total",
-            scale=alt.Scale(domain=[0, max_x]),
+            scale=alt.Scale(domain=[0,max_x]),
             axis=None
         ),
         y=alt.Y(
             "Conta",
             sort="-x",
-            axis=alt.Axis(labelLimit=400)
+            axis=alt.Axis(title=None,labelLimit=400)
         )
     )
 
@@ -392,7 +373,7 @@ with tab4:
         color="white"
     ).encode(
         x="Custo Total",
-        y=alt.Y("Conta", sort="-x"),
+        y=alt.Y("Conta",sort="-x"),
         text="Label"
     )
 
