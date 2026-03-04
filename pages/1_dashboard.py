@@ -257,45 +257,49 @@ with tab2:
 # TOP 20 PRODUTOS OBSOLETOS
 # -------------------------------------------------
 
-st.markdown("---")
-st.subheader("Top 20 Produtos Obsoletos")
+    # -------------------------------------------------
+    # TOP 20 PRODUTOS OBSOLETOS
+    # -------------------------------------------------
 
-ultima_data = df_filtrado["Data Fechamento"].max()
+    st.markdown("---")
+    st.subheader("Top 20 Produtos Obsoletos")
 
-top_produtos = (
-    df_filtrado[
-        (df_filtrado["Data Fechamento"] == ultima_data) &
-        (df_filtrado["Status Estoque"] == "Obsoleto")
-    ]
-    .groupby("Descricao", as_index=False)["Custo Total"]
-    .sum()
-    .sort_values("Custo Total", ascending=False)
-    .head(20)
-)
+    ultima_data = df_filtrado["Data Fechamento"].max()
 
-chart = alt.Chart(top_produtos).mark_bar(
-    color="#EC6E21"
-).encode(
-    x=alt.X(
-        "Custo Total:Q",
-        title="Custo Total"
-    ),
-    y=alt.Y(
-        "Descricao:N",
-        sort="-x",
-        title="Descrição"
+    top_produtos = (
+        df_filtrado[
+            (df_filtrado["Data Fechamento"] == ultima_data) &
+            (df_filtrado["Status Estoque"] == "Obsoleto")
+        ]
+        .groupby("Descricao", as_index=False)["Custo Total"]
+        .sum()
+        .sort_values("Custo Total", ascending=False)
+        .head(20)
     )
-).properties(
-    height=500
-).configure_axis(
-    labelColor="#FFFFFF",
-    titleColor="#FFFFFF",
-    gridColor="#005562"
-).configure_view(
-    strokeWidth=0
-)
 
-st.altair_chart(chart, use_container_width=True)
+    chart = alt.Chart(top_produtos).mark_bar(
+        color="#EC6E21"
+    ).encode(
+        x=alt.X(
+            "Custo Total:Q",
+            title="Custo Total"
+        ),
+        y=alt.Y(
+            "Descricao:N",
+            sort="-x",
+            title="Descrição"
+        )
+    ).properties(
+        height=500
+    ).configure_axis(
+        labelColor="#FFFFFF",
+        titleColor="#FFFFFF",
+        gridColor="#005562"
+    ).configure_view(
+        strokeWidth=0
+    )
+
+    st.altair_chart(chart, use_container_width=True)
 
     # =================================================
     # TOP 5 EMPRESAS
