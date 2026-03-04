@@ -288,10 +288,16 @@ def executar_motor(uploaded_file):
     )
 
     # Ajustes pedidos
-    df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].str.title()
+    df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].str.strip().str.upper()
+
+    # DEBUG - remova após confirmar o problema
+    print("=== DEBUG Tipo de Estoque ===")
+    print("Valores únicos:", df_final["Tipo de Estoque"].unique())
+    print("REPR:", [repr(x) for x in df_final["Tipo de Estoque"].unique()])
+    print("=============================")
+
     df_final["Conta"] = df_final["Conta"].str.title()
     df_final = df_final.drop(columns=["ID_UNICO"])
-
 
     # ==========================================================
     # BLOCO FINAL (APENAS ACRESCENTADO)
@@ -310,15 +316,14 @@ def executar_motor(uploaded_file):
         np.nan
     )
 
-    # --- CORREÇÃO: usa _norm() para comparar sem depender de acentuação ---
     df_final["Status Estoque"] = np.where(
-        df_final["Tipo de Estoque"].apply(_norm) == "EM FABRICACAO",
+        df_final["Tipo de Estoque"] == "EM FABRICACAO",
         "Até 6 meses",
         np.where(df_final["Dias Sem Mov"] > 180, "Obsoleto", "Até 6 meses")
     )
 
     def status_mov(row):
-        if _norm(row["Tipo de Estoque"]) == "EM FABRICACAO":
+        if row["Tipo de Estoque"] == "EM FABRICACAO":
             return "Até 6 meses"
         if pd.isna(row["Meses Ult Mov"]):
             return "Sem Movimento"
@@ -333,7 +338,7 @@ def executar_motor(uploaded_file):
     df_final["Status do Movimento"] = df_final.apply(status_mov, axis=1)
 
     def formatar(row):
-        if _norm(row["Tipo de Estoque"]) == "EM FABRICACAO":
+        if row["Tipo de Estoque"] == "EM FABRICACAO":
             return "Em fabricação"
         if pd.isna(row["Ult_Movimentacao"]):
             return "Sem movimento"
@@ -346,6 +351,9 @@ def executar_motor(uploaded_file):
         return f"{anos} anos {meses} meses {dias_rest} dias"
 
     df_final["Ano Meses Dias"] = df_final.apply(formatar, axis=1)
+
+    # Aplica title DEPOIS das comparações
+    df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].str.title()
 
     buffer = io.BytesIO()
     df_final.to_excel(buffer, index=False)
