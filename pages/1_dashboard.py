@@ -1,12 +1,6 @@
 import streamlit as st
 import pandas as pd
-import streamlit as st
 
-st.title("📊 Dashboard de Estoque")
-
-st.write("Página de dashboard funcionando.")
-
-from base_historica import atualizar_base_historica
 from analises import evolucao_estoque
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
@@ -15,14 +9,35 @@ st.title("📊 Dashboard de Estoque Obsoleto")
 
 st.markdown("---")
 
-# carregar histórico
+# Upload manual do histórico (caso o servidor reinicie)
+uploaded_hist = st.file_uploader(
+    "📤 Carregar Histórico (arquivo base_historica.parquet)",
+    type=["parquet"]
+)
+
+if uploaded_hist is not None:
+    df_hist = pd.read_parquet(uploaded_hist)
+    df_hist.to_parquet("data/base_historica.parquet", index=False)
+    st.success("Histórico carregado com sucesso!")
+
+# Tentar carregar histórico existente
 try:
     df_hist = pd.read_parquet("data/base_historica.parquet")
 except:
-    st.warning("Nenhum histórico carregado ainda.")
+    st.warning("Nenhum histórico encontrado. Faça upload do histórico ou processe um fechamento.")
     st.stop()
 
-# ajustar data
+# botão de download do histórico
+with open("data/base_historica.parquet", "rb") as f:
+    st.download_button(
+        label="📥 Baixar Histórico",
+        data=f,
+        file_name="base_historica.parquet"
+    )
+
+st.markdown("---")
+
+# Ajustar data
 df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"]).dt.date
 
 st.subheader("📚 Base Histórica")
