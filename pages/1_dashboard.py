@@ -74,26 +74,25 @@ st.sidebar.header("Filtros")
 # FILTRO EMPRESA / FILIAL
 # -------------------------------------------------
 
-empresas = sorted(df_hist["Empresa / Filial"].dropna().unique())
+empresas_lista = sorted(df_hist["Empresa / Filial"].dropna().unique())
 
 empresas_sel = st.sidebar.multiselect(
     "Empresa / Filial",
-    empresas,
-    default=empresas
+    options=empresas_lista,
+    default=[]
 )
 
 # -------------------------------------------------
 # FILTRO CONTA
 # -------------------------------------------------
 
-contas = sorted(df_hist["Conta"].dropna().unique())
+contas_lista = sorted(df_hist["Conta"].dropna().unique())
 
 contas_sel = st.sidebar.multiselect(
     "Conta",
-    contas,
-    default=contas
+    options=contas_lista,
+    default=[]
 )
-
 # -------------------------------------------------
 # FILTRO STATUS DO MOVIMENTO
 # -------------------------------------------------
