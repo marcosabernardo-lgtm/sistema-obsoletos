@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
+
 from motor_obsoletos import executar_motor
 from base_historica import atualizar_base_historica
+from analises import evolucao_estoque
 
 st.set_page_config(page_title="Sistema de Obsoletos", layout="wide")
 
@@ -26,12 +28,14 @@ if uploaded_file is not None:
 
         if df_final is not None:
 
-            # salva no histórico
+            # Atualiza base histórica
             df_hist = atualizar_base_historica(df_final)
 
             st.success("Processamento concluído com sucesso!")
 
             st.write("Registros no histórico:", len(df_hist))
+
+            st.markdown("---")
 
             st.subheader("Base Processada")
 
@@ -49,6 +53,20 @@ if uploaded_file is not None:
             st.subheader("📚 Base Histórica Acumulada")
 
             st.dataframe(df_hist)
+
+            st.markdown("---")
+
+            st.subheader("📊 Evolução do Estoque")
+
+            df_evolucao = evolucao_estoque(df_hist)
+
+            st.dataframe(df_evolucao)
+
+            st.line_chart(
+                df_evolucao.set_index("Data Fechamento")[
+                    ["Estoque Total", "Estoque Obsoleto"]
+                ]
+            )
 
         else:
 
