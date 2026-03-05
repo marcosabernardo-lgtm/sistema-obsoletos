@@ -3,6 +3,7 @@ import pandas as pd
 import altair as alt
 from analises import evolucao_estoque
 from tabs.base_historica import render as render_base_historica
+from tabs.evolucao_estoque import render as render_evolucao
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 
@@ -220,23 +221,8 @@ with tab1:
 # -------------------------------------------------
 
 with tab2:
-
-    df_evolucao = evolucao_estoque(df_kpi)
-
-    df_evolucao["Data Fechamento"] = pd.to_datetime(
-        df_evolucao["Data Fechamento"]
-    ).dt.date
-
-    df_evolucao["Estoque Total"] = df_evolucao["Estoque Total"].apply(moeda_br)
-
-    df_evolucao["Estoque Obsoleto"] = df_evolucao["Estoque Obsoleto"].apply(moeda_br)
-
-    df_evolucao["% Obsoleto"] = (
-        df_evolucao["% Obsoleto"]*100
-    ).round(2).astype(str)+"%"
-
-    st.dataframe(df_evolucao,use_container_width=True,hide_index=True)
-
+    render_evolucao(df_kpi, moeda_br)
+    
 # -------------------------------------------------
 # TOP 20
 # -------------------------------------------------
