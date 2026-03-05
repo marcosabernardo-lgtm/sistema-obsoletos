@@ -6,6 +6,7 @@ from tabs.base_historica import render as render_base_historica
 from tabs.evolucao_estoque import render as render_evolucao
 from tabs.top20_produtos import render as render_top20
 from tabs.graficos import render as render_graficos
+from tabs.movimentacao_obsoleto import render as render_movimentacao
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 
@@ -204,13 +205,13 @@ st.markdown("---")
 # ABAS
 # -------------------------------------------------
 
-tab1,tab2,tab3,tab4 = st.tabs([
+tab1,tab2,tab3,tab4,tab5 = st.tabs([
     "📚 Base Histórica",
     "📈 Evolução do Estoque",
     "🏆 Top 20 Produtos",
-    "📊 Gráficos"
+    "📊 Gráficos",
+    "🔄 Movimentação do Obsoleto"
 ])
-
 # -------------------------------------------------
 # BASE HISTÓRICA
 # -------------------------------------------------
@@ -238,3 +239,10 @@ with tab3:
 
 with tab4:
     render_graficos(df_filtrado, moeda_br)
+
+# -------------------------------------------------
+# EVOLUÇÃO OBSOLETOS
+# -------------------------------------------------
+
+with tab5:
+    render_movimentacao(df_hist, moeda_br)
