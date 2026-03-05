@@ -17,34 +17,21 @@ st.markdown("---")
 st.markdown("""
 <style>
 
-/* SIDEBAR MENOR */
+/* SIDEBAR */
 
 section[data-testid="stSidebar"]{
     width:260px !important;
 }
 
-/* SELECT */
+/* TABELAS */
 
-span[data-baseweb="tag"]{
-    background-color:#1f77b4 !important;
-}
-
-div[data-baseweb="select"] > div{
-    border:1px solid #EC6E21 !important;
-}
-
-/* CABEÇALHO TABELAS */
-
-thead tr th{
+[data-testid="stDataFrame"] thead th{
     background-color:#005562 !important;
     color:white !important;
     font-weight:600 !important;
-    text-align:center !important;
 }
 
-/* COR LINHAS */
-
-tbody tr{
+[data-testid="stDataFrame"] tbody tr{
     background-color:#0f5a60 !important;
 }
 
@@ -80,39 +67,10 @@ def moeda_br(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # -------------------------------------------------
-# UPLOAD
-# -------------------------------------------------
-
-uploaded_hist = st.file_uploader(
-    "📤 Carregar Histórico (arquivo base_historica.parquet)",
-    type=["parquet"]
-)
-
-if uploaded_hist is not None:
-    df_hist = pd.read_parquet(uploaded_hist)
-    df_hist.to_parquet("data/base_historica.parquet", index=False)
-    st.success("Histórico carregado com sucesso!")
-
-# -------------------------------------------------
 # CARREGAR BASE
 # -------------------------------------------------
 
-try:
-    df_hist = pd.read_parquet("data/base_historica.parquet")
-except:
-    st.warning("Nenhum histórico encontrado.")
-    st.stop()
-
-# -------------------------------------------------
-# DOWNLOAD
-# -------------------------------------------------
-
-with open("data/base_historica.parquet", "rb") as f:
-    st.download_button(
-        label="📥 Baixar Histórico",
-        data=f,
-        file_name="base_historica.parquet"
-    )
+df_hist = pd.read_parquet("data/base_historica.parquet")
 
 # -------------------------------------------------
 # FILTROS
@@ -125,18 +83,14 @@ status_estoque = st.sidebar.selectbox(
     ["Geral","Obsoletos"]
 )
 
-empresas = sorted(df_hist["Empresa / Filial"].dropna().unique())
-
 empresas_sel = st.sidebar.multiselect(
     "Empresa / Filial",
-    options=empresas
+    sorted(df_hist["Empresa / Filial"].dropna().unique())
 )
-
-contas = sorted(df_hist["Conta"].dropna().unique())
 
 contas_sel = st.sidebar.multiselect(
     "Conta",
-    options=contas
+    sorted(df_hist["Conta"].dropna().unique())
 )
 
 # -------------------------------------------------
@@ -161,10 +115,6 @@ if status_estoque == "Obsoletos":
     df_filtrado = df_filtrado[
         df_filtrado["Status do Movimento"] != "Até 6 meses"
     ]
-
-if df_filtrado.empty:
-    st.warning("Sem dados para os filtros selecionados.")
-    st.stop()
 
 # -------------------------------------------------
 # KPIs
@@ -212,7 +162,7 @@ col3.markdown(f"""
 col4.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">Itens Obsoletos</div>
-<div class="kpi-value">{itens_obsoletos:,}</div>
+<div class="kpi-value">{itens_obsoletos}</div>
 </div>
 """,unsafe_allow_html=True)
 
@@ -229,51 +179,36 @@ tab1,tab2,tab3,tab4 = st.tabs([
     "📊 Gráficos"
 ])
 
-# =================================================
+# -------------------------------------------------
 # BASE HISTÓRICA
-# =================================================
+# -------------------------------------------------
 
 with tab1:
 
-    df_base = df_filtrado.copy()
+    base = df_filtrado.copy()
+    base["Custo Total"] = base["Custo Total"].apply(moeda_br)
 
-    df_base["Custo Total"] = df_base["Custo Total"].apply(moeda_br)
+    st.dataframe(base, use_container_width=True, hide_index=True)
 
-    st.dataframe(
-        df_base,
-        use_container_width=True,
-        hide_index=True
-    )
-
-# =================================================
+# -------------------------------------------------
 # EVOLUÇÃO
-# =================================================
+# -------------------------------------------------
 
 with tab2:
 
     df_evolucao = evolucao_estoque(df_kpi)
 
-    df_evolucao = df_evolucao.sort_values("Data Fechamento")
-
     df_evolucao["Estoque Total"] = df_evolucao["Estoque Total"].apply(moeda_br)
-
     df_evolucao["Estoque Obsoleto"] = df_evolucao["Estoque Obsoleto"].apply(moeda_br)
-
     df_evolucao["% Obsoleto"] = (df_evolucao["% Obsoleto"]*100).round(2).astype(str)+"%"
 
-    st.dataframe(
-        df_evolucao,
-        use_container_width=True,
-        hide_index=True
-    )
+    st.dataframe(df_evolucao, use_container_width=True, hide_index=True)
 
-# =================================================
+# -------------------------------------------------
 # TOP 20
-# =================================================
+# -------------------------------------------------
 
 with tab3:
-
-    st.subheader("Top 20 Produtos Obsoletos")
 
     ultima_data = df_filtrado["Data Fechamento"].max()
 
@@ -288,51 +223,39 @@ with tab3:
         .head(20)
     )
 
+    top20.insert(0,"Ranking",range(1,len(top20)+1))
+
     top20 = top20.rename(columns={"Custo_Total":"Custo Total"})
 
     top20["Custo Total"] = top20["Custo Total"].apply(moeda_br)
 
-    st.dataframe(
-        top20,
-        use_container_width=True,
-        hide_index=True
-    )
+    st.dataframe(top20, use_container_width=True, hide_index=True)
 
-# =================================================
+# -------------------------------------------------
 # GRÁFICOS
-# =================================================
+# -------------------------------------------------
 
 with tab4:
 
     ultima_data = df_filtrado["Data Fechamento"].max()
 
-    base = df_filtrado[
-        df_filtrado["Data Fechamento"] == ultima_data
-    ]
+    base = df_filtrado[df_filtrado["Data Fechamento"] == ultima_data]
+
+    # EMPRESA
 
     st.subheader("Obsoleto por Empresa / Filial")
 
-    empresa = (
-        base.groupby("Empresa / Filial")["Custo Total"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-    )
+    empresa = base.groupby("Empresa / Filial")["Custo Total"].sum().reset_index()
 
     empresa["%"] = empresa["Custo Total"]/empresa["Custo Total"].sum()
 
     empresa["Label"] = empresa.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
-        axis=1
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',axis=1
     )
 
     chart = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
         x=alt.X("Custo Total",axis=None),
-        y=alt.Y(
-            "Empresa / Filial",
-            sort=alt.SortField(field="Custo Total", order="descending"),
-            axis=alt.Axis(title=None,labelLimit=500)
-        )
+        y=alt.Y("Empresa / Filial",sort="-x")
     )
 
     text = alt.Chart(empresa).mark_text(
@@ -342,6 +265,64 @@ with tab4:
     ).encode(
         x="Custo Total",
         y="Empresa / Filial",
+        text="Label"
+    )
+
+    st.altair_chart(chart+text,use_container_width=True)
+
+    # STATUS
+
+    st.subheader("Obsoleto por Status do Movimento")
+
+    status = base.groupby("Status do Movimento")["Custo Total"].sum().reset_index()
+
+    status["%"] = status["Custo Total"]/status["Custo Total"].sum()
+
+    status["Label"] = status.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',axis=1
+    )
+
+    chart = alt.Chart(status).mark_bar(color="#EC6E21").encode(
+        x=alt.X("Custo Total",axis=None),
+        y=alt.Y("Status do Movimento",sort="-x")
+    )
+
+    text = alt.Chart(status).mark_text(
+        align="left",
+        dx=5,
+        color="white"
+    ).encode(
+        x="Custo Total",
+        y="Status do Movimento",
+        text="Label"
+    )
+
+    st.altair_chart(chart+text,use_container_width=True)
+
+    # CONTA
+
+    st.subheader("Obsoleto por Conta")
+
+    conta = base.groupby("Conta")["Custo Total"].sum().reset_index()
+
+    conta["%"] = conta["Custo Total"]/conta["Custo Total"].sum()
+
+    conta["Label"] = conta.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',axis=1
+    )
+
+    chart = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
+        x=alt.X("Custo Total",axis=None),
+        y=alt.Y("Conta",sort="-x")
+    )
+
+    text = alt.Chart(conta).mark_text(
+        align="left",
+        dx=5,
+        color="white"
+    ).encode(
+        x="Custo Total",
+        y="Conta",
         text="Label"
     )
 
