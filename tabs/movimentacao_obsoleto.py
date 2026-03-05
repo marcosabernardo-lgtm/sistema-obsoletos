@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 
 
+# ------------------------------------------------
+# CARD PADRÃO DO DASHBOARD
+# ------------------------------------------------
 def card(titulo, valor):
 
     st.markdown(
@@ -10,8 +13,12 @@ def card(titulo, valor):
             border:2px solid #ff6b00;
             border-radius:12px;
             padding:18px;
+            height:95px;
+            display:flex;
+            flex-direction:column;
+            justify-content:center;
             text-align:center;
-            margin-bottom:15px;
+            margin-bottom:10px;
         ">
             <div style="font-size:16px">{titulo}</div>
             <div style="font-size:28px;font-weight:bold">{valor}</div>
@@ -21,12 +28,15 @@ def card(titulo, valor):
     )
 
 
+# ------------------------------------------------
+# ABA MOVIMENTAÇÃO
+# ------------------------------------------------
 def render(df_filtrado, moeda_br):
 
     datas = sorted(df_filtrado["Data Fechamento"].unique())
 
     if len(datas) < 2:
-        st.warning("Histórico insuficiente para análise.")
+        st.warning("Histórico insuficiente.")
         return
 
     data_atual = datas[-1]
@@ -48,12 +58,14 @@ def render(df_filtrado, moeda_br):
     )
 
     entrou = base[
-        (base["obsoleto_atual"] == True) &
+        (base["obsoleto_atual"] == True)
+        &
         (base["obsoleto_ant"] == False)
     ].copy()
 
     saiu = base[
-        (base["obsoleto_atual"] == False) &
+        (base["obsoleto_atual"] == False)
+        &
         (base["obsoleto_ant"] == True)
     ].copy()
 
@@ -63,12 +75,16 @@ def render(df_filtrado, moeda_br):
 
     st.subheader("Itens que Entraram no Obsoleto")
 
-    if not entrou.empty:
+    if entrou.empty:
+
+        st.info("Nenhum item entrou no obsoleto.")
+
+    else:
 
         qtd = len(entrou)
         valor = entrou["Custo Total"].sum()
 
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns([1,1,2])
 
         with c1:
             card("Qtd de Itens", f"{qtd:,}")
@@ -85,19 +101,18 @@ def render(df_filtrado, moeda_br):
             ]
         ].copy()
 
-        tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
+        tabela = tabela.sort_values(
+            "Custo Total",
+            ascending=False
+        )
 
-        tabela = tabela.sort_values("Custo Total", ascending=False)
+        tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
 
         st.dataframe(
             tabela,
             use_container_width=True,
             hide_index=True
         )
-
-    else:
-
-        st.info("Nenhum item entrou no obsoleto.")
 
     st.markdown("---")
 
@@ -107,12 +122,16 @@ def render(df_filtrado, moeda_br):
 
     st.subheader("Itens que Saíram do Obsoleto")
 
-    if not saiu.empty:
+    if saiu.empty:
+
+        st.info("Nenhum item saiu do obsoleto.")
+
+    else:
 
         qtd = len(saiu)
         valor = saiu["Custo Total"].sum()
 
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns([1,1,2])
 
         with c1:
             card("Qtd de Itens", f"{qtd:,}")
@@ -129,16 +148,15 @@ def render(df_filtrado, moeda_br):
             ]
         ].copy()
 
-        tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
+        tabela = tabela.sort_values(
+            "Custo Total",
+            ascending=False
+        )
 
-        tabela = tabela.sort_values("Custo Total", ascending=False)
+        tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
 
         st.dataframe(
             tabela,
             use_container_width=True,
             hide_index=True
         )
-
-    else:
-
-        st.info("Nenhum item saiu do obsoleto.")
