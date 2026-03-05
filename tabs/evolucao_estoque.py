@@ -11,43 +11,51 @@ def render(df_kpi, moeda_br):
         df_evolucao["Data Fechamento"]
     ).dt.date
 
-    # ==========================================
-    # CALCULAR VARIAÇÃO DO ESTOQUE TOTAL
-    # ==========================================
+    # ==================================================
+    # VARIAÇÃO ESTOQUE TOTAL
+    # ==================================================
 
     df_evolucao["Var_Total"] = df_evolucao["Estoque Total"].diff()
 
-    def seta_total(v):
+    def delta_total(v):
         if pd.isna(v):
             return ""
+
+        valor = moeda_br(abs(v))
+
         if v > 0:
-            return "🟢⬆️"
-        if v < 0:
-            return "🔴⬇️"
-        return "⚪"
+            return f"🟢⬆️ +{valor}"
+        elif v < 0:
+            return f"🔴⬇️ -{valor}"
+        else:
+            return "⚪"
 
-    df_evolucao["Δ Estoque"] = df_evolucao["Var_Total"].apply(seta_total)
+    df_evolucao["Δ Estoque"] = df_evolucao["Var_Total"].apply(delta_total)
 
-    # ==========================================
-    # CALCULAR VARIAÇÃO DO OBSOLETO
-    # ==========================================
+    # ==================================================
+    # VARIAÇÃO OBSOLETO
+    # ==================================================
 
     df_evolucao["Var_Obs"] = df_evolucao["Estoque Obsoleto"].diff()
 
-    def seta_obs(v):
+    def delta_obs(v):
         if pd.isna(v):
             return ""
+
+        valor = moeda_br(abs(v))
+
         if v > 0:
-            return "🔴⬆️"
-        if v < 0:
-            return "🟢⬇️"
-        return "⚪"
+            return f"🔴⬆️ +{valor}"
+        elif v < 0:
+            return f"🟢⬇️ -{valor}"
+        else:
+            return "⚪"
 
-    df_evolucao["Δ Obsoleto"] = df_evolucao["Var_Obs"].apply(seta_obs)
+    df_evolucao["Δ Obsoleto"] = df_evolucao["Var_Obs"].apply(delta_obs)
 
-    # ==========================================
+    # ==================================================
     # FORMATAÇÃO DOS VALORES
-    # ==========================================
+    # ==================================================
 
     df_evolucao["Estoque Total"] = df_evolucao["Estoque Total"].apply(moeda_br)
 
@@ -57,9 +65,9 @@ def render(df_kpi, moeda_br):
         df_evolucao["% Obsoleto"] * 100
     ).round(2).astype(str) + "%"
 
-    # ==========================================
+    # ==================================================
     # ORDEM DAS COLUNAS
-    # ==========================================
+    # ==================================================
 
     df_evolucao = df_evolucao[
         [
@@ -72,9 +80,9 @@ def render(df_kpi, moeda_br):
         ]
     ]
 
-    # ==========================================
+    # ==================================================
     # TABELA
-    # ==========================================
+    # ==================================================
 
     st.dataframe(
         df_evolucao,
