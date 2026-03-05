@@ -347,7 +347,7 @@ def executar_motor(uploaded_file):
     df_final["Status Estoque"] = np.where(
         df_final["Tipo de Estoque"] == "Em Fabricacao",
         "Até 6 meses",
-        np.where(df_final["Dias Sem Mov"] > 180, "Obsoleto", "Até 6 meses")
+        np.where(df_final["Meses Ult Mov"] > 6, "Obsoleto", "Até 6 meses")
     )
 
     def status_mov(row):
