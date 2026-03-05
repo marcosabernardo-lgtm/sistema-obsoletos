@@ -51,11 +51,13 @@ def render(df_filtrado, moeda_br):
     chave = ["Empresa / Filial", "Produto"]
 
     base = df_atual.merge(
-        df_ant[chave + ["obsoleto"]],
-        on=chave,
-        how="left",
-        suffixes=("_atual", "_ant")
-    )
+    df_ant[chave + ["obsoleto"]],
+    on=chave,
+    how="left",
+    suffixes=("_atual", "_ant")
+)
+
+base["obsoleto_ant"] = base["obsoleto_ant"].fillna(False)
 
     entrou = base[
         (base["obsoleto_atual"] == True)
