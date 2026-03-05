@@ -274,6 +274,10 @@ with tab3:
 # GRÁFICOS
 # =================================================
 
+# =================================================
+# GRÁFICOS
+# =================================================
+
 with tab4:
 
     ultima_data = df_filtrado["Data Fechamento"].max()
@@ -282,7 +286,9 @@ with tab4:
         df_filtrado["Data Fechamento"] == ultima_data
     ]
 
+    # =================================================
     # EMPRESA
+    # =================================================
 
     st.subheader("Obsoleto por Empresa / Filial")
 
@@ -302,7 +308,11 @@ with tab4:
 
     chart = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
         x=alt.X("Custo Total",axis=None),
-        y=alt.Y("Empresa / Filial",sort="-x",axis=alt.Axis(title=None))
+        y=alt.Y(
+            "Empresa / Filial",
+            sort="-x",
+            axis=alt.Axis(title=None,labelLimit=500)
+        )
     )
 
     text = alt.Chart(empresa).mark_text(
@@ -317,7 +327,9 @@ with tab4:
 
     st.altair_chart(chart+text,use_container_width=True)
 
+    # =================================================
     # STATUS
+    # =================================================
 
     st.subheader("Obsoleto por Status do Movimento")
 
@@ -328,14 +340,37 @@ with tab4:
         .reset_index()
     )
 
-    chart = alt.Chart(status).mark_bar(color="#EC6E21").encode(
-        x=alt.X("Custo Total",axis=None),
-        y=alt.Y("Status do Movimento",sort="-x",axis=alt.Axis(title=None))
+    status["%"] = status["Custo Total"]/status["Custo Total"].sum()
+
+    status["Label"] = status.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
+        axis=1
     )
 
-    st.altair_chart(chart,use_container_width=True)
+    chart = alt.Chart(status).mark_bar(color="#EC6E21").encode(
+        x=alt.X("Custo Total",axis=None),
+        y=alt.Y(
+            "Status do Movimento",
+            sort="-x",
+            axis=alt.Axis(title=None,labelLimit=500)
+        )
+    )
 
+    text = alt.Chart(status).mark_text(
+        align="left",
+        dx=5,
+        color="white"
+    ).encode(
+        x="Custo Total",
+        y="Status do Movimento",
+        text="Label"
+    )
+
+    st.altair_chart(chart+text,use_container_width=True)
+
+    # =================================================
     # CONTA
+    # =================================================
 
     st.subheader("Obsoleto por Conta")
 
@@ -346,9 +381,33 @@ with tab4:
         .reset_index()
     )
 
-    chart = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
-        x=alt.X("Custo Total",axis=None),
-        y=alt.Y("Conta",sort="-x",axis=alt.Axis(title=None))
+    conta["%"] = conta["Custo Total"]/conta["Custo Total"].sum()
+
+    conta["Label"] = conta.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
+        axis=1
     )
 
-    st.altair_chart(chart,use_container_width=True)
+    chart = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
+        x=alt.X("Custo Total",axis=None),
+        y=alt.Y(
+            "Conta",
+            sort="-x",
+            axis=alt.Axis(
+                title=None,
+                labelLimit=500
+            )
+        )
+    )
+
+    text = alt.Chart(conta).mark_text(
+        align="left",
+        dx=5,
+        color="white"
+    ).encode(
+        x="Custo Total",
+        y="Conta",
+        text="Label"
+    )
+
+    st.altair_chart(chart+text,use_container_width=True)
