@@ -115,28 +115,24 @@ def render(df_kpi, moeda_br):
     mov = pd.concat([entrou, saiu], ignore_index=True)
 
     if mov.empty:
-
         st.info("Nenhuma movimentação de obsoleto no período.")
         return
 
-   colunas = [
-    "Status Mov",
-    "Empresa / Filial",
-    "Produto",
-    "Descricao",
-    "Saldo Atual",
-    "Custo Total"
-]
-
-# adiciona coluna de tempo se existir
-if "Ano Meses Dias" in mov.columns:
-    colunas.append("Ano Meses Dias")
-
-tabela = mov[colunas].copy()
+    tabela = mov[
+        [
+            "Status Mov",
+            "Empresa / Filial",
+            "Produto",
+            "Descricao",
+            "Saldo Atual",
+            "Custo Total",
+            "Status do Movimento"
+        ]
+    ].copy()
 
     tabela = tabela.rename(columns={
         "Saldo Atual": "Quantidade",
-        "Ano Meses Dias": "Tempo sem Mov."
+        "Status do Movimento": "Status do Estoque"
     })
 
     tabela = tabela.sort_values(
