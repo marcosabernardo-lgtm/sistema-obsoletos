@@ -58,24 +58,26 @@ def score_risco(df_hist):
     # ----------------------------------------------------------
     # COMPONENTE 1 — Dias sem movimento (0 a 40 pts)
     # ----------------------------------------------------------
-    dias = df_base["Dias Sem Mov"].replace(9999, np.nan)
-    p95 = dias.quantile(0.95)
-    p95 = p95 if pd.notna(p95) and p95 > 0 else 1
-
-    df_base["_score_dias"] = (
-        dias.fillna(p95).clip(upper=p95) / p95 * 40
-    )
+    col_dias = next((c for c in df_base.columns if "Dias" in c and "Mov" in c), None)
+    if col_dias:
+        dias = pd.to_numeric(df_base[col_dias], errors="coerce").replace(9999, np.nan)
+        p95 = dias.quantile(0.95)
+        p95 = p95 if pd.notna(p95) and p95 > 0 else 1
+        df_base["_score_dias"] = dias.fillna(p95).clip(upper=p95) / p95 * 40
+    else:
+        df_base["_score_dias"] = 0.0
 
     # ----------------------------------------------------------
     # COMPONENTE 2 — Valor em risco (0 a 30 pts)
     # ----------------------------------------------------------
-    custo = df_base["Custo Total"].fillna(0).clip(lower=0)
-    p95c = custo.quantile(0.95)
-    p95c = p95c if pd.notna(p95c) and p95c > 0 else 1
-
-    df_base["_score_custo"] = (
-        custo.clip(upper=p95c) / p95c * 30
-    )
+    col_custo = next((c for c in df_base.columns if "Custo" in c and "Total" in c), None)
+    if col_custo:
+        custo = pd.to_numeric(df_base[col_custo], errors="coerce").fillna(0).clip(lower=0)
+        p95c = custo.quantile(0.95)
+        p95c = p95c if pd.notna(p95c) and p95c > 0 else 1
+        df_base["_score_custo"] = custo.clip(upper=p95c) / p95c * 30
+    else:
+        df_base["_score_custo"] = 0.0
 
     # ----------------------------------------------------------
     # COMPONENTE 3 — Estagnação entre fechamentos (0 a 30 pts)
