@@ -208,10 +208,9 @@ st.markdown("---")
 tab1,tab2,tab3,tab4,tab5 = st.tabs([
     "📚 Base Histórica",
     "📈 Evolução do Estoque",
-    "🔄 Movimentação do Obsoleto"
+    "🔄 Movimentação do Obsoleto",
     "🏆 Top 20 Produtos",
     "📊 Gráficos",
-    
 ])
 
 # -------------------------------------------------
@@ -229,23 +228,23 @@ with tab2:
     render_evolucao(df_kpi, moeda_br)
 
 # -------------------------------------------------
-# TOP 20
-# -------------------------------------------------
-
-with tab3:
-    render_movimentacao(df_hist, moeda_br)
-    
-# -------------------------------------------------
-# GRÁFICOS
-# -------------------------------------------------
-
-with tab4:
-    render_graficos(df_filtrado, moeda_br)
-
-# -------------------------------------------------
 # MOVIMENTAÇÃO DO OBSOLETO
 # -------------------------------------------------
 
 # IMPORTANTE: usa base completa
-with tab5:
+with tab3:
+    render_movimentacao(df_hist, moeda_br)
+
+# -------------------------------------------------
+# TOP 20
+# -------------------------------------------------
+
+with tab4:
     render_top20(df_filtrado, moeda_br)
+
+# -------------------------------------------------
+# GRÁFICOS
+# -------------------------------------------------
+
+with tab5:
+    render_graficos(df_filtrado, moeda_br)
