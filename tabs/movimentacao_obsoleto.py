@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 
 
-# ---------------------------------------------------------
-# CARD PADRÃO DO DASHBOARD
-# ---------------------------------------------------------
+# -------------------------------------------------------
+# CARD PADRÃO
+# -------------------------------------------------------
 def card(titulo, valor):
 
     st.markdown(
@@ -12,15 +12,14 @@ def card(titulo, valor):
         <div style="
             border:2px solid #EC6E21;
             border-radius:12px;
-            padding:18px;
-            height:95px;
+            padding:16px;
+            height:90px;
             display:flex;
             flex-direction:column;
             justify-content:center;
             text-align:center;
-            margin-bottom:10px;
         ">
-            <div style="font-size:16px">{titulo}</div>
+            <div style="font-size:15px">{titulo}</div>
             <div style="font-size:28px;font-weight:bold">{valor}</div>
         </div>
         """,
@@ -28,44 +27,32 @@ def card(titulo, valor):
     )
 
 
-# ---------------------------------------------------------
-# ABA MOVIMENTAÇÃO DO OBSOLETO
-# ---------------------------------------------------------
+# -------------------------------------------------------
+# FUNÇÃO PRINCIPAL
+# -------------------------------------------------------
 def render(df_filtrado, moeda_br):
 
-    # -----------------------------------------------------
-    # GARANTE QUE TEMOS PELO MENOS 2 FECHAMENTOS
-    # -----------------------------------------------------
+    df = df_filtrado.copy()
 
-    datas = sorted(df_filtrado["Data Fechamento"].unique())
+    datas = sorted(df["Data Fechamento"].unique())
 
     if len(datas) < 2:
-
         st.warning("Histórico insuficiente para análise.")
         return
 
     data_atual = datas[-1]
     data_anterior = datas[-2]
 
-    # -----------------------------------------------------
-    # BASES
-    # -----------------------------------------------------
-
-    df_atual = df_filtrado[df_filtrado["Data Fechamento"] == data_atual].copy()
-    df_ant = df_filtrado[df_filtrado["Data Fechamento"] == data_anterior].copy()
-
-    # -----------------------------------------------------
-    # CLASSIFICA OBSOLETO
-    # -----------------------------------------------------
+    df_atual = df[df["Data Fechamento"] == data_atual].copy()
+    df_ant = df[df["Data Fechamento"] == data_anterior].copy()
 
     df_atual["obsoleto"] = df_atual["Status do Movimento"] != "Até 6 meses"
     df_ant["obsoleto"] = df_ant["Status do Movimento"] != "Até 6 meses"
 
-    chave = ["Empresa / Filial", "Produto"]
-
-    # -----------------------------------------------------
-    # MERGE PARA COMPARAR MESES
-    # -----------------------------------------------------
+    chave = [
+        "Empresa / Filial",
+        "Produto"
+    ]
 
     base = df_atual.merge(
         df_ant[chave + ["obsoleto"]],
@@ -74,12 +61,7 @@ def render(df_filtrado, moeda_br):
         suffixes=("_atual", "_ant")
     )
 
-    # IMPORTANTE
     base["obsoleto_ant"] = base["obsoleto_ant"].fillna(False)
-
-    # -----------------------------------------------------
-    # IDENTIFICA MOVIMENTAÇÃO
-    # -----------------------------------------------------
 
     entrou = base[
         (base["obsoleto_atual"] == True)
@@ -94,33 +76,30 @@ def render(df_filtrado, moeda_br):
     ].copy()
 
     # =====================================================
-    # ITENS QUE ENTRARAM NO OBSOLETO
+    # ITENS QUE ENTRARAM
     # =====================================================
 
     st.subheader("Itens que Entraram no Obsoleto")
 
-    if entrou.empty:
+    if not entrou.empty:
 
-        st.info("Nenhum item entrou no obsoleto.")
+        qtd_itens = entrou["Produto"].nunique()
+        valor_total = entrou["Custo Total"].sum()
 
-    else:
-
-        qtd = len(entrou)
-        valor = entrou["Custo Total"].sum()
-
-        c1, c2, c3 = st.columns([1, 1, 2])
+        c1, c2, c3 = st.columns([1,1,2])
 
         with c1:
-            card("Qtd de Itens", f"{qtd:,}")
+            card("Qtd de Itens", f"{qtd_itens:,}")
 
         with c2:
-            card("Valor Total", moeda_br(valor))
+            card("Valor Total", moeda_br(valor_total))
 
         tabela = entrou[
             [
                 "Empresa / Filial",
                 "Produto",
                 "Descricao",
+                "Saldo Atual",
                 "Custo Total"
             ]
         ].copy()
@@ -132,42 +111,47 @@ def render(df_filtrado, moeda_br):
 
         tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
 
+        tabela = tabela.rename(columns={
+            "Saldo Atual": "Quantidade"
+        })
+
         st.dataframe(
             tabela,
             use_container_width=True,
             hide_index=True
         )
 
+    else:
+
+        st.info("Nenhum item entrou no obsoleto.")
+
     st.markdown("---")
 
     # =====================================================
-    # ITENS QUE SAÍRAM DO OBSOLETO
+    # ITENS QUE SAÍRAM
     # =====================================================
 
     st.subheader("Itens que Saíram do Obsoleto")
 
-    if saiu.empty:
+    if not saiu.empty:
 
-        st.info("Nenhum item saiu do obsoleto.")
+        qtd_itens = saiu["Produto"].nunique()
+        valor_total = saiu["Custo Total"].sum()
 
-    else:
-
-        qtd = len(saiu)
-        valor = saiu["Custo Total"].sum()
-
-        c1, c2, c3 = st.columns([1, 1, 2])
+        c1, c2, c3 = st.columns([1,1,2])
 
         with c1:
-            card("Qtd de Itens", f"{qtd:,}")
+            card("Qtd de Itens", f"{qtd_itens:,}")
 
         with c2:
-            card("Valor Total", moeda_br(valor))
+            card("Valor Total", moeda_br(valor_total))
 
         tabela = saiu[
             [
                 "Empresa / Filial",
                 "Produto",
                 "Descricao",
+                "Saldo Atual",
                 "Custo Total"
             ]
         ].copy()
@@ -179,8 +163,16 @@ def render(df_filtrado, moeda_br):
 
         tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
 
+        tabela = tabela.rename(columns={
+            "Saldo Atual": "Quantidade"
+        })
+
         st.dataframe(
             tabela,
             use_container_width=True,
             hide_index=True
         )
+
+    else:
+
+        st.info("Nenhum item saiu do obsoleto.")
