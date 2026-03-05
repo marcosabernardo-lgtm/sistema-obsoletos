@@ -125,42 +125,76 @@ def render(df_kpi, moeda_br):
     # BOTÃO IA (INTERPRETAÇÃO AUTOMÁTICA)
     # -------------------------------------------------
 
-    if st.button("🤖 Analisar movimentação do obsoleto"):
+  # -------------------------------------------------
+# BOTÃO IA (INTERPRETAÇÃO AUTOMÁTICA)
+# -------------------------------------------------
 
-        st.markdown("### 📊 Interpretação automática")
+if st.button("🤖 Analisar movimentação do obsoleto"):
 
-        texto = []
+    st.markdown("### 📊 Interpretação automática")
 
+    texto = []
+
+    texto.append(
+        f"No período analisado, **{moeda_br(valor_entrou)}** em itens entraram no obsoleto."
+    )
+
+    texto.append(
+        f"Por outro lado, **{moeda_br(valor_saiu)}** deixaram de ser obsoletos."
+    )
+
+    if saldo_mov > 0:
         texto.append(
-            f"No período analisado, **{moeda_br(valor_entrou)}** em itens entraram no obsoleto."
+            f"O fluxo de deterioração foi **positivo em {moeda_br(saldo_mov)}**, indicando que mais itens se tornaram obsoletos do que voltaram a girar."
+        )
+    else:
+        texto.append(
+            f"O fluxo de deterioração foi **negativo em {moeda_br(abs(saldo_mov))}**, indicando recuperação do estoque."
         )
 
+    if consumo < 0:
         texto.append(
-            f"Por outro lado, **{moeda_br(valor_saiu)}** deixaram de ser obsoletos."
+            f"Além disso, houve **consumo ou baixa de {moeda_br(abs(consumo))}** em itens obsoletos."
+        )
+    else:
+        texto.append(
+            f"Houve **aumento de {moeda_br(consumo)}** devido a ajustes de estoque."
         )
 
-        if saldo_mov > 0:
-            texto.append(
-                f"O fluxo de deterioração foi **positivo em {moeda_br(saldo_mov)}**, indicando que mais itens se tornaram obsoletos do que voltaram a girar."
-            )
-        else:
-            texto.append(
-                f"O fluxo de deterioração foi **negativo em {moeda_br(abs(saldo_mov))}**, indicando recuperação do estoque."
-            )
+    for t in texto:
+        st.write("•", t)
 
-        if consumo < 0:
-            texto.append(
-                f"Além disso, houve **consumo ou baixa de {moeda_br(abs(consumo))}** em itens obsoletos."
-            )
-        else:
-            texto.append(
-                f"Houve **aumento de {moeda_br(consumo)}** devido a ajustes de estoque."
-            )
+    st.markdown("---")
 
-        for t in texto:
-            st.write("•", t)
+    # -------------------------------------------------
+    # RESUMO DA EQUAÇÃO DO ESTOQUE
+    # -------------------------------------------------
 
-        st.markdown("---")
+    st.markdown("### 📌 Reconciliação do estoque obsoleto")
+
+    resumo = f"""
+Obsoleto anterior  
++ Entraram no obsoleto  
+- Saíram do obsoleto  
+- Consumo / ajustes  
+----------------------------  
+Obsoleto atual
+"""
+
+    st.code(resumo)
+
+    numeros = f"""
+{moeda_br(obs_ant)}
++ {moeda_br(valor_entrou)}
+- {moeda_br(valor_saiu)}
+- {moeda_br(abs(consumo))}
+----------------------------
+{moeda_br(obs_atual)}
+"""
+
+    st.markdown("Aplicando seus números:")
+
+    st.code(numeros)
 
     # -------------------------------------------------
     # TABELA ÚNICA
