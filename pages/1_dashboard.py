@@ -22,6 +22,26 @@ section[data-testid="stSidebar"]{
     width:260px !important;
 }
 
+/* FILTROS — borda laranja igual aos KPI cards */
+
+section[data-testid="stSidebar"] div[data-baseweb="select"] > div,
+section[data-testid="stSidebar"] div[data-baseweb="select"] > div:focus-within {
+    border: 2px solid #EC6E21 !important;
+    border-radius: 8px !important;
+    background-color: #005562 !important;
+    color: white !important;
+}
+
+section[data-testid="stSidebar"] div[data-baseweb="select"] span,
+section[data-testid="stSidebar"] div[data-baseweb="select"] div {
+    color: white !important;
+}
+
+section[data-testid="stSidebar"] label {
+    color: white !important;
+    font-weight: 600 !important;
+}
+
 /* HEADER TABLE — força fundo e texto branco em todos os seletores possíveis */
 
 div[data-testid="stDataFrame"] [role="columnheader"],
