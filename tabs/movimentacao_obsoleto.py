@@ -28,9 +28,9 @@ def render(df_hist, moeda_br):
         suffixes=("_atual", "_ant")
     )
 
-    # -------------------------------------------------
+    # -------------------------------
     # ENTRARAM NO OBSOLETO
-    # -------------------------------------------------
+    # -------------------------------
 
     entrou = base[
         (base["obsoleto_atual"] == True) &
@@ -39,9 +39,9 @@ def render(df_hist, moeda_br):
 
     entrou = entrou.sort_values("Custo Total", ascending=False)
 
-    # -------------------------------------------------
+    # -------------------------------
     # SAÍRAM DO OBSOLETO
-    # -------------------------------------------------
+    # -------------------------------
 
     saiu = base[
         (base["obsoleto_atual"] == False) &
@@ -50,9 +50,9 @@ def render(df_hist, moeda_br):
 
     saiu = saiu.sort_values("Custo Total", ascending=False)
 
-    # -------------------------------------------------
+    # -------------------------------
     # TABELA ENTRARAM
-    # -------------------------------------------------
+    # -------------------------------
 
     st.subheader("Itens que Entraram no Obsoleto")
 
@@ -78,9 +78,9 @@ def render(df_hist, moeda_br):
 
     st.markdown("---")
 
-    # -------------------------------------------------
+    # -------------------------------
     # TABELA SAÍRAM
-    # -------------------------------------------------
+    # -------------------------------
 
     st.subheader("Itens que Saíram do Obsoleto")
 
