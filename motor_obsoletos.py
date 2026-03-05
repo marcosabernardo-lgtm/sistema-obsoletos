@@ -321,16 +321,10 @@ def executar_motor(uploaded_file):
         columns=["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
     )
 
-   # Ajustes pedidos
-df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].str.title()
-df_final["Conta"] = df_final["Conta"].str.title()
-
-# PADRONIZAÇÃO DA CONTA
-df_final["Conta"] = df_final["Conta"].replace({
-    "Material Revenda": "Material De Revenda"
-})
-
-df_final = df_final.drop(columns=["ID_UNICO"])
+    # Ajustes pedidos
+    df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].str.title()
+    df_final["Conta"] = df_final["Conta"].str.title()
+    df_final = df_final.drop(columns=["ID_UNICO"])
 
 
     # ==========================================================
