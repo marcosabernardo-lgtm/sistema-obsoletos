@@ -37,6 +37,8 @@ def render(df_hist, moeda_br):
         (base["obsoleto_ant"] == False)
     ]
 
+    entrou = entrou.sort_values("Custo Total", ascending=False)
+
     # -------------------------
     # SAÍRAM DO OBSOLETO
     # -------------------------
@@ -46,19 +48,7 @@ def render(df_hist, moeda_br):
         (base["obsoleto_ant"] == True)
     ]
 
-    # -------------------------
-    # COLUNAS SEGURAS
-    # -------------------------
-
-    colunas = [
-        "Empresa / Filial",
-        "Produto",
-        "Descricao",
-        "Ano Meses Dias",
-        "Custo Total"
-    ]
-
-    colunas_existentes = [c for c in colunas if c in base.columns]
+    saiu = saiu.sort_values("Custo Total", ascending=False)
 
     # -------------------------
     # TABELA ENTRARAM
@@ -70,10 +60,15 @@ def render(df_hist, moeda_br):
         st.info("Nenhum item entrou no obsoleto.")
     else:
 
-        tabela = entrou[colunas_existentes].copy()
+        tabela = entrou[[
+            "Empresa / Filial",
+            "Produto",
+            "Descricao",
+            "Ano Meses Dias",
+            "Custo Total"
+        ]].copy()
 
-        if "Custo Total" in tabela.columns:
-            tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
+        tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
 
         st.dataframe(
             tabela,
@@ -93,10 +88,15 @@ def render(df_hist, moeda_br):
         st.info("Nenhum item saiu do obsoleto.")
     else:
 
-        tabela = saiu[colunas_existentes].copy()
+        tabela = saiu[[
+            "Empresa / Filial",
+            "Produto",
+            "Descricao",
+            "Ano Meses Dias",
+            "Custo Total"
+        ]].copy()
 
-        if "Custo Total" in tabela.columns:
-            tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
+        tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
 
         st.dataframe(
             tabela,
