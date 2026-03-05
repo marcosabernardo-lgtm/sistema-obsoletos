@@ -79,28 +79,9 @@ def render(df_hist, moeda_br):
     def toggle_analise():
         st.session_state["analise_visivel"] = not st.session_state["analise_visivel"]
 
+    # AQUI ESTAVA O ERRO: Removemos a criação dos filtros duplicados.
+    # Assumimos que o 'df_hist' que chega aqui JÁ DEVE estar filtrado.
     df = df_hist.copy()
-
-    # ========================================================
-    # FILTROS DA SIDEBAR (NOVA PARTE IMPORTANTE)
-    # ========================================================
-    
-    # 1. Filtro Empresa / Filial
-    lista_empresas = sorted(df["Empresa / Filial"].unique())
-    sel_empresas = st.sidebar.multiselect("Empresa / Filial", options=lista_empresas)
-
-    # 2. Filtro Conta
-    lista_contas = sorted(df["Conta"].unique())
-    sel_contas = st.sidebar.multiselect("Conta", options=lista_contas)
-
-    # APLICANDO OS FILTROS AO DATAFRAME
-    if sel_empresas:
-        df = df[df["Empresa / Filial"].isin(sel_empresas)]
-    
-    if sel_contas:
-        df = df[df["Conta"].isin(sel_contas)]
-
-    # ========================================================
 
     # --- PROCESSAMENTO DE DADOS ---
     df = (
@@ -118,7 +99,7 @@ def render(df_hist, moeda_br):
     datas = sorted(df["Data Fechamento"].unique())
 
     if len(datas) < 2:
-        st.warning(f"Histórico insuficiente com os filtros selecionados.")
+        st.warning("Histórico insuficiente para análise (verifique se os filtros não estão muito restritivos).")
         return
 
     data_atual = datas[-1]
@@ -166,7 +147,7 @@ def render(df_hist, moeda_br):
     
     if not st.session_state["analise_visivel"]:
         with col_btn:
-            st.button("🤖 Analisar Cenário", type="primary", on_click=toggle_analise, use_container_width=True)
+            st.button("🤖 Analisar Cenário", type="primary", on_click=toggle_analise, use_container_width=True, key="btn_analisar_cenario")
 
     if st.session_state["analise_visivel"]:
         titulo, cor_titulo, texto_fluxo, texto_conclusao = gerar_texto_analise(
@@ -189,7 +170,7 @@ def render(df_hist, moeda_br):
 
         col_fechar, _ = st.columns([1, 4])
         with col_fechar:
-            st.button("❌ Fechar Análise", on_click=toggle_analise, use_container_width=True)
+            st.button("❌ Fechar Análise", on_click=toggle_analise, use_container_width=True, key="btn_fechar_analise")
 
     st.markdown("---")
 
