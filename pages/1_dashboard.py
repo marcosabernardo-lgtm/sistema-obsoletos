@@ -22,15 +22,6 @@ section[data-testid="stSidebar"]{
     width:260px !important;
 }
 
-/* GRÁFICOS — borda ao redor de cada gráfico Altair */
-
-div[data-testid="stArrowVegaLiteChart"] > div,
-div[data-testid="stVegaLiteChart"] > div {
-    border: 2px solid #EC6E21 !important;
-    border-radius: 10px !important;
-    padding: 12px !important;
-}
-
 /* FILTROS — borda laranja igual aos KPI cards */
 
 section[data-testid="stSidebar"] div[data-baseweb="select"] > div,
