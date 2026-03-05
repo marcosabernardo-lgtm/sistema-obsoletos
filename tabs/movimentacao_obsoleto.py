@@ -122,6 +122,47 @@ def render(df_kpi, moeda_br):
     st.markdown("---")
 
     # -------------------------------------------------
+    # BOTÃO IA (INTERPRETAÇÃO AUTOMÁTICA)
+    # -------------------------------------------------
+
+    if st.button("🤖 Analisar movimentação do obsoleto"):
+
+        st.markdown("### 📊 Interpretação automática")
+
+        texto = []
+
+        texto.append(
+            f"No período analisado, **{moeda_br(valor_entrou)}** em itens entraram no obsoleto."
+        )
+
+        texto.append(
+            f"Por outro lado, **{moeda_br(valor_saiu)}** deixaram de ser obsoletos."
+        )
+
+        if saldo_mov > 0:
+            texto.append(
+                f"O fluxo de deterioração foi **positivo em {moeda_br(saldo_mov)}**, indicando que mais itens se tornaram obsoletos do que voltaram a girar."
+            )
+        else:
+            texto.append(
+                f"O fluxo de deterioração foi **negativo em {moeda_br(abs(saldo_mov))}**, indicando recuperação do estoque."
+            )
+
+        if consumo < 0:
+            texto.append(
+                f"Além disso, houve **consumo ou baixa de {moeda_br(abs(consumo))}** em itens obsoletos."
+            )
+        else:
+            texto.append(
+                f"Houve **aumento de {moeda_br(consumo)}** devido a ajustes de estoque."
+            )
+
+        for t in texto:
+            st.write("•", t)
+
+        st.markdown("---")
+
+    # -------------------------------------------------
     # TABELA ÚNICA
     # -------------------------------------------------
 
