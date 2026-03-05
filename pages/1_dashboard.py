@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-
 from analises import evolucao_estoque
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
@@ -23,15 +22,17 @@ section[data-testid="stSidebar"]{
     width:260px !important;
 }
 
-/* TABELAS */
+/* HEADER TABLE */
 
-[data-testid="stDataFrame"] thead tr th{
+div[data-testid="stDataFrame"] div[role="columnheader"]{
     background-color:#0f5a60 !important;
     color:white !important;
     font-weight:600 !important;
 }
 
-[data-testid="stDataFrame"] tbody tr{
+/* ROW COLOR */
+
+div[data-testid="stDataFrame"] div[role="gridcell"]{
     background-color:#0f5a60 !important;
 }
 
@@ -70,11 +71,7 @@ def moeda_br(valor):
 # CARREGAR BASE
 # -------------------------------------------------
 
-try:
-    df_hist = pd.read_parquet("data/base_historica.parquet")
-except:
-    st.warning("Nenhum histórico encontrado.")
-    st.stop()
+df_hist = pd.read_parquet("data/base_historica.parquet")
 
 # -------------------------------------------------
 # FILTROS
@@ -119,10 +116,6 @@ if status_estoque == "Obsoletos":
     df_filtrado = df_filtrado[
         df_filtrado["Status do Movimento"] != "Até 6 meses"
     ]
-
-if df_filtrado.empty:
-    st.warning("Sem dados para os filtros selecionados.")
-    st.stop()
 
 # -------------------------------------------------
 # KPIs
@@ -187,9 +180,9 @@ tab1,tab2,tab3,tab4 = st.tabs([
     "📊 Gráficos"
 ])
 
-# =================================================
+# -------------------------------------------------
 # BASE HISTÓRICA
-# =================================================
+# -------------------------------------------------
 
 with tab1:
 
@@ -203,9 +196,9 @@ with tab1:
 
     st.dataframe(base,use_container_width=True,hide_index=True)
 
-# =================================================
+# -------------------------------------------------
 # EVOLUÇÃO
-# =================================================
+# -------------------------------------------------
 
 with tab2:
 
@@ -225,13 +218,11 @@ with tab2:
 
     st.dataframe(df_evolucao,use_container_width=True,hide_index=True)
 
-# =================================================
+# -------------------------------------------------
 # TOP 20
-# =================================================
+# -------------------------------------------------
 
 with tab3:
-
-    st.subheader("Top 20 Produtos Obsoletos")
 
     ultima_data = df_filtrado["Data Fechamento"].max()
 
@@ -254,9 +245,9 @@ with tab3:
 
     st.dataframe(top20,use_container_width=True,hide_index=True)
 
-# =================================================
+# -------------------------------------------------
 # GRÁFICOS
-# =================================================
+# -------------------------------------------------
 
 with tab4:
 
@@ -286,20 +277,12 @@ with tab4:
 
     chart = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
         x=alt.X("Custo Total",axis=None),
-        y=alt.Y(
-            "Empresa / Filial",
-            sort="-x",
-            axis=alt.Axis(title=None)
-        )
+        y=alt.Y("Empresa / Filial", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None))
     )
 
-    text = alt.Chart(empresa).mark_text(
-        align="left",
-        dx=5,
-        color="white"
-    ).encode(
+    text = alt.Chart(empresa).mark_text(align="left",dx=5,color="white").encode(
         x="Custo Total",
-        y="Empresa / Filial",
+        y=alt.Y("Empresa / Filial", sort=alt.SortField(field="Custo Total",order="descending")),
         text="Label"
     )
 
@@ -325,20 +308,12 @@ with tab4:
 
     chart = alt.Chart(status).mark_bar(color="#EC6E21").encode(
         x=alt.X("Custo Total",axis=None),
-        y=alt.Y(
-            "Status do Movimento",
-            sort="-x",
-            axis=alt.Axis(title=None)
-        )
+        y=alt.Y("Status do Movimento", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None))
     )
 
-    text = alt.Chart(status).mark_text(
-        align="left",
-        dx=5,
-        color="white"
-    ).encode(
+    text = alt.Chart(status).mark_text(align="left",dx=5,color="white").encode(
         x="Custo Total",
-        y="Status do Movimento",
+        y=alt.Y("Status do Movimento", sort=alt.SortField(field="Custo Total",order="descending")),
         text="Label"
     )
 
@@ -364,20 +339,12 @@ with tab4:
 
     chart = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
         x=alt.X("Custo Total",axis=None),
-        y=alt.Y(
-            "Conta",
-            sort="-x",
-            axis=alt.Axis(title=None)
-        )
+        y=alt.Y("Conta", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None))
     )
 
-    text = alt.Chart(conta).mark_text(
-        align="left",
-        dx=5,
-        color="white"
-    ).encode(
+    text = alt.Chart(conta).mark_text(align="left",dx=5,color="white").encode(
         x="Custo Total",
-        y="Conta",
+        y=alt.Y("Conta", sort=alt.SortField(field="Custo Total",order="descending")),
         text="Label"
     )
 
