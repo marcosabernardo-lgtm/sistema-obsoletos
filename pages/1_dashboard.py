@@ -22,12 +22,19 @@ section[data-testid="stSidebar"]{
     width:260px !important;
 }
 
-/* HEADER TABLE */
+/* HEADER TABLE — força fundo e texto branco em todos os seletores possíveis */
 
-div[data-testid="stDataFrame"] div[role="columnheader"]{
+div[data-testid="stDataFrame"] [role="columnheader"],
+div[data-testid="stDataFrame"] [role="columnheader"] span,
+div[data-testid="stDataFrame"] [role="columnheader"] div,
+div[data-testid="stDataFrame"] [role="columnheader"] p,
+div[data-testid="stDataFrame"] thead th,
+div[data-testid="stDataFrame"] .dvn-col-gutter,
+div[data-testid="stDataFrame"] .sticky {
     background-color:#0f5a60 !important;
     color:white !important;
     font-weight:600 !important;
+    border-bottom: 1px solid #EC6E21 !important;
 }
 
 /* ROW COLOR */
