@@ -4,6 +4,7 @@ import altair as alt
 from analises import evolucao_estoque
 from tabs.base_historica import render as render_base_historica
 from tabs.evolucao_estoque import render as render_evolucao
+from tabs.top20_produtos import render as render_top20
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 
@@ -228,28 +229,8 @@ with tab2:
 # -------------------------------------------------
 
 with tab3:
-
-    ultima_data = df_filtrado["Data Fechamento"].max()
-
-    top20 = (
-        df_filtrado[df_filtrado["Data Fechamento"]==ultima_data]
-        .groupby(["Empresa / Filial","Produto","Descricao"],as_index=False)
-        .agg(
-            Quantidade=("Saldo Atual","sum"),
-            Custo_Total=("Custo Total","sum")
-        )
-        .sort_values("Custo_Total",ascending=False)
-        .head(20)
-    )
-
-    top20.insert(0,"Ranking",range(1,len(top20)+1))
-
-    top20 = top20.rename(columns={"Custo_Total":"Custo Total"})
-
-    top20["Custo Total"] = top20["Custo Total"].apply(moeda_br)
-
-    st.dataframe(top20,use_container_width=True,hide_index=True)
-
+    render_top20(df_filtrado, moeda_br)
+    
 # -------------------------------------------------
 # GRÁFICOS
 # -------------------------------------------------
