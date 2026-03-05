@@ -50,14 +50,27 @@ def executar_estoque(uploaded_file):
             if "06_Usadas/" in n and n.lower().endswith(".xlsx")
         ]
 
-        codigos_usadas = set()
+        # dict: empresa -> set de códigos
+        usadas_por_empresa = {}
         for nome in arquivos_usadas:
+            nome_upper = nome.upper()
+            if "TOOLS" in nome_upper:
+                empresa = "Tools"
+            elif "MAQUINAS" in nome_upper:
+                empresa = "Maquinas"
+            elif "ROBOTICA" in nome_upper:
+                empresa = "Robotica"
+            elif "SERVICE" in nome_upper:
+                empresa = "Service"
+            else:
+                continue
             with z.open(nome) as f:
                 df_u = pd.read_excel(f, dtype=str, engine="openpyxl")
             df_u.columns = df_u.columns.str.strip()
-            codigos_usadas.update(
+            codigos = set(
                 df_u["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
             )
+            usadas_por_empresa[empresa] = codigos
         # ==========================================================
 
     df = df.rename(columns={
@@ -84,9 +97,14 @@ def executar_estoque(uploaded_file):
     df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce")
     df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce")
 
-    # Aplica Maquina Usada onde o código bater
-    if codigos_usadas:
-        df.loc[df["Produto"].isin(codigos_usadas), "Conta"] = "Maquina Usada"
+    # Aplica Maquina Usada cruzando empresa + código
+    if usadas_por_empresa:
+        for empresa, codigos in usadas_por_empresa.items():
+            mask = (
+                df["Empresa / Filial"].str.startswith(empresa) &
+                df["Produto"].isin(codigos)
+            )
+            df.loc[mask, "Conta"] = "Maquina Usada"
 
     df = df.drop(columns=["Empresa", "Filial"])
 
