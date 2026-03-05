@@ -119,17 +119,20 @@ def render(df_kpi, moeda_br):
         st.info("Nenhuma movimentação de obsoleto no período.")
         return
 
-    tabela = mov[
-        [
-            "Status Mov",
-            "Empresa / Filial",
-            "Produto",
-            "Descricao",
-            "Saldo Atual",
-            "Custo Total",
-            "Ano Meses Dias"
-        ]
-    ].copy()
+   colunas = [
+    "Status Mov",
+    "Empresa / Filial",
+    "Produto",
+    "Descricao",
+    "Saldo Atual",
+    "Custo Total"
+]
+
+# adiciona coluna de tempo se existir
+if "Ano Meses Dias" in mov.columns:
+    colunas.append("Ano Meses Dias")
+
+tabela = mov[colunas].copy()
 
     tabela = tabela.rename(columns={
         "Saldo Atual": "Quantidade",
