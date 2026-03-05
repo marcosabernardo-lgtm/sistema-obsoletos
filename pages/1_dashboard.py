@@ -302,9 +302,9 @@ with tab4:
         axis=1
     )
 
-    chart = alt.Chart(empresa).mark_bar(color="#EC6E21").encode(
+    chart = alt.Chart(empresa).mark_bar(color="#EC6E21", stroke="white", strokeWidth=1).encode(
         x=alt.X("Custo Total",axis=None),
-        y=alt.Y("Empresa / Filial", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None))
+        y=alt.Y("Empresa / Filial", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None, labelLimit=200))
     )
 
     text = alt.Chart(empresa).mark_text(align="left",dx=5,color="white").encode(
@@ -313,7 +313,7 @@ with tab4:
         text="Label"
     )
 
-    st.altair_chart(chart+text,use_container_width=True)
+    st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
 
     # STATUS
 
@@ -333,9 +333,9 @@ with tab4:
         axis=1
     )
 
-    chart = alt.Chart(status).mark_bar(color="#EC6E21").encode(
+    chart = alt.Chart(status).mark_bar(color="#EC6E21", stroke="white", strokeWidth=1).encode(
         x=alt.X("Custo Total",axis=None),
-        y=alt.Y("Status do Movimento", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None))
+        y=alt.Y("Status do Movimento", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None, labelLimit=200))
     )
 
     text = alt.Chart(status).mark_text(align="left",dx=5,color="white").encode(
@@ -344,7 +344,7 @@ with tab4:
         text="Label"
     )
 
-    st.altair_chart(chart+text,use_container_width=True)
+    st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
 
     # CONTA
 
@@ -364,9 +364,9 @@ with tab4:
         axis=1
     )
 
-    chart = alt.Chart(conta).mark_bar(color="#EC6E21").encode(
+    chart = alt.Chart(conta).mark_bar(color="#EC6E21", stroke="white", strokeWidth=1).encode(
         x=alt.X("Custo Total",axis=None),
-        y=alt.Y("Conta", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None))
+        y=alt.Y("Conta", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None, labelLimit=300))
     )
 
     text = alt.Chart(conta).mark_text(align="left",dx=5,color="white").encode(
@@ -375,4 +375,4 @@ with tab4:
         text="Label"
     )
 
-    st.altair_chart(chart+text,use_container_width=True)
+    st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
