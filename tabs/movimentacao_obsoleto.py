@@ -6,26 +6,46 @@ import pandas as pd
 # CARD PADRÃO
 # -------------------------------------------------------
 
-def card(titulo, valor):
+# -------------------------------------------------
+# CARDS
+# -------------------------------------------------
 
-    st.markdown(
-        f"""
-        <div style="
-            border:2px solid #EC6E21;
-            border-radius:12px;
-            padding:16px;
-            height:90px;
-            display:flex;
-            flex-direction:column;
-            justify-content:center;
-            text-align:center;
-        ">
-            <div style="font-size:15px">{titulo}</div>
-            <div style="font-size:28px;font-weight:bold">{valor}</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+qtd_entrou = entrou["Produto"].nunique()
+valor_entrou = entrou["Custo Total"].sum()
+
+qtd_saiu = saiu["Produto"].nunique()
+valor_saiu = saiu["Custo Total"].sum()
+
+saldo_mov = valor_entrou - valor_saiu
+
+obs_atual = df_atual[df_atual["obsoleto"]]["Custo Total"].sum()
+obs_ant = df_ant[df_ant["obsoleto"]]["Custo Total"].sum()
+
+variacao_real = obs_atual - obs_ant
+
+consumo = variacao_real - saldo_mov
+
+
+st.subheader("Movimentação do Obsoleto")
+
+c1, c2, c3, c4, c5 = st.columns(5)
+
+with c1:
+    card("Itens que Entraram", f"{qtd_entrou:,}")
+
+with c2:
+    card("Valor que Entrou", moeda_br(valor_entrou))
+
+with c3:
+    card("Valor que Saiu", moeda_br(valor_saiu))
+
+with c4:
+    card("Saldo Movimentação", moeda_br(saldo_mov))
+
+with c5:
+    card("Consumo / Ajustes", moeda_br(consumo))
+
+st.markdown("---")
 
 
 # -------------------------------------------------------
