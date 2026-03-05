@@ -245,4 +245,4 @@ with tab4:
 # -------------------------------------------------
 
 with tab5:
-    render_movimentacao(df_hist, moeda_br)
+    render_movimentacao(df_filtrado, moeda_br)
