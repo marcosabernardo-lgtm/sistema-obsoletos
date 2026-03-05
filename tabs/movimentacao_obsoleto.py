@@ -155,37 +155,7 @@ def render(df_hist, moeda_br):
 
     st.markdown("---")
 
-    # -------------------------------------------------------
-    # RECONCILIAÇÃO
-    # -------------------------------------------------------
-
-    st.markdown("### 🔎 Reconciliação do estoque obsoleto")
-
-    estrutura = """
-Obsoleto anterior
-+ Entraram no obsoleto
-- Saíram do obsoleto
-- Consumo / ajustes
-----------------------------
-Obsoleto atual
-"""
-
-    st.code(estrutura)
-
-    numeros = f"""
-{moeda_br(obs_ant)}
-+ {moeda_br(valor_entrou)}
-- {moeda_br(valor_saiu)}
-- {moeda_br(abs(consumo))}
-----------------------------
-{moeda_br(obs_atual)}
-"""
-
-    st.code(numeros)
-
-    st.markdown("---")
-
-    # -------------------------------------------------------
+     # -------------------------------------------------------
     # TABELA
     # -------------------------------------------------------
 
