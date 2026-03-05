@@ -208,9 +208,10 @@ st.markdown("---")
 tab1,tab2,tab3,tab4,tab5 = st.tabs([
     "📚 Base Histórica",
     "📈 Evolução do Estoque",
+    "🔄 Movimentação do Obsoleto"
     "🏆 Top 20 Produtos",
     "📊 Gráficos",
-    "🔄 Movimentação do Obsoleto"
+    
 ])
 
 # -------------------------------------------------
