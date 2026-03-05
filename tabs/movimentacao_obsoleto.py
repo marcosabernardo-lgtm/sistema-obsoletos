@@ -3,6 +3,7 @@ import pandas as pd
 
 
 def render(df_hist, moeda_br):
+    st.write(df_hist.columns)
 
     datas = sorted(df_hist["Data Fechamento"].unique())
 
