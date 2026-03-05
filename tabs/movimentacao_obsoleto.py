@@ -51,7 +51,7 @@ def render(df_hist, moeda_br):
     saiu = saiu.sort_values("Custo Total", ascending=False)
 
     # -------------------------------------------------
-    # TABELAS
+    # TABELA ENTRARAM
     # -------------------------------------------------
 
     st.subheader("Itens que Entraram no Obsoleto")
@@ -59,10 +59,12 @@ def render(df_hist, moeda_br):
     if entrou.empty:
         st.info("Nenhum item entrou no obsoleto.")
     else:
+
         tabela = entrou[[
             "Empresa / Filial",
             "Produto",
             "Descricao",
+            "Ano Meses Dias",
             "Custo Total"
         ]].copy()
 
@@ -76,15 +78,21 @@ def render(df_hist, moeda_br):
 
     st.markdown("---")
 
+    # -------------------------------------------------
+    # TABELA SAÍRAM
+    # -------------------------------------------------
+
     st.subheader("Itens que Saíram do Obsoleto")
 
     if saiu.empty:
         st.info("Nenhum item saiu do obsoleto.")
     else:
+
         tabela = saiu[[
             "Empresa / Filial",
             "Produto",
             "Descricao",
+            "Ano Meses Dias",
             "Custo Total"
         ]].copy()
 
