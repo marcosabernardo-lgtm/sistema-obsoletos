@@ -29,34 +29,27 @@ def card(titulo, valor):
 # -------------------------------------------------------
 def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, consumo, moeda_br):
     
-    # A) Analisa se o estoque total subiu ou desceu
     if variacao_real < 0:
-        # Estoque caiu (Bom)
         cor_titulo = "#28a745"  # Verde
         titulo = "✅ O Estoque Obsoleto REDUZIU neste mês"
     else:
-        # Estoque subiu (Ruim)
         cor_titulo = "#dc3545"  # Vermelho
         titulo = "⚠️ O Estoque Obsoleto AUMENTOU neste mês"
 
-    # B) Analisa o Fluxo (Entrada vs Saída)
     saldo_mov = valor_entrou - valor_saiu
     
     if saldo_mov > 0:
-        # Entrou mais do que saiu (Ruim)
         texto_fluxo = f"""
         **⚠️ Ponto de Atenção Crítico (Fluxo):** 
         A "torneira" de obsolescência está aberta. O valor de novos itens obsoletos (**{moeda_br(valor_entrou)}**) superou o valor recuperado (**{moeda_br(valor_saiu)}**).
         Isso significa que, organicamente, o problema está crescendo.
         """
     else:
-        # Saiu mais do que entrou (Bom)
         texto_fluxo = f"""
         **✅ Ponto Positivo (Fluxo):** 
         O fluxo operacional está saudável. Conseguimos recuperar/tirar da obsolescência (**{moeda_br(valor_saiu)}**) mais do que entrou de novos problemas.
         """
 
-    # C) Analisa o Consumo / Ajustes (O fiel da balança)
     if consumo < 0:
         texto_conclusao = f"""
         **📉 O que impactou o resultado final?**
@@ -79,7 +72,7 @@ def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, consumo, moeda_
 # -------------------------------------------------------
 def render(df_hist, moeda_br):
 
-    # --- CONTROLE DE ESTADO (Para o botão de fechar funcionar) ---
+    # --- CONTROLE DE ESTADO ---
     if "analise_visivel" not in st.session_state:
         st.session_state["analise_visivel"] = False
 
@@ -88,7 +81,28 @@ def render(df_hist, moeda_br):
 
     df = df_hist.copy()
 
-    # --- PROCESSAMENTO DE DADOS (Mantido igual) ---
+    # ========================================================
+    # FILTROS DA SIDEBAR (NOVA PARTE IMPORTANTE)
+    # ========================================================
+    
+    # 1. Filtro Empresa / Filial
+    lista_empresas = sorted(df["Empresa / Filial"].unique())
+    sel_empresas = st.sidebar.multiselect("Empresa / Filial", options=lista_empresas)
+
+    # 2. Filtro Conta
+    lista_contas = sorted(df["Conta"].unique())
+    sel_contas = st.sidebar.multiselect("Conta", options=lista_contas)
+
+    # APLICANDO OS FILTROS AO DATAFRAME
+    if sel_empresas:
+        df = df[df["Empresa / Filial"].isin(sel_empresas)]
+    
+    if sel_contas:
+        df = df[df["Conta"].isin(sel_contas)]
+
+    # ========================================================
+
+    # --- PROCESSAMENTO DE DADOS ---
     df = (
         df.groupby(
             ["Data Fechamento", "Empresa / Filial", "Produto", "Descricao", "Conta", "Status do Movimento"],
@@ -104,7 +118,7 @@ def render(df_hist, moeda_br):
     datas = sorted(df["Data Fechamento"].unique())
 
     if len(datas) < 2:
-        st.warning("Histórico insuficiente.")
+        st.warning(f"Histórico insuficiente com os filtros selecionados.")
         return
 
     data_atual = datas[-1]
@@ -135,7 +149,7 @@ def render(df_hist, moeda_br):
     saldo_mov = valor_entrou - valor_saiu
     consumo = variacao_real - saldo_mov
 
-    # --- VISUALIZAÇÃO: CARDS ---
+    # --- VISUALIZAÇÃO ---
     st.subheader("Movimentação do Obsoleto")
 
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -147,24 +161,18 @@ def render(df_hist, moeda_br):
 
     st.markdown("---")
 
-    # --- ÁREA DA ANÁLISE INTELIGENTE ---
-    
+    # --- ÁREA DA ANÁLISE ---
     col_btn, col_vazia = st.columns([1, 4])
     
-    # Botão Principal (Apenas aparece se a análise estiver fechada)
     if not st.session_state["analise_visivel"]:
         with col_btn:
             st.button("🤖 Analisar Cenário", type="primary", on_click=toggle_analise, use_container_width=True)
 
-    # Conteúdo da Análise (Aparece se estiver aberto)
     if st.session_state["analise_visivel"]:
-        
-        # Gera o texto
         titulo, cor_titulo, texto_fluxo, texto_conclusao = gerar_texto_analise(
             variacao_real, valor_entrou, valor_saiu, consumo, moeda_br
         )
         
-        # Container com fundo escuro e letra branca
         st.markdown(f"""
         <div style="
             background-color: #1E1E1E; 
@@ -179,14 +187,13 @@ def render(df_hist, moeda_br):
         </div>
         """, unsafe_allow_html=True)
 
-        # Botão de Fechar (Logo abaixo do texto)
         col_fechar, _ = st.columns([1, 4])
         with col_fechar:
             st.button("❌ Fechar Análise", on_click=toggle_analise, use_container_width=True)
 
     st.markdown("---")
 
-    # --- TABELA DE DADOS ---
+    # --- TABELA ---
     entrou["Status Mov"] = "🔴 Entrou"
     saiu["Status Mov"] = "🟢 Saiu"
     mov = pd.concat([entrou, saiu])
