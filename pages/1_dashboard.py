@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-from analises import evolucao_estoque, score_risco
+from analises import evolucao_estoque
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 
@@ -20,6 +20,15 @@ st.markdown("""
 
 section[data-testid="stSidebar"]{
     width:260px !important;
+}
+
+/* GRÁFICOS — borda ao redor de cada gráfico Altair */
+
+div[data-testid="stArrowVegaLiteChart"] > div,
+div[data-testid="stVegaLiteChart"] > div {
+    border: 2px solid #EC6E21 !important;
+    border-radius: 10px !important;
+    padding: 12px !important;
 }
 
 /* FILTROS — borda laranja igual aos KPI cards */
@@ -200,12 +209,11 @@ st.markdown("---")
 # ABAS
 # -------------------------------------------------
 
-tab1,tab2,tab3,tab4,tab5 = st.tabs([
+tab1,tab2,tab3,tab4 = st.tabs([
     "📚 Base Histórica",
     "📈 Evolução do Estoque",
     "🏆 Top 20 Produtos",
-    "📊 Gráficos",
-    "🎯 Score de Risco"
+    "📊 Gráficos"
 ])
 
 # -------------------------------------------------
@@ -316,8 +324,6 @@ with tab4:
 
     st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
 
-    st.markdown("---")
-
     # STATUS
 
     st.subheader("Obsoleto por Status do Movimento")
@@ -349,8 +355,6 @@ with tab4:
 
     st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
 
-    st.markdown("---")
-
     # CONTA
 
     st.subheader("Obsoleto por Conta")
@@ -381,42 +385,3 @@ with tab4:
     )
 
     st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
-
-# -------------------------------------------------
-# SCORE DE RISCO
-# -------------------------------------------------
-
-with tab5:
-
-    st.markdown("### 🎯 Score de Risco de Obsolescência")
-    st.caption("Score calculado com base em: dias sem movimento, valor em risco e estagnação entre fechamentos.")
-
-    df_score = score_risco(df_kpi)
-
-    # KPIs de risco
-    criticos  = (df_score["Risco"] == "🔴 Crítico").sum()
-    altos     = (df_score["Risco"] == "🟠 Alto").sum()
-    medios    = (df_score["Risco"] == "🟡 Médio").sum()
-    baixos    = (df_score["Risco"] == "🟢 Baixo").sum()
-
-    c1,c2,c3,c4 = st.columns(4)
-    c1.markdown(f'''<div class="kpi-card"><div class="kpi-title">🔴 Crítico</div><div class="kpi-value">{criticos}</div></div>''', unsafe_allow_html=True)
-    c2.markdown(f'''<div class="kpi-card"><div class="kpi-title">🟠 Alto</div><div class="kpi-value">{altos}</div></div>''', unsafe_allow_html=True)
-    c3.markdown(f'''<div class="kpi-card"><div class="kpi-title">🟡 Médio</div><div class="kpi-value">{medios}</div></div>''', unsafe_allow_html=True)
-    c4.markdown(f'''<div class="kpi-card"><div class="kpi-title">🟢 Baixo</div><div class="kpi-value">{baixos}</div></div>''', unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # Filtro de risco
-    risco_sel = st.selectbox(
-        "Filtrar por Risco",
-        ["Todos", "🔴 Crítico", "🟠 Alto", "🟡 Médio", "🟢 Baixo"]
-    )
-
-    df_exibir = df_score.copy()
-    if risco_sel != "Todos":
-        df_exibir = df_exibir[df_exibir["Risco"] == risco_sel]
-
-    df_exibir["Custo Total"] = df_exibir["Custo Total"].apply(moeda_br)
-
-    st.dataframe(df_exibir, use_container_width=True, hide_index=True)
