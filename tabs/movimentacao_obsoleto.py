@@ -37,7 +37,7 @@ def render(df_hist, moeda_br):
     df = df_hist.copy()
 
     # -------------------------------------------------------
-    # CONSOLIDAR BASE POR ITEM NO FECHAMENTO
+    # CONSOLIDAR BASE
     # -------------------------------------------------------
 
     df = (
@@ -73,7 +73,7 @@ def render(df_hist, moeda_br):
     df_ant = df[df["Data Fechamento"] == data_anterior].copy()
 
     # -------------------------------------------------------
-    # CALCULAR OBSOLETO REAL
+    # CALCULAR OBSOLETO
     # -------------------------------------------------------
 
     obs_ant = df_ant[
@@ -156,43 +156,12 @@ def render(df_hist, moeda_br):
     st.markdown("---")
 
     # -------------------------------------------------------
-    # INTERPRETAÇÃO
+    # RECONCILIAÇÃO
     # -------------------------------------------------------
 
-    if st.button("🤖 Analisar movimentação do obsoleto"):
+    st.markdown("### 🔎 Reconciliação do estoque obsoleto")
 
-        st.markdown("### 📊 Interpretação automática")
-
-        st.write(
-            f"• No período analisado, **{moeda_br(valor_entrou)}** em itens entraram no obsoleto."
-        )
-
-        st.write(
-            f"• Por outro lado, **{moeda_br(valor_saiu)}** deixaram de ser obsoletos."
-        )
-
-        if saldo_mov > 0:
-            st.write(
-                f"• O fluxo de deterioração foi **positivo em {moeda_br(saldo_mov)}**, indicando que mais itens se tornaram obsoletos do que voltaram a girar."
-            )
-        else:
-            st.write(
-                f"• O fluxo de deterioração foi **negativo em {moeda_br(abs(saldo_mov))}**, indicando recuperação de estoque."
-            )
-
-        st.write(
-            f"• Além disso, houve **consumo ou baixa de {moeda_br(abs(consumo))}** em itens obsoletos."
-        )
-
-        st.markdown("---")
-
-        # -------------------------------------------------------
-        # RECONCILIAÇÃO
-        # -------------------------------------------------------
-
-        st.markdown("### 🔎 Reconciliação do estoque obsoleto")
-
-        estrutura = """
+    estrutura = """
 Obsoleto anterior
 + Entraram no obsoleto
 - Saíram do obsoleto
@@ -201,9 +170,9 @@ Obsoleto anterior
 Obsoleto atual
 """
 
-        st.code(estrutura)
+    st.code(estrutura)
 
-        numeros = f"""
+    numeros = f"""
 {moeda_br(obs_ant)}
 + {moeda_br(valor_entrou)}
 - {moeda_br(valor_saiu)}
@@ -212,10 +181,12 @@ Obsoleto atual
 {moeda_br(obs_atual)}
 """
 
-        st.code(numeros)
+    st.code(numeros)
+
+    st.markdown("---")
 
     # -------------------------------------------------------
-    # TABELA DE MOVIMENTAÇÃO
+    # TABELA
     # -------------------------------------------------------
 
     entrou["Status Mov"] = "🔴 Entrou"
