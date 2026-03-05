@@ -233,8 +233,8 @@ with tab2:
 # -------------------------------------------------
 
 with tab3:
-    render_top20(df_filtrado, moeda_br)
-
+    render_movimentacao(df_hist, moeda_br)
+    
 # -------------------------------------------------
 # GRÁFICOS
 # -------------------------------------------------
@@ -248,4 +248,4 @@ with tab4:
 
 # IMPORTANTE: usa base completa
 with tab5:
-    render_movimentacao(df_hist, moeda_br)
+    render_top20(df_filtrado, moeda_br)
