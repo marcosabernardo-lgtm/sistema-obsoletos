@@ -10,10 +10,6 @@ from tabs.movimentacao_obsoleto import render as render_movimentacao
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 
-st.title("📊 Dashboard de Estoque Obsoleto")
-
-st.markdown("---")
-
 # -------------------------------------------------
 # CSS
 # -------------------------------------------------
@@ -92,6 +88,10 @@ div[data-testid="stDataFrame"] div[role="gridcell"]{
 </style>
 """, unsafe_allow_html=True)
 
+st.title("📊 Dashboard de Estoque Obsoleto")
+
+st.markdown("---")
+
 # -------------------------------------------------
 # FUNÇÕES
 # -------------------------------------------------
@@ -111,11 +111,13 @@ df_hist = pd.read_parquet("data/base_historica.parquet")
 
 st.sidebar.header("Filtros")
 
+# Filtro de Status (Usado para tabelas específicas, não afeta a movimentação geral)
 status_estoque = st.sidebar.selectbox(
     "Status do Estoque",
     ["Geral","Obsoletos"]
 )
 
+# Filtros Principais (Afetam tudo)
 empresas_sel = st.sidebar.multiselect(
     "Empresa / Filial",
     sorted(df_hist["Empresa / Filial"].dropna().unique())
@@ -127,7 +129,7 @@ contas_sel = st.sidebar.multiselect(
 )
 
 # -------------------------------------------------
-# BASE KPI
+# BASE KPI (Filtros de Empresa e Conta aplicados)
 # -------------------------------------------------
 
 df_kpi = df_hist.copy()
@@ -139,7 +141,7 @@ if contas_sel:
     df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
 
 # -------------------------------------------------
-# BASE FILTRADA
+# BASE FILTRADA (Adiciona filtro de Status)
 # -------------------------------------------------
 
 df_filtrado = df_kpi.copy()
@@ -153,21 +155,27 @@ if status_estoque == "Obsoletos":
 # KPIs
 # -------------------------------------------------
 
-ultima_data = df_kpi["Data Fechamento"].max()
+if not df_kpi.empty:
+    ultima_data = df_kpi["Data Fechamento"].max()
+    base_kpi = df_kpi[df_kpi["Data Fechamento"] == ultima_data]
 
-base_kpi = df_kpi[df_kpi["Data Fechamento"] == ultima_data]
+    estoque_total = base_kpi["Custo Total"].sum()
 
-estoque_total = base_kpi["Custo Total"].sum()
+    estoque_obsoleto = base_kpi[
+        base_kpi["Status do Movimento"] != "Até 6 meses"
+    ]["Custo Total"].sum()
 
-estoque_obsoleto = base_kpi[
-    base_kpi["Status do Movimento"] != "Até 6 meses"
-]["Custo Total"].sum()
+    perc_obsoleto = estoque_obsoleto / estoque_total if estoque_total > 0 else 0
 
-perc_obsoleto = estoque_obsoleto / estoque_total if estoque_total > 0 else 0
-
-itens_obsoletos = base_kpi[
-    base_kpi["Status do Movimento"] != "Até 6 meses"
-]["Produto"].nunique()
+    itens_obsoletos = base_kpi[
+        base_kpi["Status do Movimento"] != "Até 6 meses"
+    ]["Produto"].nunique()
+else:
+    # Caso os filtros não retornem nada
+    estoque_total = 0
+    estoque_obsoleto = 0
+    perc_obsoleto = 0
+    itens_obsoletos = 0
 
 col1,col2,col3,col4 = st.columns(4)
 
@@ -231,9 +239,10 @@ with tab2:
 # MOVIMENTAÇÃO DO OBSOLETO
 # -------------------------------------------------
 
-# IMPORTANTE: usa base completa
+# ALTERAÇÃO AQUI: Mudamos de df_hist para df_kpi
+# df_kpi já contém os filtros de Empresa e Conta selecionados na sidebar.
 with tab3:
-    render_movimentacao(df_hist, moeda_br)
+    render_movimentacao(df_kpi, moeda_br)
 
 # -------------------------------------------------
 # TOP 20
