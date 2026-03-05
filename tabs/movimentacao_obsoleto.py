@@ -38,6 +38,8 @@ def render(df_hist, moeda_br):
 
     # -------------------------------------------------------
     # CONSOLIDAR BASE
+    # Agrupa por Produto + Status para garantir consistência
+    # com a função evolucao_estoque (sem perder ou duplicar)
     # -------------------------------------------------------
 
     df = (
@@ -48,6 +50,7 @@ def render(df_hist, moeda_br):
                 "Empresa / Filial",
                 "Produto",
                 "Descricao",
+                "Conta",
                 "Status do Movimento"
             ],
             as_index=False
@@ -57,6 +60,17 @@ def render(df_hist, moeda_br):
                 "Saldo Atual": "sum",
                 "Custo Total": "sum"
             }
+        )
+    )
+
+    # Garante um único registro por Produto + Fechamento
+    # priorizando o status mais restritivo (obsoleto > ativo)
+    df = (
+        df
+        .sort_values("Status do Movimento")
+        .drop_duplicates(
+            subset=["Data Fechamento", "Empresa / Filial", "Produto"],
+            keep="first"
         )
     )
 
