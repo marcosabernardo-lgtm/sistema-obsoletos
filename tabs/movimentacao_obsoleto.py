@@ -38,37 +38,40 @@ def render(df_hist, moeda_br):
         (base["obsoleto_ant"] == True)
     ].copy()
 
-    # -----------------------------
-    # COLUNAS DISPONÍVEIS
-    # -----------------------------
-
-    colunas_base = [
-        "Empresa / Filial",
-        "Produto",
-        "Descricao",
-        "Ano Meses Dias",
-        "Custo Total"
-    ]
-
-    colunas_existentes = [
-        c for c in colunas_base if c in base.columns
-    ]
-
-    # -----------------------------
-    # ENTRARAM NO OBSOLETO
-    # -----------------------------
+    # ======================================================
+    # ITENS QUE ENTRARAM NO OBSOLETO
+    # ======================================================
 
     st.subheader("Itens que Entraram no Obsoleto")
 
     if entrou.empty:
         st.info("Nenhum item entrou no obsoleto.")
+
     else:
 
-        tabela = entrou[colunas_existentes].copy()
+        qtd_itens = len(entrou)
+        valor_total = entrou["Custo Total"].sum()
 
-        if "Custo Total" in tabela.columns:
-            tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
-            tabela = tabela.sort_values("Custo Total", ascending=False)
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.metric("Qtd de Itens", f"{qtd_itens:,}")
+
+        with c2:
+            st.metric("Valor Total", moeda_br(valor_total))
+
+        tabela = entrou[
+            [
+                "Empresa / Filial",
+                "Produto",
+                "Descricao",
+                "Custo Total"
+            ]
+        ].copy()
+
+        tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
+
+        tabela = tabela.sort_values("Custo Total", ascending=False)
 
         st.dataframe(
             tabela,
@@ -78,21 +81,40 @@ def render(df_hist, moeda_br):
 
     st.markdown("---")
 
-    # -----------------------------
-    # SAÍRAM DO OBSOLETO
-    # -----------------------------
+    # ======================================================
+    # ITENS QUE SAÍRAM DO OBSOLETO
+    # ======================================================
 
     st.subheader("Itens que Saíram do Obsoleto")
 
     if saiu.empty:
         st.info("Nenhum item saiu do obsoleto.")
+
     else:
 
-        tabela = saiu[colunas_existentes].copy()
+        qtd_itens = len(saiu)
+        valor_total = saiu["Custo Total"].sum()
 
-        if "Custo Total" in tabela.columns:
-            tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
-            tabela = tabela.sort_values("Custo Total", ascending=False)
+        c1, c2 = st.columns(2)
+
+        with c1:
+            st.metric("Qtd de Itens", f"{qtd_itens:,}")
+
+        with c2:
+            st.metric("Valor Total", moeda_br(valor_total))
+
+        tabela = saiu[
+            [
+                "Empresa / Filial",
+                "Produto",
+                "Descricao",
+                "Custo Total"
+            ]
+        ].copy()
+
+        tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
+
+        tabela = tabela.sort_values("Custo Total", ascending=False)
 
         st.dataframe(
             tabela,
