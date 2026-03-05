@@ -3,7 +3,7 @@ import pandas as pd
 
 
 # -------------------------------------------------------
-# CARD PADRÃO
+# CARD
 # -------------------------------------------------------
 
 def card(titulo, valor):
@@ -32,9 +32,9 @@ def card(titulo, valor):
 # FUNÇÃO PRINCIPAL
 # -------------------------------------------------------
 
-def render(df_kpi, moeda_br):
+def render(df_base, moeda_br):
 
-    df = df_kpi.copy()
+    df = df_base.copy()
 
     datas = sorted(df["Data Fechamento"].unique())
 
@@ -48,8 +48,30 @@ def render(df_kpi, moeda_br):
     df_atual = df[df["Data Fechamento"] == data_atual].copy()
     df_ant = df[df["Data Fechamento"] == data_anterior].copy()
 
+    # -------------------------------------------------
+    # DEFINIÇÃO OBSOLETO
+    # -------------------------------------------------
+
     df_atual["obsoleto"] = df_atual["Status do Movimento"] != "Até 6 meses"
     df_ant["obsoleto"] = df_ant["Status do Movimento"] != "Até 6 meses"
+
+    # -------------------------------------------------
+    # CALCULO REAL DO OBSOLETO (SEM MERGE)
+    # -------------------------------------------------
+
+    obs_ant = df_ant[
+        df_ant["Status do Movimento"] != "Até 6 meses"
+    ]["Custo Total"].sum()
+
+    obs_atual = df_atual[
+        df_atual["Status do Movimento"] != "Até 6 meses"
+    ]["Custo Total"].sum()
+
+    variacao_real = obs_atual - obs_ant
+
+    # -------------------------------------------------
+    # DETECTAR QUEM ENTROU E SAIU DO OBSOLETO
+    # -------------------------------------------------
 
     chave = [
         "Empresa / Filial",
@@ -78,7 +100,7 @@ def render(df_kpi, moeda_br):
     ].copy()
 
     # -------------------------------------------------
-    # CÁLCULOS
+    # VALORES
     # -------------------------------------------------
 
     qtd_entrou = entrou["Produto"].nunique()
@@ -88,11 +110,6 @@ def render(df_kpi, moeda_br):
     valor_saiu = saiu["Custo Total"].sum()
 
     saldo_mov = valor_entrou - valor_saiu
-
-    obs_atual = df_atual[df_atual["obsoleto"]]["Custo Total"].sum()
-    obs_ant = df_ant[df_ant["obsoleto"]]["Custo Total"].sum()
-
-    variacao_real = obs_atual - obs_ant
 
     consumo = variacao_real - saldo_mov
 
@@ -122,53 +139,48 @@ def render(df_kpi, moeda_br):
     st.markdown("---")
 
     # -------------------------------------------------
-    # BOTÃO IA
+    # BOTÃO DE INTERPRETAÇÃO
     # -------------------------------------------------
 
     if st.button("🤖 Analisar movimentação do obsoleto"):
 
         st.markdown("### 📊 Interpretação automática")
 
-        texto = []
-
-        texto.append(
-            f"No período analisado, **{moeda_br(valor_entrou)}** em itens entraram no obsoleto."
+        st.write(
+            f"• No período analisado, **{moeda_br(valor_entrou)}** em itens entraram no obsoleto."
         )
 
-        texto.append(
-            f"Por outro lado, **{moeda_br(valor_saiu)}** deixaram de ser obsoletos."
+        st.write(
+            f"• Por outro lado, **{moeda_br(valor_saiu)}** deixaram de ser obsoletos."
         )
 
         if saldo_mov > 0:
-            texto.append(
-                f"O fluxo de deterioração foi **positivo em {moeda_br(saldo_mov)}**, indicando que mais itens se tornaram obsoletos do que voltaram a girar."
+            st.write(
+                f"• O fluxo de deterioração foi **positivo em {moeda_br(saldo_mov)}**, indicando que mais itens se tornaram obsoletos do que voltaram a girar."
             )
         else:
-            texto.append(
-                f"O fluxo de deterioração foi **negativo em {moeda_br(abs(saldo_mov))}**, indicando recuperação do estoque."
+            st.write(
+                f"• O fluxo de deterioração foi **negativo em {moeda_br(abs(saldo_mov))}**, indicando recuperação do estoque."
             )
 
         if consumo < 0:
-            texto.append(
-                f"Além disso, houve **consumo ou baixa de {moeda_br(abs(consumo))}** em itens obsoletos."
+            st.write(
+                f"• Além disso, houve **consumo ou baixa de {moeda_br(abs(consumo))}** em itens obsoletos."
             )
         else:
-            texto.append(
-                f"Houve **aumento de {moeda_br(consumo)}** devido a ajustes de estoque."
+            st.write(
+                f"• Houve **aumento de {moeda_br(consumo)}** devido a ajustes de estoque."
             )
-
-        for t in texto:
-            st.write("•", t)
 
         st.markdown("---")
 
         # -------------------------------------------------
-        # RECONCILIAÇÃO DO ESTOQUE OBSOLETO
+        # RECONCILIAÇÃO
         # -------------------------------------------------
 
         st.markdown("### 🔎 Reconciliação do estoque obsoleto")
 
-        resumo = """
+        estrutura = """
 Obsoleto anterior
 + Entraram no obsoleto
 - Saíram do obsoleto
@@ -177,7 +189,7 @@ Obsoleto anterior
 Obsoleto atual
 """
 
-        st.code(resumo)
+        st.code(estrutura)
 
         numeros = f"""
 {moeda_br(obs_ant)}
@@ -192,10 +204,8 @@ Obsoleto atual
 
         st.code(numeros)
 
-        st.markdown("---")
-
     # -------------------------------------------------
-    # TABELA DE MOVIMENTAÇÃO
+    # TABELA
     # -------------------------------------------------
 
     entrou["Status Mov"] = "🔴 Entrou"
