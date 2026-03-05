@@ -64,9 +64,9 @@ def render(df_kpi, moeda_br):
         valor = round(abs(v * 100), 2)
 
         if v > 0:
-            return f" 🔴⬆️ +{valor} pp"
+            return f" 🔴⬆️ +{valor}"
         elif v < 0:
-            return f" 🟢⬇️ -{valor} pp"
+            return f" 🟢⬇️ -{valor}"
         return ""
 
     df_evolucao["Δ Percent"] = df_evolucao["Var_Percent"].apply(delta_percent)
