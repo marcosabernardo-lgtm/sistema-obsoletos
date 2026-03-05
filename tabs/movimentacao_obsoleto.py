@@ -2,15 +2,15 @@ import streamlit as st
 import pandas as pd
 
 
-# ------------------------------------------------
+# ---------------------------------------------------------
 # CARD PADRÃO DO DASHBOARD
-# ------------------------------------------------
+# ---------------------------------------------------------
 def card(titulo, valor):
 
     st.markdown(
         f"""
         <div style="
-            border:2px solid #ff6b00;
+            border:2px solid #EC6E21;
             border-radius:12px;
             padding:18px;
             height:95px;
@@ -28,36 +28,58 @@ def card(titulo, valor):
     )
 
 
-# ------------------------------------------------
-# ABA MOVIMENTAÇÃO
-# ------------------------------------------------
+# ---------------------------------------------------------
+# ABA MOVIMENTAÇÃO DO OBSOLETO
+# ---------------------------------------------------------
 def render(df_filtrado, moeda_br):
+
+    # -----------------------------------------------------
+    # GARANTE QUE TEMOS PELO MENOS 2 FECHAMENTOS
+    # -----------------------------------------------------
 
     datas = sorted(df_filtrado["Data Fechamento"].unique())
 
     if len(datas) < 2:
-        st.warning("Histórico insuficiente.")
+
+        st.warning("Histórico insuficiente para análise.")
         return
 
     data_atual = datas[-1]
     data_anterior = datas[-2]
 
+    # -----------------------------------------------------
+    # BASES
+    # -----------------------------------------------------
+
     df_atual = df_filtrado[df_filtrado["Data Fechamento"] == data_atual].copy()
     df_ant = df_filtrado[df_filtrado["Data Fechamento"] == data_anterior].copy()
+
+    # -----------------------------------------------------
+    # CLASSIFICA OBSOLETO
+    # -----------------------------------------------------
 
     df_atual["obsoleto"] = df_atual["Status do Movimento"] != "Até 6 meses"
     df_ant["obsoleto"] = df_ant["Status do Movimento"] != "Até 6 meses"
 
     chave = ["Empresa / Filial", "Produto"]
 
-    base = df_atual.merge(
-    df_ant[chave + ["obsoleto"]],
-    on=chave,
-    how="left",
-    suffixes=("_atual", "_ant")
-)
+    # -----------------------------------------------------
+    # MERGE PARA COMPARAR MESES
+    # -----------------------------------------------------
 
-base["obsoleto_ant"] = base["obsoleto_ant"].fillna(False)
+    base = df_atual.merge(
+        df_ant[chave + ["obsoleto"]],
+        on=chave,
+        how="left",
+        suffixes=("_atual", "_ant")
+    )
+
+    # IMPORTANTE
+    base["obsoleto_ant"] = base["obsoleto_ant"].fillna(False)
+
+    # -----------------------------------------------------
+    # IDENTIFICA MOVIMENTAÇÃO
+    # -----------------------------------------------------
 
     entrou = base[
         (base["obsoleto_atual"] == True)
@@ -71,9 +93,9 @@ base["obsoleto_ant"] = base["obsoleto_ant"].fillna(False)
         (base["obsoleto_ant"] == True)
     ].copy()
 
-    # =================================================
-    # ITENS QUE ENTRARAM
-    # =================================================
+    # =====================================================
+    # ITENS QUE ENTRARAM NO OBSOLETO
+    # =====================================================
 
     st.subheader("Itens que Entraram no Obsoleto")
 
@@ -86,7 +108,7 @@ base["obsoleto_ant"] = base["obsoleto_ant"].fillna(False)
         qtd = len(entrou)
         valor = entrou["Custo Total"].sum()
 
-        c1, c2, c3 = st.columns([1,1,2])
+        c1, c2, c3 = st.columns([1, 1, 2])
 
         with c1:
             card("Qtd de Itens", f"{qtd:,}")
@@ -118,9 +140,9 @@ base["obsoleto_ant"] = base["obsoleto_ant"].fillna(False)
 
     st.markdown("---")
 
-    # =================================================
-    # ITENS QUE SAÍRAM
-    # =================================================
+    # =====================================================
+    # ITENS QUE SAÍRAM DO OBSOLETO
+    # =====================================================
 
     st.subheader("Itens que Saíram do Obsoleto")
 
@@ -133,7 +155,7 @@ base["obsoleto_ant"] = base["obsoleto_ant"].fillna(False)
         qtd = len(saiu)
         valor = saiu["Custo Total"].sum()
 
-        c1, c2, c3 = st.columns([1,1,2])
+        c1, c2, c3 = st.columns([1, 1, 2])
 
         with c1:
             card("Qtd de Itens", f"{qtd:,}")
