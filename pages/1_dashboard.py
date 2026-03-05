@@ -305,29 +305,26 @@ with tab4:
     )
 
     empresa["%"] = empresa["Custo Total"]/empresa["Custo Total"].sum()
-    empresa["Valor"] = empresa["Custo Total"].apply(moeda_br)
-    empresa["Perc"] = empresa["%"].apply(lambda x: f"{x*100:.1f}%")
 
-    y_enc = alt.Y("Empresa / Filial", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None, labelLimit=200))
-
-    chart = alt.Chart(empresa).mark_bar(color="#EC6E21", stroke="white", strokeWidth=1, size=28).encode(
-        x=alt.X("Custo Total", axis=None),
-        y=y_enc
+    empresa["Label"] = empresa.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
+        axis=1
     )
 
-    text_valor = alt.Chart(empresa).mark_text(align="left", dx=5, dy=-8, color="white", fontSize=12, fontWeight="bold").encode(
+    chart = alt.Chart(empresa).mark_bar(color="#EC6E21", stroke="white", strokeWidth=1).encode(
+        x=alt.X("Custo Total",axis=None),
+        y=alt.Y("Empresa / Filial", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None, labelLimit=200))
+    )
+
+    text = alt.Chart(empresa).mark_text(align="left",dx=5,color="white").encode(
         x="Custo Total",
         y=alt.Y("Empresa / Filial", sort=alt.SortField(field="Custo Total",order="descending")),
-        text="Valor"
+        text="Label"
     )
 
-    text_perc = alt.Chart(empresa).mark_text(align="left", dx=5, dy=8, color="#EC6E21", fontSize=11).encode(
-        x="Custo Total",
-        y=alt.Y("Empresa / Filial", sort=alt.SortField(field="Custo Total",order="descending")),
-        text="Perc"
-    )
+    st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
 
-    st.altair_chart((chart+text_valor+text_perc).properties(background="transparent"), use_container_width=True)
+    st.markdown("---")
 
     # STATUS
 
@@ -341,29 +338,26 @@ with tab4:
     )
 
     status["%"] = status["Custo Total"]/status["Custo Total"].sum()
-    status["Valor"] = status["Custo Total"].apply(moeda_br)
-    status["Perc"] = status["%"].apply(lambda x: f"{x*100:.1f}%")
 
-    y_enc2 = alt.Y("Status do Movimento", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None, labelLimit=200))
-
-    chart = alt.Chart(status).mark_bar(color="#EC6E21", stroke="white", strokeWidth=1, size=28).encode(
-        x=alt.X("Custo Total", axis=None),
-        y=y_enc2
+    status["Label"] = status.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
+        axis=1
     )
 
-    text_valor = alt.Chart(status).mark_text(align="left", dx=5, dy=-8, color="white", fontSize=12, fontWeight="bold").encode(
+    chart = alt.Chart(status).mark_bar(color="#EC6E21", stroke="white", strokeWidth=1).encode(
+        x=alt.X("Custo Total",axis=None),
+        y=alt.Y("Status do Movimento", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None, labelLimit=200))
+    )
+
+    text = alt.Chart(status).mark_text(align="left",dx=5,color="white").encode(
         x="Custo Total",
         y=alt.Y("Status do Movimento", sort=alt.SortField(field="Custo Total",order="descending")),
-        text="Valor"
+        text="Label"
     )
 
-    text_perc = alt.Chart(status).mark_text(align="left", dx=5, dy=8, color="#EC6E21", fontSize=11).encode(
-        x="Custo Total",
-        y=alt.Y("Status do Movimento", sort=alt.SortField(field="Custo Total",order="descending")),
-        text="Perc"
-    )
+    st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
 
-    st.altair_chart((chart+text_valor+text_perc).properties(background="transparent"), use_container_width=True)
+    st.markdown("---")
 
     # CONTA
 
@@ -377,26 +371,21 @@ with tab4:
     )
 
     conta["%"] = conta["Custo Total"]/conta["Custo Total"].sum()
-    conta["Valor"] = conta["Custo Total"].apply(moeda_br)
-    conta["Perc"] = conta["%"].apply(lambda x: f"{x*100:.1f}%")
 
-    y_enc3 = alt.Y("Conta", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None, labelLimit=300))
-
-    chart = alt.Chart(conta).mark_bar(color="#EC6E21", stroke="white", strokeWidth=1, size=28).encode(
-        x=alt.X("Custo Total", axis=None),
-        y=y_enc3
+    conta["Label"] = conta.apply(
+        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
+        axis=1
     )
 
-    text_valor = alt.Chart(conta).mark_text(align="left", dx=5, dy=-8, color="white", fontSize=12, fontWeight="bold").encode(
+    chart = alt.Chart(conta).mark_bar(color="#EC6E21", stroke="white", strokeWidth=1).encode(
+        x=alt.X("Custo Total",axis=None),
+        y=alt.Y("Conta", sort=alt.SortField(field="Custo Total",order="descending"), axis=alt.Axis(title=None, labelLimit=300))
+    )
+
+    text = alt.Chart(conta).mark_text(align="left",dx=5,color="white").encode(
         x="Custo Total",
         y=alt.Y("Conta", sort=alt.SortField(field="Custo Total",order="descending")),
-        text="Valor"
+        text="Label"
     )
 
-    text_perc = alt.Chart(conta).mark_text(align="left", dx=5, dy=8, color="#EC6E21", fontSize=11).encode(
-        x="Custo Total",
-        y=alt.Y("Conta", sort=alt.SortField(field="Custo Total",order="descending")),
-        text="Perc"
-    )
-
-    st.altair_chart((chart+text_valor+text_perc).properties(background="transparent"), use_container_width=True)
+    st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
