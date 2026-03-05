@@ -27,8 +27,7 @@ def render(df_kpi, moeda_br):
             return f"🟢⬆️ +{valor}"
         elif v < 0:
             return f"🔴⬇️ -{valor}"
-        else:
-            return "⚪"
+        return "⚪"
 
     df_evolucao["Δ Estoque"] = df_evolucao["Var_Total"].apply(delta_total)
 
@@ -48,13 +47,32 @@ def render(df_kpi, moeda_br):
             return f"🔴⬆️ +{valor}"
         elif v < 0:
             return f"🟢⬇️ -{valor}"
-        else:
-            return "⚪"
+        return "⚪"
 
     df_evolucao["Δ Obsoleto"] = df_evolucao["Var_Obs"].apply(delta_obs)
 
     # ==================================================
-    # FORMATAÇÃO DOS VALORES
+    # VARIAÇÃO % OBSOLETO
+    # ==================================================
+
+    df_evolucao["Var_Percent"] = df_evolucao["% Obsoleto"].diff()
+
+    def delta_percent(v):
+        if pd.isna(v):
+            return ""
+
+        valor = round(abs(v * 100), 2)
+
+        if v > 0:
+            return f" 🔴⬆️ +{valor} pp"
+        elif v < 0:
+            return f" 🟢⬇️ -{valor} pp"
+        return ""
+
+    df_evolucao["Δ Percent"] = df_evolucao["Var_Percent"].apply(delta_percent)
+
+    # ==================================================
+    # FORMATAÇÃO
     # ==================================================
 
     df_evolucao["Estoque Total"] = df_evolucao["Estoque Total"].apply(moeda_br)
@@ -62,8 +80,9 @@ def render(df_kpi, moeda_br):
     df_evolucao["Estoque Obsoleto"] = df_evolucao["Estoque Obsoleto"].apply(moeda_br)
 
     df_evolucao["% Obsoleto"] = (
-        df_evolucao["% Obsoleto"] * 100
-    ).round(2).astype(str) + "%"
+        (df_evolucao["% Obsoleto"] * 100).round(2).astype(str) + "%"
+        + df_evolucao["Δ Percent"]
+    )
 
     # ==================================================
     # ORDEM DAS COLUNAS
