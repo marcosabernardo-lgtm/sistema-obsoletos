@@ -49,9 +49,11 @@ def score_risco(df_hist):
 
     # Base: último fechamento, excluindo Em Fabricacao
     df_base = df_hist[df_hist["Data Fechamento"] == ultima].copy()
-    df_base = df_base[
-        df_base["Tipo de Estoque"].astype(str).str.strip().str.upper() != "EM FABRICACAO"
-    ].copy()
+
+    if "Tipo de Estoque" in df_base.columns:
+        df_base = df_base[
+            df_base["Tipo de Estoque"].astype(str).str.strip().str.upper() != "EM FABRICACAO"
+        ].copy()
 
     # ----------------------------------------------------------
     # COMPONENTE 1 — Dias sem movimento (0 a 40 pts)
