@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 from analises import evolucao_estoque
+from tabs.base_historica import render as render_base_historica
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 
@@ -212,17 +213,8 @@ tab1,tab2,tab3,tab4 = st.tabs([
 # -------------------------------------------------
 
 with tab1:
-
-    base = df_filtrado.copy()
-
-    base["Data Fechamento"] = pd.to_datetime(
-        base["Data Fechamento"]
-    ).dt.date
-
-    base["Custo Total"] = base["Custo Total"].apply(moeda_br)
-
-    st.dataframe(base,use_container_width=True,hide_index=True)
-
+    render_base_historica(df_filtrado, moeda_br)
+    
 # -------------------------------------------------
 # EVOLUÇÃO
 # -------------------------------------------------
