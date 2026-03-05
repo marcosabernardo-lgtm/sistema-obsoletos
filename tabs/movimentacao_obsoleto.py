@@ -2,9 +2,28 @@ import streamlit as st
 import pandas as pd
 
 
-def render(df_hist, moeda_br):
+def card(titulo, valor):
 
-    datas = sorted(df_hist["Data Fechamento"].unique())
+    st.markdown(
+        f"""
+        <div style="
+            border:2px solid #ff6b00;
+            border-radius:12px;
+            padding:18px;
+            text-align:center;
+            margin-bottom:15px;
+        ">
+            <div style="font-size:16px">{titulo}</div>
+            <div style="font-size:28px;font-weight:bold">{valor}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def render(df_filtrado, moeda_br):
+
+    datas = sorted(df_filtrado["Data Fechamento"].unique())
 
     if len(datas) < 2:
         st.warning("Histórico insuficiente para análise.")
@@ -13,8 +32,8 @@ def render(df_hist, moeda_br):
     data_atual = datas[-1]
     data_anterior = datas[-2]
 
-    df_atual = df_hist[df_hist["Data Fechamento"] == data_atual].copy()
-    df_ant = df_hist[df_hist["Data Fechamento"] == data_anterior].copy()
+    df_atual = df_filtrado[df_filtrado["Data Fechamento"] == data_atual].copy()
+    df_ant = df_filtrado[df_filtrado["Data Fechamento"] == data_anterior].copy()
 
     df_atual["obsoleto"] = df_atual["Status do Movimento"] != "Até 6 meses"
     df_ant["obsoleto"] = df_ant["Status do Movimento"] != "Até 6 meses"
@@ -38,27 +57,24 @@ def render(df_hist, moeda_br):
         (base["obsoleto_ant"] == True)
     ].copy()
 
-    # ======================================================
-    # ITENS QUE ENTRARAM NO OBSOLETO
-    # ======================================================
+    # =================================================
+    # ITENS QUE ENTRARAM
+    # =================================================
 
     st.subheader("Itens que Entraram no Obsoleto")
 
-    if entrou.empty:
-        st.info("Nenhum item entrou no obsoleto.")
+    if not entrou.empty:
 
-    else:
-
-        qtd_itens = len(entrou)
-        valor_total = entrou["Custo Total"].sum()
+        qtd = len(entrou)
+        valor = entrou["Custo Total"].sum()
 
         c1, c2 = st.columns(2)
 
         with c1:
-            st.metric("Qtd de Itens", f"{qtd_itens:,}")
+            card("Qtd de Itens", f"{qtd:,}")
 
         with c2:
-            st.metric("Valor Total", moeda_br(valor_total))
+            card("Valor Total", moeda_br(valor))
 
         tabela = entrou[
             [
@@ -79,29 +95,30 @@ def render(df_hist, moeda_br):
             hide_index=True
         )
 
+    else:
+
+        st.info("Nenhum item entrou no obsoleto.")
+
     st.markdown("---")
 
-    # ======================================================
-    # ITENS QUE SAÍRAM DO OBSOLETO
-    # ======================================================
+    # =================================================
+    # ITENS QUE SAÍRAM
+    # =================================================
 
     st.subheader("Itens que Saíram do Obsoleto")
 
-    if saiu.empty:
-        st.info("Nenhum item saiu do obsoleto.")
+    if not saiu.empty:
 
-    else:
-
-        qtd_itens = len(saiu)
-        valor_total = saiu["Custo Total"].sum()
+        qtd = len(saiu)
+        valor = saiu["Custo Total"].sum()
 
         c1, c2 = st.columns(2)
 
         with c1:
-            st.metric("Qtd de Itens", f"{qtd_itens:,}")
+            card("Qtd de Itens", f"{qtd:,}")
 
         with c2:
-            st.metric("Valor Total", moeda_br(valor_total))
+            card("Valor Total", moeda_br(valor))
 
         tabela = saiu[
             [
@@ -121,3 +138,7 @@ def render(df_hist, moeda_br):
             use_container_width=True,
             hide_index=True
         )
+
+    else:
+
+        st.info("Nenhum item saiu do obsoleto.")
