@@ -79,11 +79,11 @@ def render(df_hist, moeda_br):
     def toggle_analise():
         st.session_state["analise_visivel"] = not st.session_state["analise_visivel"]
 
-    # AQUI ESTAVA O ERRO: Removemos a criação dos filtros duplicados.
-    # Assumimos que o 'df_hist' que chega aqui JÁ DEVE estar filtrado.
+    # Recebe o DF já filtrado do arquivo principal
     df = df_hist.copy()
 
     # --- PROCESSAMENTO DE DADOS ---
+    # Agrupa mantendo a coluna 'Conta'
     df = (
         df.groupby(
             ["Data Fechamento", "Empresa / Filial", "Produto", "Descricao", "Conta", "Status do Movimento"],
@@ -99,7 +99,7 @@ def render(df_hist, moeda_br):
     datas = sorted(df["Data Fechamento"].unique())
 
     if len(datas) < 2:
-        st.warning("Histórico insuficiente para análise (verifique se os filtros não estão muito restritivos).")
+        st.warning("Histórico insuficiente para análise com os filtros atuais.")
         return
 
     data_atual = datas[-1]
@@ -117,6 +117,7 @@ def render(df_hist, moeda_br):
     df_ant["obsoleto"] = df_ant["Status do Movimento"] != "Até 6 meses"
 
     chave = ["Empresa / Filial", "Produto"]
+    # Faz o merge para identificar entradas e saídas
     base = df_atual.merge(df_ant[chave + ["obsoleto"]], on=chave, how="left", suffixes=("_atual", "_ant"))
     base["obsoleto_ant"] = base["obsoleto_ant"].fillna(False)
 
@@ -179,9 +180,16 @@ def render(df_hist, moeda_br):
     saiu["Status Mov"] = "🟢 Saiu"
     mov = pd.concat([entrou, saiu])
 
+    # AQUI FOI ADICIONADA A COLUNA 'Conta'
     tabela = mov[[
-        "Status Mov", "Empresa / Filial", "Produto", "Descricao", 
-        "Saldo Atual", "Custo Total", "Status do Movimento"
+        "Status Mov", 
+        "Empresa / Filial", 
+        "Conta", 
+        "Produto", 
+        "Descricao", 
+        "Saldo Atual", 
+        "Custo Total", 
+        "Status do Movimento"
     ]].copy()
 
     tabela = tabela.rename(columns={"Saldo Atual": "Quantidade", "Status do Movimento": "Status do Estoque"})
