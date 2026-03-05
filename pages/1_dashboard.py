@@ -212,27 +212,28 @@ tab1,tab2,tab3,tab4,tab5 = st.tabs([
     "📊 Gráficos",
     "🔄 Movimentação do Obsoleto"
 ])
+
 # -------------------------------------------------
 # BASE HISTÓRICA
 # -------------------------------------------------
 
 with tab1:
     render_base_historica(df_filtrado, moeda_br)
-    
+
 # -------------------------------------------------
 # EVOLUÇÃO
 # -------------------------------------------------
 
 with tab2:
     render_evolucao(df_kpi, moeda_br)
-    
+
 # -------------------------------------------------
 # TOP 20
 # -------------------------------------------------
 
 with tab3:
     render_top20(df_filtrado, moeda_br)
-    
+
 # -------------------------------------------------
 # GRÁFICOS
 # -------------------------------------------------
@@ -241,8 +242,9 @@ with tab4:
     render_graficos(df_filtrado, moeda_br)
 
 # -------------------------------------------------
-# EVOLUÇÃO OBSOLETOS
+# MOVIMENTAÇÃO DO OBSOLETO
 # -------------------------------------------------
 
+# IMPORTANTE: usa base completa
 with tab5:
-    render_movimentacao(df_filtrado, moeda_br)
+    render_movimentacao(df_hist, moeda_br)
