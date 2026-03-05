@@ -9,15 +9,21 @@ import numpy as np
 # ==========================================================
 
 def normalizar_empresa(nome):
+
     nome = str(nome).upper()
+
     if "TOOLS" in nome:
         return "Tools"
+
     if "MAQUINAS" in nome:
         return "Maquinas"
+
     if "ALLSERVICE" in nome:
         return "Service"
+
     if "ROBOTICA" in nome:
         return "Robotica"
+
     return nome
 
 
@@ -35,52 +41,13 @@ def executar_estoque(uploaded_file):
             raise Exception("Arquivo 02_Estoque_Atual não encontrado no ZIP")
 
         with z.open(arquivo_estoque) as f:
+
             df = pd.read_excel(
                 f,
                 sheet_name="Detalhado",
                 dtype={"Código": str},
                 engine="openpyxl"
             )
-
-        # ==========================================================
-        # MAQUINAS USADAS
-        # ==========================================================
-
-        arquivos_usadas = [
-            n for n in z.namelist()
-            if "06_Usadas/" in n and n.lower().endswith(".xlsx")
-        ]
-
-        usadas_por_empresa = {}
-
-        for nome in arquivos_usadas:
-
-            nome_upper = nome.upper()
-
-            if "TOOLS" in nome_upper:
-                empresa = "Tools"
-            elif "MAQUINAS" in nome_upper:
-                empresa = "Maquinas"
-            elif "ROBOTICA" in nome_upper:
-                empresa = "Robotica"
-            elif "SERVICE" in nome_upper:
-                empresa = "Service"
-            else:
-                continue
-
-            with z.open(nome) as f:
-                df_u = pd.read_excel(f, dtype=str, engine="openpyxl")
-
-            df_u.columns = df_u.columns.str.strip()
-
-            codigos = set(
-                df_u["Codigo"]
-                .astype(str)
-                .str.strip()
-                .str.replace(".0", "", regex=False)
-            )
-
-            usadas_por_empresa[empresa] = codigos
 
     df = df.rename(columns={
         "Valor Total": "Custo Total",
@@ -105,17 +72,6 @@ def executar_estoque(uploaded_file):
 
     df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce")
     df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce")
-
-    if usadas_por_empresa:
-
-        for empresa, codigos in usadas_por_empresa.items():
-
-            mask = (
-                df["Empresa / Filial"].str.startswith(empresa)
-                & df["Produto"].isin(codigos)
-            )
-
-            df.loc[mask, "Conta"] = "Maquina Usada"
 
     df = df.drop(columns=["Empresa", "Filial"])
 
@@ -166,8 +122,10 @@ def executar_movimentacoes(uploaded_file):
 
             if "ROBOTICA" in nome_upper:
                 empresa = "Robotica"
+
             elif "SERVICE" in nome_upper:
                 empresa = "Service"
+
             else:
                 continue
 
@@ -219,12 +177,18 @@ def executar_motor(uploaded_file):
     # ------------------------------------------------------
 
     df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].str.title()
-    df_final["Conta"] = df_final["Conta"].str.title()
 
-    # PADRONIZA CONTA
-    df_final["Conta"] = df_final["Conta"].replace({
-        "Material Revenda": "Material De Revenda"
-    })
+    # PADRONIZAÇÃO DEFINITIVA DA CONTA
+    df_final["Conta"] = (
+        df_final["Conta"]
+        .astype(str)
+        .str.strip()
+        .str.upper()
+        .replace({
+            "MATERIAL REVENDA": "Material De Revenda",
+            "MATERIAL DE REVENDA": "Material De Revenda"
+        })
+    )
 
     df_final = df_final.drop(columns=["ID_UNICO"])
 
