@@ -24,14 +24,11 @@ section[data-testid="stSidebar"]{
 
 /* GRÁFICOS — borda ao redor de cada gráfico Altair */
 
-div[data-testid="stArrowVegaLiteChart"],
-div[data-testid="stVegaLiteChart"],
-div[class*="vegaLite"],
-div[class*="vega-embed"] {
+div[data-testid="stArrowVegaLiteChart"] > div,
+div[data-testid="stVegaLiteChart"] > div {
     border: 2px solid #EC6E21 !important;
     border-radius: 10px !important;
-    padding: 16px !important;
-    background-color: #005562 !important;
+    padding: 12px !important;
 }
 
 /* FILTROS — borda laranja igual aos KPI cards */
@@ -325,8 +322,7 @@ with tab4:
         text="Label"
     )
 
-    with st.container(border=True):
-        st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
+    st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
 
     # STATUS
 
@@ -357,8 +353,7 @@ with tab4:
         text="Label"
     )
 
-    with st.container(border=True):
-        st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
+    st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
 
     # CONTA
 
@@ -389,5 +384,4 @@ with tab4:
         text="Label"
     )
 
-    with st.container(border=True):
-        st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
+    st.altair_chart((chart+text).properties(background="transparent"), use_container_width=True)
