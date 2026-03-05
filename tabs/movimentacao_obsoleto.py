@@ -5,6 +5,7 @@ import pandas as pd
 # -------------------------------------------------------
 # CARD PADRÃO
 # -------------------------------------------------------
+
 def card(titulo, valor):
 
     st.markdown(
@@ -30,9 +31,10 @@ def card(titulo, valor):
 # -------------------------------------------------------
 # FUNÇÃO PRINCIPAL
 # -------------------------------------------------------
-def render(df_filtrado, moeda_br):
 
-    df = df_filtrado.copy()
+def render(df_kpi, moeda_br):
+
+    df = df_kpi.copy()
 
     datas = sorted(df["Data Fechamento"].unique())
 
@@ -75,104 +77,74 @@ def render(df_filtrado, moeda_br):
         (base["obsoleto_ant"] == True)
     ].copy()
 
-    # =====================================================
-    # ITENS QUE ENTRARAM
-    # =====================================================
+    # -------------------------------------------------
+    # CARDS
+    # -------------------------------------------------
 
-    st.subheader("Itens que Entraram no Obsoleto")
+    qtd_entrou = entrou["Produto"].nunique()
+    valor_entrou = entrou["Custo Total"].sum()
 
-    if not entrou.empty:
+    qtd_saiu = saiu["Produto"].nunique()
+    valor_saiu = saiu["Custo Total"].sum()
 
-        qtd_itens = entrou["Produto"].nunique()
-        valor_total = entrou["Custo Total"].sum()
+    st.subheader("Movimentação do Obsoleto")
 
-        c1, c2, c3 = st.columns([1,1,2])
+    c1, c2, c3, c4 = st.columns(4)
 
-        with c1:
-            card("Qtd de Itens", f"{qtd_itens:,}")
+    with c1:
+        card("Itens que Entraram", f"{qtd_entrou:,}")
 
-        with c2:
-            card("Valor Total", moeda_br(valor_total))
+    with c2:
+        card("Valor que Entrou", moeda_br(valor_entrou))
 
-        tabela = entrou[
-            [
-                "Empresa / Filial",
-                "Produto",
-                "Descricao",
-                "Saldo Atual",
-                "Custo Total"
-            ]
-        ].copy()
+    with c3:
+        card("Itens que Saíram", f"{qtd_saiu:,}")
 
-        tabela = tabela.sort_values(
-            "Custo Total",
-            ascending=False
-        )
-
-        tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
-
-        tabela = tabela.rename(columns={
-            "Saldo Atual": "Quantidade"
-        })
-
-        st.dataframe(
-            tabela,
-            use_container_width=True,
-            hide_index=True
-        )
-
-    else:
-
-        st.info("Nenhum item entrou no obsoleto.")
+    with c4:
+        card("Valor que Saiu", moeda_br(valor_saiu))
 
     st.markdown("---")
 
-    # =====================================================
-    # ITENS QUE SAÍRAM
-    # =====================================================
+    # -------------------------------------------------
+    # TABELA ÚNICA
+    # -------------------------------------------------
 
-    st.subheader("Itens que Saíram do Obsoleto")
+    entrou["Status Mov"] = "🔴 Entrou"
+    saiu["Status Mov"] = "🟢 Saiu"
 
-    if not saiu.empty:
+    mov = pd.concat([entrou, saiu], ignore_index=True)
 
-        qtd_itens = saiu["Produto"].nunique()
-        valor_total = saiu["Custo Total"].sum()
+    if mov.empty:
 
-        c1, c2, c3 = st.columns([1,1,2])
+        st.info("Nenhuma movimentação de obsoleto no período.")
+        return
 
-        with c1:
-            card("Qtd de Itens", f"{qtd_itens:,}")
-
-        with c2:
-            card("Valor Total", moeda_br(valor_total))
-
-        tabela = saiu[
-            [
-                "Empresa / Filial",
-                "Produto",
-                "Descricao",
-                "Saldo Atual",
-                "Custo Total"
-            ]
-        ].copy()
-
-        tabela = tabela.sort_values(
+    tabela = mov[
+        [
+            "Status Mov",
+            "Empresa / Filial",
+            "Produto",
+            "Descricao",
+            "Saldo Atual",
             "Custo Total",
-            ascending=False
-        )
+            "Ano Meses Dias"
+        ]
+    ].copy()
 
-        tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
+    tabela = tabela.rename(columns={
+        "Saldo Atual": "Quantidade",
+        "Ano Meses Dias": "Tempo sem Mov."
+    })
 
-        tabela = tabela.rename(columns={
-            "Saldo Atual": "Quantidade"
-        })
+    tabela = tabela.sort_values(
+        "Custo Total",
+        ascending=False
+    )
 
-        st.dataframe(
-            tabela,
-            use_container_width=True,
-            hide_index=True
-        )
+    tabela["Custo Total"] = tabela["Custo Total"].apply(moeda_br)
 
-    else:
-
-        st.info("Nenhum item saiu do obsoleto.")
+    st.dataframe(
+        tabela,
+        use_container_width=True,
+        hide_index=True
+    )
