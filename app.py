@@ -5,7 +5,9 @@ from datetime import datetime
 
 from motor_obsoletos import executar_motor
 from motor_estoque import executar_motor_estoque
-from base_historica import atualizar_base_historica
+
+from base_obsoletos_lake import salvar_fechamento_obsoletos
+from base_estoque_lake import salvar_fechamento_estoque
 
 
 st.set_page_config(page_title="Upload Estoque", layout="wide")
@@ -27,7 +29,6 @@ O sistema irá:
 
 st.markdown("---")
 
-BASE_PATH = "data/base_historica.parquet"
 LOG_PATH = "data/log_uploads.parquet"
 
 
@@ -70,7 +71,7 @@ def salvar_log(nome_zip, registros, tipo):
 
 
 # ---------------------------------------------------------
-# MOSTRAR HISTÓRICO
+# HISTÓRICO
 # ---------------------------------------------------------
 
 def mostrar_historico():
@@ -85,11 +86,7 @@ def mostrar_historico():
 
         st.subheader("📂 Arquivos já importados")
 
-        st.dataframe(
-            df_view,
-            use_container_width=True,
-            hide_index=True
-        )
+        st.dataframe(df_view, use_container_width=True, hide_index=True)
 
     else:
 
@@ -102,27 +99,19 @@ st.markdown("---")
 
 
 # ---------------------------------------------------------
-# RESET BASE
+# RESET
 # ---------------------------------------------------------
 
 with st.expander("⚠️ Zona de Perigo — Resetar Base"):
 
-    st.warning("Isso irá deletar toda a base histórica e o log de uploads.")
+    if st.button("🗑 Resetar tudo"):
 
-    if st.button("🗑 Deletar base histórica e log"):
+        import shutil
 
-        deletados = []
+        if os.path.exists("data"):
+            shutil.rmtree("data")
 
-        for path in [BASE_PATH, LOG_PATH]:
-
-            if os.path.exists(path):
-                os.remove(path)
-                deletados.append(path)
-
-        if deletados:
-            st.success(f"Deletado: {', '.join(deletados)}")
-        else:
-            st.info("Nenhum arquivo encontrado para deletar.")
+        st.success("Bases removidas")
 
         st.rerun()
 
@@ -130,17 +119,17 @@ st.markdown("---")
 
 
 # ---------------------------------------------------------
-# SELEÇÃO DO TIPO DE PROCESSAMENTO
+# TIPO PROCESSAMENTO
 # ---------------------------------------------------------
 
 st.subheader("Tipo de processamento")
 
 tipo_processo = st.radio(
-    "Escolha o tipo de processamento do arquivo",
-    (
+    "Escolha o tipo de processamento",
+    [
         "Atualizar Obsolescência",
         "Atualizar Evolução de Estoque"
-    )
+    ]
 )
 
 st.markdown("---")
@@ -163,18 +152,10 @@ if uploaded_file is not None:
 
     df_log = carregar_log()
 
-    # ---------------------------------------------------------
-    # BLOQUEAR DUPLICIDADE
-    # ---------------------------------------------------------
-
     if nome_zip in df_log["Arquivo"].values:
 
         st.error("⚠ Este arquivo já foi importado anteriormente.")
         st.stop()
-
-    # ---------------------------------------------------------
-    # PROCESSAMENTO
-    # ---------------------------------------------------------
 
     if st.button("🚀 Processar Arquivo"):
 
@@ -185,37 +166,35 @@ if uploaded_file is not None:
                 if tipo_processo == "Atualizar Obsolescência":
 
                     df_final, df_export = executar_motor(uploaded_file)
+
+                    caminho = salvar_fechamento_obsoletos(df_final)
+
                     tipo = "Obsolescência"
 
                 else:
 
                     df_final, df_export = executar_motor_estoque(uploaded_file)
+
+                    caminho = salvar_fechamento_estoque(df_final)
+
                     tipo = "Evolução Estoque"
 
-                if df_final is not None:
+                qtd_registros = len(df_final)
 
-                    df_final["arquivo_upload"] = nome_zip
+                salvar_log(nome_zip, qtd_registros, tipo)
 
-                    qtd_arquivo = len(df_final)
+                st.success("✅ Processamento concluído!")
 
-                    df_hist = atualizar_base_historica(df_final)
+                st.write("Arquivo salvo em:", caminho)
 
-                    df_log = salvar_log(nome_zip, qtd_arquivo, tipo)
+                st.write("Registros:", qtd_registros)
 
-                    st.success("✅ Processamento concluído!")
-
-                    st.write("Registros no histórico:", len(df_hist))
-
-                    st.download_button(
-                        label="📥 Baixar Excel Final",
-                        data=df_export,
-                        file_name=f"{nome_zip.replace('.zip','')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-
-                else:
-
-                    st.error("Erro no processamento.")
+                st.download_button(
+                    label="📥 Baixar Excel Final",
+                    data=df_export,
+                    file_name=f"{nome_zip.replace('.zip','')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
             except Exception as e:
 
