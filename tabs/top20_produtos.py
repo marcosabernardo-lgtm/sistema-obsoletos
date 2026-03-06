@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import io
+from utils import botao_download_excel
 
 
 def render(df_filtrado, moeda_br):
@@ -56,16 +56,7 @@ def render(df_filtrado, moeda_br):
     ]
 
     # ---------- BOTÃO EXPORTAR ----------
-    buffer = io.BytesIO()
-    export_df.to_excel(buffer, index=False)
-    buffer.seek(0)
-
-    st.download_button(
-        label="📥 Exportar Top 20 para Excel",
-        data=buffer,
-        file_name="top20_estoque_obsoleto.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    botao_download_excel(export_df, "top20_estoque_obsoleto.xlsx")
 
     # ---------- TABELA ----------
     st.dataframe(
