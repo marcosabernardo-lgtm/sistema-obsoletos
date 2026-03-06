@@ -10,8 +10,6 @@ from tabs.obsoletos.top20_produtos import render as render_top20
 from tabs.obsoletos.graficos import render as render_graficos
 from tabs.obsoletos.movimentacao_obsoleto import render as render_movimentacao
 
-from tabs.estoque.evolucao_estoque_total import render as render_estoque_total
-
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 
@@ -220,8 +218,7 @@ tab1,tab2,tab3,tab4,tab5,tab6 = st.tabs([
     "📈 Evolução do Estoque",
     "🔄 Movimentação do Obsoleto",
     "🏆 Top 20 Produtos",
-    "📊 Gráficos",
-    "📦 Evolução Estoque Total"
+    "📊 Gráficos"
 ])
 
 # -------------------------------------------------
@@ -258,10 +255,3 @@ with tab4:
 
 with tab5:
     render_graficos(df_filtrado, moeda_br)
-
-# -------------------------------------------------
-# ESTOQUE TOTAL
-# -------------------------------------------------
-
-with tab6:
-    render_estoque_total()
