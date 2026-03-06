@@ -213,7 +213,7 @@ st.markdown("---")
 # ABAS
 # -------------------------------------------------
 
-tab1,tab2,tab3,tab4,tab5,tab6 = st.tabs([
+tab1,tab2,tab3,tab4,tab5= st.tabs([
     "📚 Base Histórica",
     "📈 Evolução do Estoque",
     "🔄 Movimentação do Obsoleto",
