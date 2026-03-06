@@ -1,44 +1,21 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
+import io
 
 
-# ---------------------------------------------------------
-# EXPORTAÇÃO PARA EXCEL
-# ---------------------------------------------------------
-def dataframe_para_excel(df: pd.DataFrame) -> bytes:
-    """
-    Converte DataFrame em arquivo Excel em memória.
-    Retorna bytes para download.
-    """
+def dataframe_para_excel(df):
 
-    output = BytesIO()
+    output = io.BytesIO()
 
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="dados")
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False)
 
-        workbook = writer.book
-        worksheet = writer.sheets["dados"]
+    output.seek(0)
 
-        # Ajusta largura das colunas automaticamente
-        for i, col in enumerate(df.columns):
-            largura = max(
-                df[col].astype(str).map(len).max(),
-                len(col)
-            ) + 2
-
-            worksheet.set_column(i, i, largura)
-
-    return output.getvalue()
+    return output
 
 
-# ---------------------------------------------------------
-# BOTÃO PADRÃO DE DOWNLOAD
-# ---------------------------------------------------------
-def botao_download_excel(df: pd.DataFrame, nome_arquivo: str):
-    """
-    Cria botão padrão para download de Excel.
-    """
+def botao_download_excel(df, nome_arquivo):
 
     excel = dataframe_para_excel(df)
 
@@ -48,31 +25,3 @@ def botao_download_excel(df: pd.DataFrame, nome_arquivo: str):
         file_name=nome_arquivo,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-
-# ---------------------------------------------------------
-# LEITURA CACHEADA DO PARQUET
-# ---------------------------------------------------------
-@st.cache_data
-def carregar_parquet(caminho: str) -> pd.DataFrame:
-    """
-    Carrega parquet com cache do Streamlit.
-    """
-
-    df = pd.read_parquet(caminho)
-
-    return df
-
-
-# ---------------------------------------------------------
-# FORMATAR VALOR MONETÁRIO
-# ---------------------------------------------------------
-def formatar_moeda(valor: float) -> str:
-    """
-    Formata valor em padrão brasileiro.
-    """
-
-    if pd.isna(valor):
-        return "R$ 0,00"
-
-    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
