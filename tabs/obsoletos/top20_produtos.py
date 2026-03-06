@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from utils import botao_download_excel
+from utils.utils import botao_download_excel
 
 
 def render(df_filtrado, moeda_br):
