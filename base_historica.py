@@ -17,7 +17,8 @@ def atualizar_base_historica(df_final):
         "Custo Total",
         "Meses Ult Mov",
         "Status Estoque",
-        "Status do Movimento"
+        "Status do Movimento",
+        "arquivo_upload",
     ]
 
     df_snapshot = df_final[colunas].copy()
@@ -25,6 +26,7 @@ def atualizar_base_historica(df_final):
     df_snapshot["Data Fechamento"] = pd.to_datetime(df_snapshot["Data Fechamento"])
 
     data_ref = df_snapshot["Data Fechamento"].iloc[0]
+    nome_zip = df_snapshot["arquivo_upload"].iloc[0]
 
     if os.path.exists(CAMINHO_BASE):
 
@@ -32,7 +34,15 @@ def atualizar_base_historica(df_final):
 
         df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"])
 
-        df_hist = df_hist[df_hist["Data Fechamento"] != data_ref]
+        # Garante que coluna existe no histórico antigo
+        if "arquivo_upload" not in df_hist.columns:
+            df_hist["arquivo_upload"] = ""
+
+        # Remove registros da mesma data OU do mesmo arquivo (evita duplicidade)
+        df_hist = df_hist[
+            (df_hist["Data Fechamento"] != data_ref) &
+            (df_hist["arquivo_upload"] != nome_zip)
+        ]
 
         df_hist = pd.concat(
             [df_hist, df_snapshot],
