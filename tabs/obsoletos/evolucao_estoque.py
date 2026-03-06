@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from analises import evolucao_estoque
+from analytics.analises import evolucao_estoque
 
 
 def render(df_kpi, moeda_br):
