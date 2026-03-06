@@ -3,11 +3,11 @@ import pandas as pd
 import os
 from datetime import datetime
 
-from motor_obsoletos import executar_motor
-from motor_estoque import executar_motor_estoque
+from motor.motor_obsoletos import executar_motor
+from motor.motor_estoque import executar_motor_estoque
 
-from base_obsoletos_lake import salvar_fechamento_obsoletos
-from base_estoque_lake import salvar_fechamento_estoque
+from storage.base_obsoletos_lake import salvar_fechamento_obsoletos
+from storage.base_estoque_lake import salvar_fechamento_estoque
 
 
 st.set_page_config(page_title="Upload Estoque", layout="wide")
