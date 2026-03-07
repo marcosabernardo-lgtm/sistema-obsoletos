@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import glob
 
 from tabs.estoque.evolucao_estoque_total import render as render_estoque_total
 
@@ -11,13 +12,15 @@ st.title("📦 Dashboard Evolução de Estoque")
 
 st.markdown("---")
 
-CAMINHO_BASE = "data/base_estoque.parquet"
+PASTA = "data/estoque"
 
 # -------------------------------------------------
-# VERIFICAR SE BASE EXISTE
+# VERIFICAR SE EXISTEM FECHAMENTOS
 # -------------------------------------------------
 
-if not os.path.exists(CAMINHO_BASE):
+arquivos = glob.glob(f"{PASTA}/*.parquet")
+
+if len(arquivos) == 0:
 
     st.info("Nenhum fechamento de estoque processado ainda.")
 
@@ -31,10 +34,16 @@ Para utilizar este dashboard:
     st.stop()
 
 # -------------------------------------------------
-# CARREGAR BASE
+# CARREGAR TODOS OS FECHAMENTOS
 # -------------------------------------------------
 
-df_hist = pd.read_parquet(CAMINHO_BASE)
+dfs = []
+
+for arq in arquivos:
+    df = pd.read_parquet(arq)
+    dfs.append(df)
+
+df_hist = pd.concat(dfs, ignore_index=True)
 
 # -------------------------------------------------
 # RENDER
