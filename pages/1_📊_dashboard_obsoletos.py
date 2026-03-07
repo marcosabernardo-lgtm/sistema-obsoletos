@@ -9,6 +9,7 @@ from tabs.obsoletos.base_historica import render as render_base_historica
 from tabs.obsoletos.top20_produtos import render as render_top20
 from tabs.obsoletos.graficos import render as render_graficos
 from tabs.obsoletos.movimentacao_obsoleto import render as render_movimentacao
+from tabs.obsoletos.evolucao_estoque import render as render_evolucao
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 
@@ -48,12 +49,7 @@ section[data-testid="stSidebar"] label {
 /* HEADER TABLE */
 
 div[data-testid="stDataFrame"] [role="columnheader"],
-div[data-testid="stDataFrame"] [role="columnheader"] span,
-div[data-testid="stDataFrame"] [role="columnheader"] div,
-div[data-testid="stDataFrame"] [role="columnheader"] p,
-div[data-testid="stDataFrame"] thead th,
-div[data-testid="stDataFrame"] .dvn-col-gutter,
-div[data-testid="stDataFrame"] .sticky {
+div[data-testid="stDataFrame"] thead th {
     background-color:#0f5a60 !important;
     color:white !important;
     font-weight:600 !important;
@@ -253,7 +249,7 @@ with tab1:
     render_base_historica(df_filtrado, moeda_br)
 
 with tab2:
-    evolucao_estoque(df_kpi)
+    render_evolucao(df_kpi, moeda_br)
 
 with tab3:
     render_movimentacao(df_kpi, moeda_br)
