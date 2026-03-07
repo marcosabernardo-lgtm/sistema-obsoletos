@@ -65,4 +65,4 @@ df_hist = pd.concat(dfs, ignore_index=True)
 # RENDER
 # -------------------------------------------------
 
-render_estoque_total(df_hist, moeda_br)
+render_estoque_total(df_hist)
