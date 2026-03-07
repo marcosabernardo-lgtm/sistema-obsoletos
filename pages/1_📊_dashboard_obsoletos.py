@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+import os
 
 from analytics.analises import evolucao_estoque
 
@@ -9,6 +10,7 @@ from tabs.obsoletos.evolucao_estoque import render as render_evolucao
 from tabs.obsoletos.top20_produtos import render as render_top20
 from tabs.obsoletos.graficos import render as render_graficos
 from tabs.obsoletos.movimentacao_obsoleto import render as render_movimentacao
+
 
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
@@ -106,7 +108,14 @@ def moeda_br(valor):
 # CARREGAR BASE
 # -------------------------------------------------
 
-df_hist = pd.read_parquet("data/base_historica.parquet")
+BASE_PATH = "data/base_historica.parquet"
+
+if not os.path.exists(BASE_PATH):
+    st.warning("⚠️ Nenhuma base de dados encontrada. Acesse a página **app** para fazer o upload dos arquivos.")
+    st.stop()
+
+df_hist = pd.read_parquet(BASE_PATH)
+
 
 # -------------------------------------------------
 # FILTROS
@@ -213,7 +222,7 @@ st.markdown("---")
 # ABAS
 # -------------------------------------------------
 
-tab1,tab2,tab3,tab4,tab5= st.tabs([
+tab1,tab2,tab3,tab4,tab5 = st.tabs([
     "📚 Base Histórica",
     "📈 Evolução do Estoque",
     "🔄 Movimentação do Obsoleto",
@@ -221,37 +230,17 @@ tab1,tab2,tab3,tab4,tab5= st.tabs([
     "📊 Gráficos"
 ])
 
-# -------------------------------------------------
-# BASE HISTÓRICA
-# -------------------------------------------------
-
 with tab1:
     render_base_historica(df_filtrado, moeda_br)
-
-# -------------------------------------------------
-# EVOLUÇÃO
-# -------------------------------------------------
 
 with tab2:
     render_evolucao(df_kpi, moeda_br)
 
-# -------------------------------------------------
-# MOVIMENTAÇÃO
-# -------------------------------------------------
-
 with tab3:
     render_movimentacao(df_kpi, moeda_br)
 
-# -------------------------------------------------
-# TOP 20
-# -------------------------------------------------
-
 with tab4:
     render_top20(df_filtrado, moeda_br)
-
-# -------------------------------------------------
-# GRÁFICOS
-# -------------------------------------------------
 
 with tab5:
     render_graficos(df_filtrado, moeda_br)
