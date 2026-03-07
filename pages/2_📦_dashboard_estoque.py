@@ -77,4 +77,7 @@ df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"])
 # RENDER
 # -------------------------------------------------
 
-render_estoque_total(df_hist)
+try:
+    render_estoque_total(df_hist)
+except Exception as e:
+    st.exception(e)
