@@ -62,6 +62,18 @@ df_hist = pd.concat(dfs, ignore_index=True)
 
 
 # -------------------------------------------------
+# VERIFICAR E TRATAR DADOS
+# -------------------------------------------------
+
+if df_hist.empty:
+    st.warning("⚠️ Base de dados vazia.")
+    st.stop()
+
+df_hist["Custo Total"] = pd.to_numeric(df_hist["Custo Total"], errors="coerce").fillna(0)
+df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"])
+
+
+# -------------------------------------------------
 # RENDER
 # -------------------------------------------------
 
