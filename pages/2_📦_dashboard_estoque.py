@@ -12,7 +12,21 @@ st.title("📦 Dashboard Evolução de Estoque")
 
 st.markdown("---")
 
+
+# -------------------------------------------------
+# FUNÇÃO MOEDA
+# -------------------------------------------------
+
+def moeda_br(valor):
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+# -------------------------------------------------
+# PASTA DATA LAKE
+# -------------------------------------------------
+
 PASTA = "data/estoque"
+
 
 # -------------------------------------------------
 # VERIFICAR SE EXISTEM FECHAMENTOS
@@ -33,6 +47,7 @@ Para utilizar este dashboard:
 
     st.stop()
 
+
 # -------------------------------------------------
 # CARREGAR TODOS OS FECHAMENTOS
 # -------------------------------------------------
@@ -45,8 +60,9 @@ for arq in arquivos:
 
 df_hist = pd.concat(dfs, ignore_index=True)
 
+
 # -------------------------------------------------
 # RENDER
 # -------------------------------------------------
 
-render_estoque_total(df_hist, lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+render_estoque_total(df_hist, moeda_br)
