@@ -6,12 +6,9 @@ import os
 from analytics.analises import evolucao_estoque
 
 from tabs.obsoletos.base_historica import render as render_base_historica
-from tabs.obsoletos.evolucao_estoque import render as render_evolucao
 from tabs.obsoletos.top20_produtos import render as render_top20
 from tabs.obsoletos.graficos import render as render_graficos
 from tabs.obsoletos.movimentacao_obsoleto import render as render_movimentacao
-
-
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 
@@ -108,14 +105,32 @@ def moeda_br(valor):
 # CARREGAR BASE
 # -------------------------------------------------
 
-BASE_PATH = "data/base_historica.parquet"
+PASTA_OBSOLETOS = "data/obsoletos"
 
-if not os.path.exists(BASE_PATH):
+if not os.path.exists(PASTA_OBSOLETOS):
     st.warning("⚠️ Nenhuma base de dados encontrada. Acesse a página **app** para fazer o upload dos arquivos.")
     st.stop()
 
-df_hist = pd.read_parquet(BASE_PATH)
+arquivos = [
+    os.path.join(PASTA_OBSOLETOS, f)
+    for f in os.listdir(PASTA_OBSOLETOS)
+    if f.endswith(".parquet")
+]
 
+if not arquivos:
+    st.warning("⚠️ Nenhuma base de dados encontrada. Acesse a página **app** para fazer o upload dos arquivos.")
+    st.stop()
+
+lista = []
+
+for arq in arquivos:
+    df = pd.read_parquet(arq)
+    lista.append(df)
+
+df_hist = pd.concat(lista, ignore_index=True)
+
+df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"])
+df_hist = df_hist.sort_values("Data Fechamento")
 
 # -------------------------------------------------
 # FILTROS
@@ -166,7 +181,9 @@ if status_estoque == "Obsoletos":
 # -------------------------------------------------
 
 if not df_kpi.empty:
+
     ultima_data = df_kpi["Data Fechamento"].max()
+
     base_kpi = df_kpi[df_kpi["Data Fechamento"] == ultima_data]
 
     estoque_total = base_kpi["Custo Total"].sum()
@@ -180,7 +197,9 @@ if not df_kpi.empty:
     itens_obsoletos = base_kpi[
         base_kpi["Status do Movimento"] != "Até 6 meses"
     ]["Produto"].nunique()
+
 else:
+
     estoque_total = 0
     estoque_obsoleto = 0
     perc_obsoleto = 0
@@ -234,7 +253,7 @@ with tab1:
     render_base_historica(df_filtrado, moeda_br)
 
 with tab2:
-    render_evolucao(df_kpi, moeda_br)
+    evolucao_estoque(df_kpi)
 
 with tab3:
     render_movimentacao(df_kpi, moeda_br)
