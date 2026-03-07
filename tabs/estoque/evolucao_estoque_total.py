@@ -1,98 +1,53 @@
 import streamlit as st
 import pandas as pd
-import glob
+import altair as alt
 
 
 def render(df, moeda_br):
 
-    st.subheader("📊 Evolução do Estoque Total")
+    st.subheader("Evolução do Estoque Total")
 
-    arquivos = glob.glob("data/estoque/*.parquet")
+    # -------------------------------------------------
+    # AGRUPAMENTO
+    # -------------------------------------------------
 
-    if len(arquivos) == 0:
-
-        st.info("Nenhum fechamento de estoque encontrado.")
-
-        return
-
-
-    df_lista = []
-
-    for arq in arquivos:
-
-        df = pd.read_parquet(arq)
-
-        data = pd.to_datetime(df["Data Fechamento"].iloc[0])
-
-        valor = df["Custo Total"].sum()
-
-        df_lista.append({
-            "Data": data,
-            "Estoque Total": valor
-        })
-
-
-    df = pd.DataFrame(df_lista)
-
-    df = df.sort_values("Data")
-
-    df["Variação"] = df["Estoque Total"].diff()
-
-    df["% Variação"] = df["Estoque Total"].pct_change() * 100
-
-
-    # ---------------------------------------------------------
-    # KPIs
-    # ---------------------------------------------------------
-
-    col1, col2, col3 = st.columns(3)
-
-    ultimo = df.iloc[-1]
-
-    col1.metric(
-        "Estoque Atual",
-        f"R$ {ultimo['Estoque Total']:,.0f}"
+    df_evol = (
+        df
+        .groupby("Data Fechamento")["Custo Total"]
+        .sum()
+        .reset_index()
+        .sort_values("Data Fechamento")
     )
 
-    if len(df) > 1:
+    # -------------------------------------------------
+    # FORMATAÇÃO
+    # -------------------------------------------------
 
-        variacao = df.iloc[-1]["Estoque Total"] - df.iloc[-2]["Estoque Total"]
+    df_evol["Estoque Total"] = df_evol["Custo Total"].apply(moeda_br)
 
-        col2.metric(
-            "Variação Último Fechamento",
-            f"R$ {variacao:,.0f}"
+    # -------------------------------------------------
+    # GRÁFICO
+    # -------------------------------------------------
+
+    chart = (
+        alt.Chart(df_evol)
+        .mark_line(point=True)
+        .encode(
+            x="Data Fechamento:T",
+            y="Custo Total:Q",
+            tooltip=["Data Fechamento", "Estoque Total"]
         )
+        .properties(height=400)
+    )
 
-        col3.metric(
-            "% Variação",
-            f"{df.iloc[-1]['% Variação']:.2f}%"
-        )
+    st.altair_chart(chart, use_container_width=True)
 
-
-    st.markdown("---")
-
-
-    # ---------------------------------------------------------
+    # -------------------------------------------------
     # TABELA
-    # ---------------------------------------------------------
-
-    df_view = df.copy()
-
-    df_view["Data"] = df_view["Data"].dt.strftime("%d/%m/%Y")
+    # -------------------------------------------------
 
     st.dataframe(
-        df_view,
+        df_evol[["Data Fechamento", "Estoque Total"]],
         use_container_width=True,
         hide_index=True
-    )
-
-
-    # ---------------------------------------------------------
-    # GRÁFICO
-    # ---------------------------------------------------------
-
-    st.markdown("### Evolução do Estoque")
-
-    st.line_chart(
-        df.set_index("Data")["Estoque Total"]
     )
