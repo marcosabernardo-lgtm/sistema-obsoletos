@@ -49,4 +49,4 @@ df_hist = pd.concat(dfs, ignore_index=True)
 # RENDER
 # -------------------------------------------------
 
-render_estoque_total(df_hist)
+render_estoque_total(df_hist, lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
