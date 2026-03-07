@@ -3,7 +3,7 @@ import pandas as pd
 import glob
 
 
-def render():
+def render(df, moeda_br):
 
     st.subheader("📊 Evolução do Estoque Total")
 
