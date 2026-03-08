@@ -8,6 +8,7 @@ import io
 # ==========================================================
 
 def normalizar_empresa(nome):
+
     nome = str(nome).upper()
 
     if "TOOLS" in nome:
@@ -29,9 +30,9 @@ def normalizar_empresa(nome):
 # MOTOR EVOLUÇÃO ESTOQUE
 # ==========================================================
 
-def executar_motor_estoque(uploaded_file):
+def executar_motor_estoque(caminho_zip):
 
-    with zipfile.ZipFile(uploaded_file) as z:
+    with zipfile.ZipFile(caminho_zip, "r") as z:
 
         # ------------------------------------------------------
         # ESTOQUE ATUAL
@@ -139,6 +140,12 @@ def executar_motor_estoque(uploaded_file):
         df["Custo Total"],
         errors="coerce"
     )
+
+    # ------------------------------------------------------
+    # DATA FECHAMENTO
+    # ------------------------------------------------------
+
+    df["Data Fechamento"] = pd.Timestamp.today().normalize()
 
     # ------------------------------------------------------
     # MARCAR MAQUINA USADA

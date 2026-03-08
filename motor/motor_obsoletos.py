@@ -21,9 +21,9 @@ def normalizar_empresa(nome):
     return nome
 
 
-def executar_estoque(uploaded_file):
+def executar_estoque(caminho_zip):
 
-    with zipfile.ZipFile(uploaded_file) as z:
+    with zipfile.ZipFile(caminho_zip, "r") as z:
 
         arquivo_estoque = next(
             (n for n in z.namelist()
@@ -42,15 +42,11 @@ def executar_estoque(uploaded_file):
                 engine="openpyxl"
             )
 
-        # ==========================================================
-        # MAQUINAS USADAS — lê os xlsx de 06_Usadas/ e marca a Conta
-        # ==========================================================
         arquivos_usadas = [
             n for n in z.namelist()
             if "06_Usadas/" in n and n.lower().endswith(".xlsx")
         ]
 
-        # dict: empresa -> set de códigos
         usadas_por_empresa = {}
         for nome in arquivos_usadas:
             nome_upper = nome.upper()
@@ -71,7 +67,6 @@ def executar_estoque(uploaded_file):
                 df_u["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
             )
             usadas_por_empresa[empresa] = codigos
-        # ==========================================================
 
     df = df.rename(columns={
         "Valor Total": "Custo Total",
@@ -97,7 +92,6 @@ def executar_estoque(uploaded_file):
     df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce")
     df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce")
 
-    # Aplica Maquina Usada cruzando empresa + código
     if usadas_por_empresa:
         for empresa, codigos in usadas_por_empresa.items():
             mask = (
@@ -119,9 +113,9 @@ def executar_estoque(uploaded_file):
 # MOVIMENTAÇÕES
 # ==========================================================
 
-def executar_movimentacoes(uploaded_file):
+def executar_movimentacoes(caminho_zip):
 
-    with zipfile.ZipFile(uploaded_file) as z:
+    with zipfile.ZipFile(caminho_zip, "r") as z:
 
         arquivo_empresas = next(
             (n for n in z.namelist()
@@ -194,9 +188,9 @@ def executar_movimentacoes(uploaded_file):
 # ENTRADAS / SAÍDAS
 # ==========================================================
 
-def executar_entradas_saidas(uploaded_file):
+def executar_entradas_saidas(caminho_zip):
 
-    with zipfile.ZipFile(uploaded_file) as z:
+    with zipfile.ZipFile(caminho_zip, "r") as z:
 
         arquivo_empresas = next(
             (n for n in z.namelist()
@@ -293,11 +287,11 @@ def executar_entradas_saidas(uploaded_file):
 # MOTOR FINAL
 # ==========================================================
 
-def executar_motor(uploaded_file):
+def executar_motor(caminho_zip):
 
-    df_estoque = executar_estoque(uploaded_file)
-    df_mov = executar_movimentacoes(uploaded_file)
-    df_es = executar_entradas_saidas(uploaded_file)
+    df_estoque = executar_estoque(caminho_zip)
+    df_mov = executar_movimentacoes(caminho_zip)
+    df_es = executar_entradas_saidas(caminho_zip)
 
     df_final = df_estoque.merge(df_mov, on="ID_UNICO", how="left")
     df_final = df_final.merge(df_es, on="ID_UNICO", how="left")
@@ -321,15 +315,10 @@ def executar_motor(uploaded_file):
         columns=["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
     )
 
-    # Ajustes pedidos
     df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].str.title()
     df_final["Conta"] = df_final["Conta"].str.title()
     df_final = df_final.drop(columns=["ID_UNICO"])
 
-
-    # ==========================================================
-    # BLOCO FINAL (APENAS ACRESCENTADO)
-    # ==========================================================
 
     DataBase = pd.to_datetime(df_final["Data Fechamento"].iloc[0])
 

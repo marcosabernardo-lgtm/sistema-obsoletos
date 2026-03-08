@@ -12,6 +12,19 @@ from storage.base_estoque_lake import salvar_fechamento_estoque
 
 st.set_page_config(page_title="Upload Estoque", layout="wide")
 
+# ---------------------------------------------------------
+# GARANTIR ESTRUTURA DE PASTAS
+# ---------------------------------------------------------
+
+os.makedirs("data", exist_ok=True)
+os.makedirs("data/obsoletos", exist_ok=True)
+os.makedirs("data/estoque", exist_ok=True)
+os.makedirs("data/uploads", exist_ok=True)
+
+LOG_PATH = "data/log_uploads.parquet"
+UPLOAD_DIR = "data/uploads"
+
+
 st.title("📦 Upload de Fechamento de Estoque")
 
 st.markdown(
@@ -28,8 +41,6 @@ O sistema irá:
 )
 
 st.markdown("---")
-
-LOG_PATH = "data/log_uploads.parquet"
 
 
 # ---------------------------------------------------------
@@ -62,8 +73,6 @@ def salvar_log(nome_zip, registros, tipo):
     }])
 
     df_log = pd.concat([df_log, novo], ignore_index=True)
-
-    os.makedirs("data", exist_ok=True)
 
     df_log.to_parquet(LOG_PATH, index=False)
 
@@ -119,6 +128,16 @@ st.markdown("---")
 
 
 # ---------------------------------------------------------
+# STATUS DO DATA LAKE
+# ---------------------------------------------------------
+
+with st.expander("📊 Status da Base de Dados"):
+
+    st.write("Arquivos em obsoletos:", os.listdir("data/obsoletos"))
+    st.write("Arquivos em estoque:", os.listdir("data/estoque"))
+
+
+# ---------------------------------------------------------
 # TIPO PROCESSAMENTO
 # ---------------------------------------------------------
 
@@ -148,6 +167,8 @@ if uploaded_file is not None:
 
     nome_zip = uploaded_file.name
 
+    caminho_upload = os.path.join(UPLOAD_DIR, nome_zip)
+
     st.write("Arquivo selecionado:", nome_zip)
 
     df_log = carregar_log()
@@ -163,9 +184,20 @@ if uploaded_file is not None:
 
             try:
 
+                # -------------------------------------------------
+                # SALVAR ZIP EM DISCO
+                # -------------------------------------------------
+
+                with open(caminho_upload, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+
+                # -------------------------------------------------
+                # PROCESSAMENTO
+                # -------------------------------------------------
+
                 if tipo_processo == "Atualizar Obsolescência":
 
-                    df_final, df_export = executar_motor(uploaded_file)
+                    df_final, df_export = executar_motor(caminho_upload)
 
                     caminho = salvar_fechamento_obsoletos(df_final)
 
@@ -173,7 +205,7 @@ if uploaded_file is not None:
 
                 else:
 
-                    df_final, df_export = executar_motor_estoque(uploaded_file)
+                    df_final, df_export = executar_motor_estoque(caminho_upload)
 
                     caminho = salvar_fechamento_estoque(df_final)
 
