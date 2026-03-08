@@ -217,6 +217,8 @@ if uploaded_file is not None:
 
                 st.success("✅ Processamento concluído!")
 
+                st.rerun()
+
                 st.write("Arquivo salvo em:", caminho)
 
                 st.write("Registros:", qtd_registros)
