@@ -146,11 +146,6 @@ data_sel = st.sidebar.selectbox(
 
 data_selecionada = pd.Timestamp(datas_fmt[data_sel])
 
-status_estoque = st.sidebar.selectbox(
-    "Status do Estoque",
-    ["Geral", "Obsoletos"]
-)
-
 empresas_sel = st.sidebar.multiselect(
     "Empresa / Filial",
     sorted(df_hist["Empresa / Filial"].dropna().unique())
@@ -177,12 +172,7 @@ if contas_sel:
 # BASE FILTRADA
 # -------------------------------------------------
 
-df_filtrado = df_kpi.copy()
-
-if status_estoque == "Obsoletos":
-    df_filtrado = df_filtrado[
-        df_filtrado["Status do Movimento"] != "Até 6 meses"
-    ]
+df_filtrado = df_kpi[df_kpi["Status do Movimento"] != "Até 6 meses"].copy()
 
 # -------------------------------------------------
 # KPIs
@@ -273,10 +263,7 @@ with tab2:
     render_evolucao(df_hist_filtrado, moeda_br)
 
 with tab3:
-    try:
-        render_movimentacao(df_hist_filtrado, moeda_br, data_selecionada)
-    except Exception as e:
-        st.exception(e)
+    render_movimentacao(df_hist_filtrado, moeda_br, data_selecionada)
 
 with tab4:
     render_top20(df_filtrado, moeda_br)
