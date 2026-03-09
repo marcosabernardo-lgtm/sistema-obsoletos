@@ -9,22 +9,27 @@ def evolucao_estoque(df_hist):
         .sum()
         .reset_index(name="Estoque Total")
     )
+
     obsoleto = (
-        df_hist[df_hist["Status do Movimento"] != "Até 6 meses"]
+        df_hist[df_hist["Status Estoque"] == "Obsoleto"]
         .groupby("Data Fechamento")["Custo Total"]
         .sum()
         .reset_index(name="Estoque Obsoleto")
     )
+
     df = total.merge(
         obsoleto,
         on="Data Fechamento",
         how="left"
     )
+
     df["Estoque Obsoleto"] = df["Estoque Obsoleto"].fillna(0)
+
     df["% Obsoleto"] = (
         df["Estoque Obsoleto"] /
         df["Estoque Total"]
     )
+
     return df.sort_values("Data Fechamento")
 
 
@@ -81,7 +86,6 @@ def score_risco(df_hist):
 
     # ----------------------------------------------------------
     # COMPONENTE 3 — Estagnação entre fechamentos (0 a 30 pts)
-    # Verifica se a Ult_Movimentacao não mudou em nenhum fechamento anterior
     # ----------------------------------------------------------
     df_base["_score_estag"] = 0.0
 
@@ -100,7 +104,6 @@ def score_risco(df_hist):
             df_merge["Ult_Movimentacao_atual"] == df_merge["Ult_Movimentacao_ant"]
         )
 
-        # Percentual de fechamentos anteriores com mesma data de movimento
         estag = (
             df_merge.groupby(["Produto", "Empresa / Filial"])["_igual"]
             .mean()
@@ -121,7 +124,6 @@ def score_risco(df_hist):
         df_base["_score_estag"]
     ).clip(0, 100).round(1)
 
-    # Classificação
     def classificar(score):
         if score <= 30:
             return "🟢 Baixo"
@@ -133,7 +135,6 @@ def score_risco(df_hist):
 
     df_base["Risco"] = df_base["Score"].apply(classificar)
 
-    # Colunas relevantes para exibição
     colunas = [
         "Empresa / Filial",
         "Produto",
