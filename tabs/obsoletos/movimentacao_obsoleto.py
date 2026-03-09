@@ -5,15 +5,16 @@ import io
 # -------------------------------------------------------
 # 1. FUNÇÃO DE ESTILO (CARD)
 # -------------------------------------------------------
-def card(titulo, valor, cor_borda="#EC6E21", cor_valor=None):
+def card(titulo, valor, cor_borda="#EC6E21", cor_valor=None, subtitulo=None):
     cor_val = cor_valor if cor_valor else "white"
+    sub_html = f'<div style="font-size:12px;color:#aaa;margin-top:4px">{subtitulo}</div>' if subtitulo else ""
     st.markdown(
         f"""
         <div style="
             border:2px solid {cor_borda};
             border-radius:12px;
             padding:16px;
-            height:90px;
+            min-height:90px;
             display:flex;
             flex-direction:column;
             justify-content:center;
@@ -21,6 +22,7 @@ def card(titulo, valor, cor_borda="#EC6E21", cor_valor=None):
         ">
             <div style="font-size:13px;color:white">{titulo}</div>
             <div style="font-size:22px;font-weight:bold;color:{cor_val}">{valor}</div>
+            {sub_html}
         </div>
         """,
         unsafe_allow_html=True
@@ -224,16 +226,15 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # -------------------------------------------------------
     st.subheader("📅 Mês Atual vs Mês Anterior")
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1, c2, c3, c4, c5 = st.columns(5)
 
-    with c1: card("🔴 Entrou (itens)", f"{qtd_entrou:,}")
-    with c2: card("🔴 Valor que Entrou", moeda_br(valor_entrou), cor_valor="#ff6b6b")
-    with c3: card("🟢 Valor que Saiu", moeda_br(valor_saiu), cor_valor="#51cf66")
-    with c4: card("⚫ Baixas", moeda_br(valor_baixas), cor_valor="#aaa")
-    with c5:
+    with c1: card("🔴 Entrou", moeda_br(valor_entrou), cor_valor="#ff6b6b", subtitulo=f"{qtd_entrou:,} itens")
+    with c2: card("🟢 Saiu", moeda_br(valor_saiu), cor_valor="#51cf66", subtitulo=f"{qtd_saiu:,} itens")
+    with c3: card("⚫ Baixas", moeda_br(valor_baixas), cor_valor="#aaa", subtitulo=f"{qtd_baixas:,} itens")
+    with c4:
         cor = "#ff6b6b" if var_custo_val > 0 else "#51cf66"
         card("📊 Var. Custo Médio", moeda_br(var_custo_val), cor_valor=cor)
-    with c6:
+    with c5:
         cor = "#ff6b6b" if variacao_real > 0 else "#51cf66"
         card("Δ Variação Real", moeda_br(variacao_real), cor_borda="#fff", cor_valor=cor)
 
