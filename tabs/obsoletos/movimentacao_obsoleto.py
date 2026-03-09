@@ -193,10 +193,10 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # -------------------------------------------------------
     # ACUMULADO (todo o histórico até data_atual)
     # -------------------------------------------------------
-    df_acum = df[df["Data Fechamento"] <= data_atual].copy()
     df_primeiro = df[df["Data Fechamento"] == pd.Timestamp(datas[0])].copy()
+    df_primeiro["obsoleto"] = df_primeiro["Status do Movimento"] != "Até 6 meses"
 
-    obs_acum_inicio = df_primeiro[df_primeiro["obsoleto"]]["Custo Total"].sum() if "obsoleto" in df_primeiro.columns else 0
+    obs_acum_inicio = df_primeiro[df_primeiro["obsoleto"]]["Custo Total"].sum()
     obs_acum_atual  = obs_atual
     variacao_acum   = obs_acum_atual - obs_acum_inicio
 
@@ -287,6 +287,16 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     baixas_tab = baixas.copy()
     baixas_tab["Custo Total"] = baixas_tab["Custo Total_ant"]
+    # Preencher campos do mês anterior para as baixas
+    for col in ["Conta", "Descricao", "Saldo Atual", "Status do Movimento"]:
+        if col + "_ant" in baixas_tab.columns:
+            baixas_tab[col] = baixas_tab[col + "_ant"]
+        elif col not in baixas_tab.columns:
+            # buscar do df_ant
+            campos_ant = df_ant[["Empresa / Filial", "Produto", col]].drop_duplicates()
+            baixas_tab = baixas_tab.merge(campos_ant, on=["Empresa / Filial", "Produto"], how="left", suffixes=("", "_fill"))
+            if col + "_fill" in baixas_tab.columns:
+                baixas_tab[col] = baixas_tab[col + "_fill"]
 
     colunas = ["Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao", "Saldo Atual", "Custo Total", "Status do Movimento"]
 
