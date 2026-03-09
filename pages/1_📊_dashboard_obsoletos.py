@@ -273,7 +273,7 @@ with tab2:
     render_evolucao(df_hist_filtrado, moeda_br)
 
 with tab3:
-    render_movimentacao(df_hist_filtrado, moeda_br)
+    render_movimentacao(df_hist_filtrado, moeda_br, data_selecionada)
 
 with tab4:
     render_top20(df_filtrado, moeda_br)
