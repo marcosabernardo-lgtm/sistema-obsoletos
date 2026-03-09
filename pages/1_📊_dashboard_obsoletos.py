@@ -134,14 +134,13 @@ df_hist = df_hist.sort_values("Data Fechamento")
 
 st.sidebar.header("Filtros")
 
-# Datas disponíveis — padrão = última
 datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=True)
 datas_fmt = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
 data_sel = st.sidebar.selectbox(
     "Data de Fechamento",
     options=list(datas_fmt.keys()),
-    index=0  # última data por padrão
+    index=0
 )
 
 data_selecionada = pd.Timestamp(datas_fmt[data_sel])
@@ -157,7 +156,7 @@ contas_sel = st.sidebar.multiselect(
 )
 
 # -------------------------------------------------
-# BASE KPI — filtrada pela data selecionada
+# BASE KPI
 # -------------------------------------------------
 
 df_kpi = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
@@ -172,7 +171,7 @@ if contas_sel:
 # BASE FILTRADA
 # -------------------------------------------------
 
-df_filtrado = df_kpi[df_kpi["Status do Movimento"] != "Até 6 meses"].copy()
+df_filtrado = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"].copy()
 
 # -------------------------------------------------
 # KPIs
@@ -183,13 +182,13 @@ if not df_kpi.empty:
     estoque_total = df_kpi["Custo Total"].sum()
 
     estoque_obsoleto = df_kpi[
-        df_kpi["Status do Movimento"] != "Até 6 meses"
+        df_kpi["Status Estoque"] == "Obsoleto"
     ]["Custo Total"].sum()
 
     perc_obsoleto = estoque_obsoleto / estoque_total if estoque_total > 0 else 0
 
     itens_obsoletos = df_kpi[
-        df_kpi["Status do Movimento"] != "Até 6 meses"
+        df_kpi["Status Estoque"] == "Obsoleto"
     ]["Produto"].nunique()
 
 else:
@@ -232,8 +231,7 @@ col4.markdown(f"""
 st.markdown("---")
 
 # -------------------------------------------------
-# BASE HISTÓRICA COMPLETA para abas de evolução
-# — respeita empresa/conta mas NÃO filtra por data
+# BASE HISTÓRICA COMPLETA
 # -------------------------------------------------
 
 df_hist_filtrado = df_hist.copy()
