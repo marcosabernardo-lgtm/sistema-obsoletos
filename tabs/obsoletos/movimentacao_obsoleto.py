@@ -37,7 +37,6 @@ def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_baixas, v
 
     saldo_status = valor_entrou - valor_saiu
 
-    # --- TÍTULO PRINCIPAL ---
     if variacao_real < 0:
         cor_titulo = "#28a745"
         titulo = "✅ O Estoque Obsoleto REDUZIU neste mês"
@@ -45,13 +44,11 @@ def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_baixas, v
         cor_titulo = "#dc3545"
         titulo = "⚠️ O Estoque Obsoleto AUMENTOU neste mês"
 
-    # --- RESULTADO GERAL ---
     texto_resultado = (
         f"O estoque obsoleto variou **{moeda_br(abs(variacao_real))}** "
         f"({'redução' if variacao_real < 0 else 'aumento'}) neste período."
     )
 
-    # --- FLUXO DE STATUS ---
     if saldo_status > 0:
         texto_fluxo = (
             f"⚠️ **Fluxo Operacional Negativo:** "
@@ -69,15 +66,13 @@ def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_baixas, v
         )
         cor_fluxo = "#51cf66"
 
-    # --- BAIXAS ---
     if valor_baixas > 0:
-        # Verificar se o resultado só foi positivo por causa das baixas
         if variacao_real < 0 and saldo_status > 0:
             texto_baixas = (
                 f"⚠️ **Atenção — Resultado mascarado pelas Baixas:** "
                 f"O obsoleto reduziu no mês, mas isso ocorreu principalmente pela saída definitiva de "
-                f"**{qtd_baixas} itens** ({moeda_br(valor_baixas)}) que saíram definitivamente do estoque. "
-                f"Sem as baixas, o obsoleto teria **aumentado** {moeda_br(saldo_status)}."
+                f"**{qtd_baixas} itens** ({moeda_br(valor_baixas)}) que foram vendidos ou consumidos. "
+                f"Sem essas saídas, o obsoleto teria **aumentado** {moeda_br(saldo_status)}."
             )
             cor_baixas = "#ffa94d"
         else:
@@ -90,7 +85,6 @@ def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_baixas, v
         texto_baixas = "Não houve baixas de itens obsoletos neste período."
         cor_baixas = "#aaa"
 
-    # --- VARIAÇÃO DE CUSTO ---
     if abs(var_custo) < 1:
         texto_custo = "A variação de custo médio dos itens já obsoletos foi irrelevante neste período."
         cor_custo = "#aaa"
@@ -174,7 +168,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
     chave = ["Empresa / Filial", "Produto"]
 
     # -------------------------------------------------------
-    # MERGE COMPLETO — atual x anterior trazendo TODAS as colunas
+    # MERGE COMPLETO
     # -------------------------------------------------------
     colunas_ant = chave + ["obsoleto", "Custo Total", "Descricao", "Conta", "Saldo Atual", "Status do Movimento"]
     colunas_ant = [c for c in colunas_ant if c in df_ant.columns]
@@ -190,9 +184,10 @@ def render(df_hist, moeda_br, data_selecionada=None):
     base["obsoleto_ant"]      = base["obsoleto_ant"].fillna(False)
     base["Custo Total_atual"] = base["Custo Total_atual"].fillna(0)
     base["Custo Total_ant"]   = base["Custo Total_ant"].fillna(0)
+    base["Saldo Atual_atual"] = base["Saldo Atual_atual"].fillna(0)
+    base["Saldo Atual_ant"]   = base["Saldo Atual_ant"].fillna(0)
 
-    # Para campos sem sufixo (quando só vem de um lado), garantir existência
-    for col in ["Descricao", "Conta", "Saldo Atual", "Status do Movimento"]:
+    for col in ["Descricao", "Conta", "Status do Movimento"]:
         col_at  = col + "_atual"
         col_ant = col + "_ant"
         if col_at not in base.columns:
@@ -208,53 +203,45 @@ def render(df_hist, moeda_br, data_selecionada=None):
     entrou = base[
         (base["obsoleto_atual"] == True) & (base["obsoleto_ant"] == False)
     ].copy()
-    entrou["Status Mov"]        = "🔴 Entrou"
-    entrou["Custo Total"]       = entrou["Custo Total_atual"]
-    entrou["Descricao"]         = entrou["Descricao_atual"]
-    entrou["Conta"]             = entrou["Conta_atual"]
-    entrou["Saldo Atual"]       = entrou["Saldo Atual_atual"]
-    entrou["Status do Movimento"] = entrou["Status do Movimento_atual"]
+    entrou["Status Mov"] = "🔴 Entrou"
 
     # SAIU: era obsoleto → voltou para ativo (ainda existe)
     saiu = base[
         (base["obsoleto_atual"] == False) & (base["obsoleto_ant"] == True) &
         (base["Custo Total_atual"] > 0)
     ].copy()
-    saiu["Status Mov"]          = "🟢 Saiu"
-    saiu["Custo Total"]         = saiu["Custo Total_ant"]
-    saiu["Descricao"]           = saiu["Descricao_atual"].fillna(saiu["Descricao_ant"])
-    saiu["Conta"]               = saiu["Conta_atual"].fillna(saiu["Conta_ant"])
-    saiu["Saldo Atual"]         = saiu["Saldo Atual_atual"].fillna(saiu["Saldo Atual_ant"])
-    saiu["Status do Movimento"] = saiu["Status do Movimento_atual"].fillna(saiu["Status do Movimento_ant"])
+    saiu["Status Mov"] = "🟢 Saiu"
 
     # BAIXAS: era obsoleto → sumiu do estoque
     baixas = base[
         (base["obsoleto_ant"] == True) &
         (base["Custo Total_atual"] == 0)
     ].copy()
-    baixas["Status Mov"]          = "⚫ Baixa"
-    baixas["Custo Total"]         = baixas["Custo Total_ant"]
-    baixas["Descricao"]           = baixas["Descricao_ant"]
-    baixas["Conta"]               = baixas["Conta_ant"]
-    baixas["Saldo Atual"]         = baixas["Saldo Atual_ant"]
-    baixas["Status do Movimento"] = baixas["Status do Movimento_ant"]
+    baixas["Status Mov"] = "⚫ Baixa"
 
-    # VARIAÇÃO DE CUSTO: era obsoleto, continua obsoleto, valor mudou
+    # REDUZIU: era obsoleto, continua obsoleto, quantidade/valor diminuiu
+    reduziu = base[
+        (base["obsoleto_atual"] == True) & (base["obsoleto_ant"] == True) &
+        (base["Custo Total_atual"] < base["Custo Total_ant"])
+    ].copy()
+    reduziu["Status Mov"] = "🔽 Reduziu"
+
+    # VARIAÇÃO DE CUSTO para cards
     var_custo_df = base[
         (base["obsoleto_atual"] == True) & (base["obsoleto_ant"] == True)
     ].copy()
     var_custo_df["delta"] = var_custo_df["Custo Total_atual"] - var_custo_df["Custo Total_ant"]
 
     # -------------------------------------------------------
-    # VALORES
+    # VALORES PARA CARDS
     # -------------------------------------------------------
-    valor_entrou  = entrou["Custo Total"].sum()
+    valor_entrou  = entrou["Custo Total_atual"].sum()
     qtd_entrou    = entrou["Produto"].nunique()
 
-    valor_saiu    = saiu["Custo Total"].sum()
+    valor_saiu    = saiu["Custo Total_ant"].sum()
     qtd_saiu      = saiu["Produto"].nunique()
 
-    valor_baixas  = baixas["Custo Total"].sum()
+    valor_baixas  = baixas["Custo Total_ant"].sum()
     qtd_baixas    = baixas["Produto"].nunique()
 
     var_custo_val = var_custo_df["delta"].sum()
@@ -266,7 +253,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # -------------------------------------------------------
     # ACUMULADO
     # -------------------------------------------------------
-    df_primeiro = df[df["Data Fechamento"] == pd.Timestamp(datas[0])].copy()
+    df_primeiro     = df[df["Data Fechamento"] == pd.Timestamp(datas[0])].copy()
     obs_acum_inicio = df_primeiro[df_primeiro["obsoleto"]]["Custo Total"].sum()
     obs_acum_atual  = obs_atual
     variacao_acum   = obs_acum_atual - obs_acum_inicio
@@ -350,27 +337,37 @@ def render(df_hist, moeda_br, data_selecionada=None):
     st.markdown("---")
 
     # -------------------------------------------------------
-    # TABELA
+    # TABELA com colunas do mês anterior e atual
     # -------------------------------------------------------
-    colunas_tabela = ["Status Mov", "Empresa / Filial", "Conta", "Produto",
-                      "Descricao", "Saldo Atual", "Custo Total", "Status do Movimento"]
+    def preparar_tabela(df_tab, custo_atual_col, custo_ant_col, saldo_atual_col, saldo_ant_col):
+        t = df_tab.copy()
+        t["Descricao"]   = t["Descricao_atual"].fillna(t["Descricao_ant"])
+        t["Conta"]       = t["Conta_atual"].fillna(t["Conta_ant"])
+        t["Qtd Ant"]     = t[saldo_ant_col].fillna(0)
+        t["Vlr Ant"]     = t[custo_ant_col].fillna(0)
+        t["Qtd Atual"]   = t[saldo_atual_col].fillna(0)
+        t["Vlr Atual"]   = t[custo_atual_col].fillna(0)
+        return t[[
+            "Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao",
+            "Qtd Ant", "Vlr Ant", "Qtd Atual", "Vlr Atual"
+        ]].copy()
 
     frames = []
-    for df_tab in [entrou, saiu, baixas]:
+    for df_tab in [entrou, saiu, baixas, reduziu]:
         if len(df_tab) > 0:
-            cols_disp = [c for c in colunas_tabela if c in df_tab.columns]
-            frames.append(df_tab[cols_disp].copy())
+            frames.append(preparar_tabela(
+                df_tab,
+                "Custo Total_atual", "Custo Total_ant",
+                "Saldo Atual_atual", "Saldo Atual_ant"
+            ))
 
     if frames:
         mov = pd.concat(frames, ignore_index=True)
-        mov = mov.rename(columns={
-            "Saldo Atual": "Quantidade",
-            "Status do Movimento": "Status do Estoque"
-        })
-        mov = mov.sort_values("Custo Total", ascending=False)
+        mov = mov.sort_values("Vlr Atual", ascending=False)
 
         buffer = io.BytesIO()
-        mov.to_excel(buffer, index=False)
+        export = mov.copy()
+        export.to_excel(buffer, index=False)
         buffer.seek(0)
 
         st.download_button(
@@ -380,7 +377,8 @@ def render(df_hist, moeda_br, data_selecionada=None):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        mov["Custo Total"] = mov["Custo Total"].apply(moeda_br)
+        mov["Vlr Ant"]   = mov["Vlr Ant"].apply(moeda_br)
+        mov["Vlr Atual"] = mov["Vlr Atual"].apply(moeda_br)
 
         st.dataframe(mov, use_container_width=True, hide_index=True)
     else:
