@@ -300,6 +300,8 @@ def executar_motor(caminho_zip):
         ["Ult_Mov", "Ult_Entrada", "Ult_Saida"]
     ].max(axis=1)
 
+    df_final["Ult_Movimentacao"] = pd.to_datetime(df_final["Ult_Movimentacao"], errors="coerce")
+
     def origem(row):
         if row["Ult_Movimentacao"] == row["Ult_Saida"]:
             return "Ult_Saida"
@@ -319,7 +321,6 @@ def executar_motor(caminho_zip):
     df_final["Conta"] = df_final["Conta"].str.title()
     df_final = df_final.drop(columns=["ID_UNICO"])
 
-
     DataBase = pd.to_datetime(df_final["Data Fechamento"].iloc[0])
 
     df_final["Dias Sem Mov"] = (
@@ -334,14 +335,14 @@ def executar_motor(caminho_zip):
     )
 
     df_final["Status Estoque"] = np.where(
-    df_final["Tipo de Estoque"] == "Em Fabricacao",
-    "Até 6 meses",
-    np.where(
-        df_final["Ult_Movimentacao"].isna() | (df_final["Meses Ult Mov"] > 6),
-        "Obsoleto",
-        "Até 6 meses"
+        df_final["Tipo de Estoque"] == "Em Fabricacao",
+        "Até 6 meses",
+        np.where(
+            df_final["Ult_Movimentacao"].isna() | (df_final["Meses Ult Mov"] > 6),
+            "Obsoleto",
+            "Até 6 meses"
+        )
     )
-)
 
     def status_mov(row):
         if row["Tipo de Estoque"] == "Em Fabricacao":
