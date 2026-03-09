@@ -86,6 +86,8 @@ def render(df_hist, moeda_br, data_selecionada=None):
         .drop_duplicates(subset=["Data Fechamento", "Empresa / Filial", "Produto"], keep="first")
     )
 
+    df["obsoleto"] = df["Status do Movimento"] != "Até 6 meses"
+
     datas = sorted(df["Data Fechamento"].unique())
 
     # -------------------------------------------------------
@@ -100,16 +102,16 @@ def render(df_hist, moeda_br, data_selecionada=None):
             return
 
         if len(datas_anteriores) == 0:
-            st.info(f"ℹ️ {pd.Timestamp(data_sel_ts).strftime('%d/%m/%Y')} é o primeiro fechamento — não há mês anterior para comparar.")
+            st.info(f"ℹ️ {data_sel_ts.strftime('%d/%m/%Y')} é o primeiro fechamento — não há mês anterior para comparar.")
             return
 
-        data_atual = data_sel_ts
+        data_atual    = data_sel_ts
         data_anterior = pd.Timestamp(max(datas_anteriores))
     else:
         if len(datas) < 2:
             st.warning("Histórico insuficiente para análise.")
             return
-        data_atual = pd.Timestamp(datas[-1])
+        data_atual    = pd.Timestamp(datas[-1])
         data_anterior = pd.Timestamp(datas[-2])
 
     df_atual = df[df["Data Fechamento"] == data_atual].copy()
@@ -117,54 +119,75 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     st.caption(f"Comparando **{data_atual.strftime('%d/%m/%Y')}** vs **{data_anterior.strftime('%d/%m/%Y')}**")
 
-    # -------------------------------------------------------
-    # FLAGS OBSOLETO
-    # -------------------------------------------------------
-    df_atual["obsoleto"] = df_atual["Status do Movimento"] != "Até 6 meses"
-    df_ant["obsoleto"]   = df_ant["Status do Movimento"]   != "Até 6 meses"
-
     chave = ["Empresa / Filial", "Produto"]
 
     # -------------------------------------------------------
-    # MERGE ATUAL x ANTERIOR
+    # MERGE COMPLETO — atual x anterior trazendo TODAS as colunas
     # -------------------------------------------------------
+    colunas_ant = chave + ["obsoleto", "Custo Total", "Descricao", "Conta", "Saldo Atual", "Status do Movimento"]
+    colunas_ant = [c for c in colunas_ant if c in df_ant.columns]
+
     base = df_atual.merge(
-        df_ant[chave + ["obsoleto", "Custo Total"]],
+        df_ant[colunas_ant],
         on=chave,
         how="outer",
         suffixes=("_atual", "_ant")
     )
 
-    base["obsoleto_atual"] = base["obsoleto_atual"].fillna(False)
-    base["obsoleto_ant"]   = base["obsoleto_ant"].fillna(False)
+    base["obsoleto_atual"]    = base["obsoleto_atual"].fillna(False)
+    base["obsoleto_ant"]      = base["obsoleto_ant"].fillna(False)
     base["Custo Total_atual"] = base["Custo Total_atual"].fillna(0)
     base["Custo Total_ant"]   = base["Custo Total_ant"].fillna(0)
+
+    # Para campos sem sufixo (quando só vem de um lado), garantir existência
+    for col in ["Descricao", "Conta", "Saldo Atual", "Status do Movimento"]:
+        col_at  = col + "_atual"
+        col_ant = col + "_ant"
+        if col_at not in base.columns:
+            base[col_at] = None
+        if col_ant not in base.columns:
+            base[col_ant] = None
 
     # -------------------------------------------------------
     # CATEGORIAS
     # -------------------------------------------------------
 
-    # ENTROU: não era obsoleto, virou obsoleto
+    # ENTROU: não era obsoleto → virou obsoleto
     entrou = base[
         (base["obsoleto_atual"] == True) & (base["obsoleto_ant"] == False)
     ].copy()
-    entrou["Status Mov"] = "🔴 Entrou"
+    entrou["Status Mov"]        = "🔴 Entrou"
+    entrou["Custo Total"]       = entrou["Custo Total_atual"]
+    entrou["Descricao"]         = entrou["Descricao_atual"]
+    entrou["Conta"]             = entrou["Conta_atual"]
+    entrou["Saldo Atual"]       = entrou["Saldo Atual_atual"]
+    entrou["Status do Movimento"] = entrou["Status do Movimento_atual"]
 
-    # SAIU: era obsoleto, voltou para ativo (ainda existe no estoque atual)
+    # SAIU: era obsoleto → voltou para ativo (ainda existe)
     saiu = base[
         (base["obsoleto_atual"] == False) & (base["obsoleto_ant"] == True) &
         (base["Custo Total_atual"] > 0)
     ].copy()
-    saiu["Status Mov"] = "🟢 Saiu"
+    saiu["Status Mov"]          = "🟢 Saiu"
+    saiu["Custo Total"]         = saiu["Custo Total_ant"]
+    saiu["Descricao"]           = saiu["Descricao_atual"].fillna(saiu["Descricao_ant"])
+    saiu["Conta"]               = saiu["Conta_atual"].fillna(saiu["Conta_ant"])
+    saiu["Saldo Atual"]         = saiu["Saldo Atual_atual"].fillna(saiu["Saldo Atual_ant"])
+    saiu["Status do Movimento"] = saiu["Status do Movimento_atual"].fillna(saiu["Status do Movimento_ant"])
 
-    # BAIXAS: era obsoleto, sumiu do estoque (não aparece no atual ou saldo zero)
+    # BAIXAS: era obsoleto → sumiu do estoque
     baixas = base[
         (base["obsoleto_ant"] == True) &
         (base["Custo Total_atual"] == 0)
     ].copy()
-    baixas["Status Mov"] = "⚫ Baixa"
+    baixas["Status Mov"]          = "⚫ Baixa"
+    baixas["Custo Total"]         = baixas["Custo Total_ant"]
+    baixas["Descricao"]           = baixas["Descricao_ant"]
+    baixas["Conta"]               = baixas["Conta_ant"]
+    baixas["Saldo Atual"]         = baixas["Saldo Atual_ant"]
+    baixas["Status do Movimento"] = baixas["Status do Movimento_ant"]
 
-    # VARIAÇÃO DE CUSTO: era obsoleto, continua obsoleto, mas valor mudou
+    # VARIAÇÃO DE CUSTO: era obsoleto, continua obsoleto, valor mudou
     var_custo_df = base[
         (base["obsoleto_atual"] == True) & (base["obsoleto_ant"] == True)
     ].copy()
@@ -173,35 +196,31 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # -------------------------------------------------------
     # VALORES
     # -------------------------------------------------------
-    valor_entrou   = entrou["Custo Total_atual"].sum()
-    qtd_entrou     = entrou["Produto"].nunique() if "Produto" in entrou.columns else 0
+    valor_entrou  = entrou["Custo Total"].sum()
+    qtd_entrou    = entrou["Produto"].nunique()
 
-    valor_saiu     = saiu["Custo Total_ant"].sum()
-    qtd_saiu       = saiu["Produto"].nunique() if "Produto" in saiu.columns else 0
+    valor_saiu    = saiu["Custo Total"].sum()
+    qtd_saiu      = saiu["Produto"].nunique()
 
-    valor_baixas   = baixas["Custo Total_ant"].sum()
-    qtd_baixas     = baixas["Produto"].nunique() if "Produto" in baixas.columns else 0
+    valor_baixas  = baixas["Custo Total"].sum()
+    qtd_baixas    = baixas["Produto"].nunique()
 
-    var_custo_val  = var_custo_df["delta"].sum()
-    qtd_var_custo  = var_custo_df[var_custo_df["delta"] != 0]["Produto"].nunique() if "Produto" in var_custo_df.columns else 0
+    var_custo_val = var_custo_df["delta"].sum()
 
-    obs_ant        = df_ant[df_ant["obsoleto"]]["Custo Total"].sum()
-    obs_atual      = df_atual[df_atual["obsoleto"]]["Custo Total"].sum()
-    variacao_real  = obs_atual - obs_ant
-    saldo_status   = valor_entrou - valor_saiu
+    obs_ant       = df_ant[df_ant["obsoleto"]]["Custo Total"].sum()
+    obs_atual     = df_atual[df_atual["obsoleto"]]["Custo Total"].sum()
+    variacao_real = obs_atual - obs_ant
 
     # -------------------------------------------------------
-    # ACUMULADO (todo o histórico até data_atual)
+    # ACUMULADO
     # -------------------------------------------------------
     df_primeiro = df[df["Data Fechamento"] == pd.Timestamp(datas[0])].copy()
-    df_primeiro["obsoleto"] = df_primeiro["Status do Movimento"] != "Até 6 meses"
-
     obs_acum_inicio = df_primeiro[df_primeiro["obsoleto"]]["Custo Total"].sum()
     obs_acum_atual  = obs_atual
     variacao_acum   = obs_acum_atual - obs_acum_inicio
 
     # -------------------------------------------------------
-    # SEÇÃO: MÊS ATUAL
+    # CARDS — MÊS ATUAL
     # -------------------------------------------------------
     st.subheader("📅 Mês Atual vs Mês Anterior")
 
@@ -221,7 +240,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
     st.markdown("---")
 
     # -------------------------------------------------------
-    # SEÇÃO: ACUMULADO
+    # CARDS — ACUMULADO
     # -------------------------------------------------------
     st.subheader("📈 Acumulado (desde o primeiro fechamento)")
 
@@ -277,41 +296,23 @@ def render(df_hist, moeda_br, data_selecionada=None):
     st.markdown("---")
 
     # -------------------------------------------------------
-    # TABELA — Entrou + Saiu + Baixas
+    # TABELA
     # -------------------------------------------------------
-    entrou_tab = entrou.copy()
-    entrou_tab["Custo Total"] = entrou_tab["Custo Total_atual"]
-
-    saiu_tab = saiu.copy()
-    saiu_tab["Custo Total"] = saiu_tab["Custo Total_ant"]
-
-    baixas_tab = baixas.copy()
-    baixas_tab["Custo Total"] = baixas_tab["Custo Total_ant"]
-    # Preencher campos do mês anterior para as baixas
-    for col in ["Conta", "Descricao", "Saldo Atual", "Status do Movimento"]:
-        if col + "_ant" in baixas_tab.columns:
-            baixas_tab[col] = baixas_tab[col + "_ant"]
-        elif col not in baixas_tab.columns:
-            # buscar do df_ant
-            campos_ant = df_ant[["Empresa / Filial", "Produto", col]].drop_duplicates()
-            baixas_tab = baixas_tab.merge(campos_ant, on=["Empresa / Filial", "Produto"], how="left", suffixes=("", "_fill"))
-            if col + "_fill" in baixas_tab.columns:
-                baixas_tab[col] = baixas_tab[col + "_fill"]
-
-    colunas = ["Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao", "Saldo Atual", "Custo Total", "Status do Movimento"]
-
-    def preparar(df_tab, cols):
-        disponiveis = [c for c in cols if c in df_tab.columns]
-        return df_tab[disponiveis].copy()
+    colunas_tabela = ["Status Mov", "Empresa / Filial", "Conta", "Produto",
+                      "Descricao", "Saldo Atual", "Custo Total", "Status do Movimento"]
 
     frames = []
-    for df_tab in [entrou_tab, saiu_tab, baixas_tab]:
+    for df_tab in [entrou, saiu, baixas]:
         if len(df_tab) > 0:
-            frames.append(preparar(df_tab, colunas))
+            cols_disp = [c for c in colunas_tabela if c in df_tab.columns]
+            frames.append(df_tab[cols_disp].copy())
 
     if frames:
         mov = pd.concat(frames, ignore_index=True)
-        mov = mov.rename(columns={"Saldo Atual": "Quantidade", "Status do Movimento": "Status do Estoque"})
+        mov = mov.rename(columns={
+            "Saldo Atual": "Quantidade",
+            "Status do Movimento": "Status do Estoque"
+        })
         mov = mov.sort_values("Custo Total", ascending=False)
 
         buffer = io.BytesIO()
