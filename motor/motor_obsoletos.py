@@ -334,10 +334,14 @@ def executar_motor(caminho_zip):
     )
 
     df_final["Status Estoque"] = np.where(
-        df_final["Tipo de Estoque"] == "Em Fabricacao",
-        "Até 6 meses",
-        np.where(df_final["Meses Ult Mov"] > 6, "Obsoleto", "Até 6 meses")
+    df_final["Tipo de Estoque"] == "Em Fabricacao",
+    "Até 6 meses",
+    np.where(
+        df_final["Ult_Movimentacao"].isna() | (df_final["Meses Ult Mov"] > 6),
+        "Obsoleto",
+        "Até 6 meses"
     )
+)
 
     def status_mov(row):
         if row["Tipo de Estoque"] == "Em Fabricacao":
