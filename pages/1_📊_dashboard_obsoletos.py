@@ -134,9 +134,21 @@ df_hist = df_hist.sort_values("Data Fechamento")
 
 st.sidebar.header("Filtros")
 
+# Datas disponíveis — padrão = última
+datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=True)
+datas_fmt = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
+
+data_sel = st.sidebar.selectbox(
+    "Data de Fechamento",
+    options=list(datas_fmt.keys()),
+    index=0  # última data por padrão
+)
+
+data_selecionada = pd.Timestamp(datas_fmt[data_sel])
+
 status_estoque = st.sidebar.selectbox(
     "Status do Estoque",
-    ["Geral","Obsoletos"]
+    ["Geral", "Obsoletos"]
 )
 
 empresas_sel = st.sidebar.multiselect(
@@ -150,10 +162,10 @@ contas_sel = st.sidebar.multiselect(
 )
 
 # -------------------------------------------------
-# BASE KPI
+# BASE KPI — filtrada pela data selecionada
 # -------------------------------------------------
 
-df_kpi = df_hist.copy()
+df_kpi = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
 
 if empresas_sel:
     df_kpi = df_kpi[df_kpi["Empresa / Filial"].isin(empresas_sel)]
@@ -178,20 +190,16 @@ if status_estoque == "Obsoletos":
 
 if not df_kpi.empty:
 
-    ultima_data = df_kpi["Data Fechamento"].max()
+    estoque_total = df_kpi["Custo Total"].sum()
 
-    base_kpi = df_kpi[df_kpi["Data Fechamento"] == ultima_data]
-
-    estoque_total = base_kpi["Custo Total"].sum()
-
-    estoque_obsoleto = base_kpi[
-        base_kpi["Status do Movimento"] != "Até 6 meses"
+    estoque_obsoleto = df_kpi[
+        df_kpi["Status do Movimento"] != "Até 6 meses"
     ]["Custo Total"].sum()
 
     perc_obsoleto = estoque_obsoleto / estoque_total if estoque_total > 0 else 0
 
-    itens_obsoletos = base_kpi[
-        base_kpi["Status do Movimento"] != "Até 6 meses"
+    itens_obsoletos = df_kpi[
+        df_kpi["Status do Movimento"] != "Até 6 meses"
     ]["Produto"].nunique()
 
 else:
@@ -201,43 +209,56 @@ else:
     perc_obsoleto = 0
     itens_obsoletos = 0
 
-col1,col2,col3,col4 = st.columns(4)
+col1, col2, col3, col4 = st.columns(4)
 
 col1.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">Valor Estoque</div>
 <div class="kpi-value">{moeda_br(estoque_total)}</div>
 </div>
-""",unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 col2.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">Estoque Obsoleto</div>
 <div class="kpi-value">{moeda_br(estoque_obsoleto)}</div>
 </div>
-""",unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 col3.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">% Estoque Obsoleto</div>
 <div class="kpi-value">{perc_obsoleto*100:.2f}%</div>
 </div>
-""",unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 col4.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">Itens Obsoletos</div>
 <div class="kpi-value">{itens_obsoletos}</div>
 </div>
-""",unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 st.markdown("---")
+
+# -------------------------------------------------
+# BASE HISTÓRICA COMPLETA para abas de evolução
+# — respeita empresa/conta mas NÃO filtra por data
+# -------------------------------------------------
+
+df_hist_filtrado = df_hist.copy()
+
+if empresas_sel:
+    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Empresa / Filial"].isin(empresas_sel)]
+
+if contas_sel:
+    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Conta"].isin(contas_sel)]
 
 # -------------------------------------------------
 # ABAS
 # -------------------------------------------------
 
-tab1,tab2,tab3,tab4,tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📚 Base Histórica",
     "📈 Evolução do Estoque",
     "🔄 Movimentação do Obsoleto",
@@ -249,10 +270,10 @@ with tab1:
     render_base_historica(df_filtrado, moeda_br)
 
 with tab2:
-    render_evolucao(df_kpi, moeda_br)
+    render_evolucao(df_hist_filtrado, moeda_br)
 
 with tab3:
-    render_movimentacao(df_kpi, moeda_br)
+    render_movimentacao(df_hist_filtrado, moeda_br)
 
 with tab4:
     render_top20(df_filtrado, moeda_br)
