@@ -75,6 +75,8 @@ def executar_estoque(caminho_zip):
         "Quantidade": "Saldo Atual"
     })
 
+    df["Vlr Unit"] = pd.to_numeric(df["Vlr Unit"], errors="coerce")
+
     df["Empresa"] = df["Empresa"].apply(normalizar_empresa)
     df["Filial"] = df["Filial"].astype(str).str.title()
 
