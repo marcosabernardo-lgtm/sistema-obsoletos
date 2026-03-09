@@ -10,6 +10,11 @@ def render(df_filtrado, moeda_br):
         base["Data Fechamento"]
     ).dt.date
 
+    if "Vlr Unit" in base.columns:
+        base["Vlr Unit"] = pd.to_numeric(base["Vlr Unit"], errors="coerce").apply(
+            lambda x: moeda_br(x) if pd.notna(x) else ""
+        )
+
     base["Custo Total"] = base["Custo Total"].apply(moeda_br)
 
     st.dataframe(
