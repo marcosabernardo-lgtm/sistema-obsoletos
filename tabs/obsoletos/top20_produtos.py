@@ -27,6 +27,9 @@ def render(df_filtrado, moeda_br):
 
     base = df_filtrado[df_filtrado["Data Fechamento"] == ultima_data]
 
+    # Total geral do obsoleto (base para o %)
+    total_geral = base["Custo Total"].sum()
+
     top20 = (
         base
         .groupby(
@@ -39,9 +42,7 @@ def render(df_filtrado, moeda_br):
         )
     )
 
-    total_geral = top20["Custo_Total"].sum()
-
-    top20["%"] = (top20["Custo_Total"] / total_geral) * 100
+    top20["%"] = (top20["Custo_Total"] / total_geral * 100) if total_geral > 0 else 0
 
     top20 = (
         top20
@@ -53,10 +54,8 @@ def render(df_filtrado, moeda_br):
     top20 = top20.rename(columns={"Custo_Total": "Custo Total"})
 
     # ---------- CARDS MINI ----------
-    total_top20       = top20["Custo Total"].sum()
-    itens_top20       = top20["Produto"].nunique()
-    perc_top20        = (total_top20 / total_geral * 100) if total_geral > 0 else 0
-    ticket_medio_top20 = total_top20 / itens_top20 if itens_top20 > 0 else 0
+    total_top20 = top20["Custo Total"].sum()
+    perc_top20  = (total_top20 / total_geral * 100) if total_geral > 0 else 0
 
     c1, c2, c3 = st.columns([1, 1, 2])
     with c1: card_mini("Valor Top 20", moeda_br(total_top20))
