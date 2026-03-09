@@ -32,8 +32,8 @@ def card(titulo, valor, cor_borda="#EC6E21", cor_valor=None, subtitulo=None):
 # -------------------------------------------------------
 # 2. GERADOR DE TEXTO ANÁLISE
 # -------------------------------------------------------
-def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_baixas, var_custo,
-                        qtd_entrou, qtd_saiu, qtd_baixas, moeda_br):
+def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_reduziu, var_custo,
+                        qtd_entrou, qtd_saiu, qtd_reduziu, moeda_br):
 
     saldo_status = valor_entrou - valor_saiu
 
@@ -66,19 +66,19 @@ def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_baixas, v
         )
         cor_fluxo = "#51cf66"
 
-    if valor_baixas > 0:
+    if valor_reduziu > 0:
         if variacao_real < 0 and saldo_status > 0:
             texto_baixas = (
                 f"⚠️ **Atenção — Resultado mascarado pelas reduções parciais:** "
                 f"O obsoleto reduziu no mês, mas o fluxo de novos itens ainda é negativo. "
-                f"A redução de **{moeda_br(valor_baixas)}** veio da diminuição de quantidade "
-                f"em **{qtd_baixas} itens** que foram parcialmente vendidos ou consumidos."
+                f"A redução de **{moeda_br(valor_reduziu)}** veio da diminuição de quantidade "
+                f"em **{qtd_reduziu} itens** que foram parcialmente vendidos ou consumidos."
             )
             cor_baixas = "#ffa94d"
         else:
             texto_baixas = (
-                f"📦 **Reduções parciais:** **{qtd_baixas} itens** tiveram redução de quantidade, "
-                f"representando **{moeda_br(valor_baixas)}** a menos no obsoleto."
+                f"📦 **Reduções parciais:** **{qtd_reduziu} itens** tiveram redução de quantidade, "
+                f"representando **{moeda_br(valor_reduziu)}** a menos no obsoleto."
             )
             cor_baixas = "#aaa"
     else:
@@ -122,17 +122,18 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # -------------------------------------------------------
     df = (
         df.groupby(
-            ["Data Fechamento", "Empresa / Filial", "Produto", "Descricao", "Conta", "Status do Movimento"],
+            ["Data Fechamento", "Empresa / Filial", "Produto", "Descricao", "Conta", "Status Estoque"],
             as_index=False
         ).agg({"Saldo Atual": "sum", "Custo Total": "sum"})
     )
 
     df = (
-        df.sort_values("Status do Movimento")
+        df.sort_values("Status Estoque")
         .drop_duplicates(subset=["Data Fechamento", "Empresa / Filial", "Produto"], keep="first")
     )
 
-    df["obsoleto"] = df["Status do Movimento"] != "Até 6 meses"
+    # Critério único: Status Estoque == "Obsoleto"
+    df["obsoleto"] = df["Status Estoque"] == "Obsoleto"
 
     datas = sorted(df["Data Fechamento"].unique())
 
@@ -171,28 +172,26 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # -------------------------------------------------------
     # MERGE — apenas obsoletos dos dois períodos
     # -------------------------------------------------------
-    df_ant_sel = df_ant[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Status do Movimento"]].copy()
+    df_ant_sel = df_ant[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta"]].copy()
     df_ant_sel = df_ant_sel.rename(columns={
         "Custo Total": "Vlr Ant",
         "Saldo Atual": "Qtd Ant",
         "Descricao": "Descricao_ant",
         "Conta": "Conta_ant",
-        "Status do Movimento": "Status_ant"
     })
 
-    df_atual_sel = df_atual[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Status do Movimento"]].copy()
+    df_atual_sel = df_atual[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta"]].copy()
     df_atual_sel = df_atual_sel.rename(columns={
         "Custo Total": "Vlr Atual",
         "Saldo Atual": "Qtd Atual",
         "Descricao": "Descricao_atual",
         "Conta": "Conta_atual",
-        "Status do Movimento": "Status_atual"
     })
 
     base = df_atual_sel.merge(df_ant_sel, on=chave, how="outer")
 
-    base["Vlr Ant"]  = base["Vlr Ant"].fillna(0)
-    base["Qtd Ant"]  = base["Qtd Ant"].fillna(0)
+    base["Vlr Ant"]   = base["Vlr Ant"].fillna(0)
+    base["Qtd Ant"]   = base["Qtd Ant"].fillna(0)
     base["Vlr Atual"] = base["Vlr Atual"].fillna(0)
     base["Qtd Atual"] = base["Qtd Atual"].fillna(0)
 
@@ -200,7 +199,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
     base["Conta"]     = base["Conta_atual"].fillna(base["Conta_ant"])
 
     # -------------------------------------------------------
-    # CATEGORIAS — baseadas em quantidade e existência
+    # CATEGORIAS
     # -------------------------------------------------------
 
     # ENTROU: não existia como obsoleto no anterior, existe agora
@@ -229,11 +228,11 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # -------------------------------------------------------
     # VALORES PARA CARDS
     # -------------------------------------------------------
-    valor_entrou = entrou["Vlr Atual"].sum()
-    qtd_entrou   = len(entrou)
+    valor_entrou  = entrou["Vlr Atual"].sum()
+    qtd_entrou    = len(entrou)
 
-    valor_saiu   = saiu["Vlr Ant"].sum()
-    qtd_saiu     = len(saiu)
+    valor_saiu    = saiu["Vlr Ant"].sum()
+    qtd_saiu      = len(saiu)
 
     valor_reduziu = (reduziu["Vlr Ant"] - reduziu["Vlr Atual"]).sum()
     qtd_reduziu   = len(reduziu)
