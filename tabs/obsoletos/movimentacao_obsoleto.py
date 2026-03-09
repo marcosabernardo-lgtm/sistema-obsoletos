@@ -257,15 +257,12 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # -------------------------------------------------------
     st.subheader("📅 Mês Atual vs Mês Anterior")
 
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4 = st.columns(4)
 
     with c1: card("🔴 Entrou", moeda_br(valor_entrou), cor_valor="#ff6b6b", subtitulo=f"{qtd_entrou:,} itens")
     with c2: card("🟢 Saiu", moeda_br(valor_saiu), cor_valor="#51cf66", subtitulo=f"{qtd_saiu:,} itens")
     with c3: card("🔽 Reduziu", moeda_br(valor_reduziu), cor_valor="#74c0fc", subtitulo=f"{qtd_reduziu:,} itens")
     with c4:
-        cor = "#ff6b6b" if var_custo_val > 0 else "#51cf66"
-        card("📊 Variação de Custo", moeda_br(var_custo_val), cor_valor=cor)
-    with c5:
         cor = "#ff6b6b" if variacao_real > 0 else "#51cf66"
         card("Δ Variação Real", moeda_br(variacao_real), cor_borda="#fff", cor_valor=cor)
 
