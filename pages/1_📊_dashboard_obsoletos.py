@@ -273,7 +273,10 @@ with tab2:
     render_evolucao(df_hist_filtrado, moeda_br)
 
 with tab3:
-    render_movimentacao(df_hist_filtrado, moeda_br, data_selecionada)
+    try:
+        render_movimentacao(df_hist_filtrado, moeda_br, data_selecionada)
+    except Exception as e:
+        st.exception(e)
 
 with tab4:
     render_top20(df_filtrado, moeda_br)
