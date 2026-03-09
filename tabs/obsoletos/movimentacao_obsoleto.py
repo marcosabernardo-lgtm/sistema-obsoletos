@@ -75,7 +75,7 @@ def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_baixas, v
         if variacao_real < 0 and saldo_status > 0:
             texto_baixas = (
                 f"⚠️ **Atenção — Resultado mascarado pelas Baixas:** "
-                f"O obsoleto reduziu no mês, mas isso ocorreu principalmente pelo descarte/consumo de "
+                f"O obsoleto reduziu no mês, mas isso ocorreu principalmente pela saída definitiva de "
                 f"**{qtd_baixas} itens** ({moeda_br(valor_baixas)}) que saíram definitivamente do estoque. "
                 f"Sem as baixas, o obsoleto teria **aumentado** {moeda_br(saldo_status)}."
             )
