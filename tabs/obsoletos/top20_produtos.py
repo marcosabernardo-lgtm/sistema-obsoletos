@@ -58,11 +58,9 @@ def render(df_filtrado, moeda_br):
     perc_top20        = (total_top20 / total_geral * 100) if total_geral > 0 else 0
     ticket_medio_top20 = total_top20 / itens_top20 if itens_top20 > 0 else 0
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns([1, 1, 2])
     with c1: card_mini("Valor Top 20", moeda_br(total_top20))
-    with c2: card_mini("Itens", f"{itens_top20}")
-    with c3: card_mini("% do Obsoleto Total", f"{perc_top20:.2f}%")
-    with c4: card_mini("Ticket Médio", moeda_br(ticket_medio_top20))
+    with c2: card_mini("% do Obsoleto Total", f"{perc_top20:.2f}%")
 
     st.markdown("")
 
