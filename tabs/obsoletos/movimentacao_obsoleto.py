@@ -32,8 +32,12 @@ def card(titulo, valor, cor_borda="#EC6E21", cor_valor=None, subtitulo=None):
 # -------------------------------------------------------
 # 2. GERADOR DE TEXTO ANÁLISE
 # -------------------------------------------------------
-def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_baixas, var_custo, moeda_br):
+def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_baixas, var_custo,
+                        qtd_entrou, qtd_saiu, qtd_baixas, moeda_br):
 
+    saldo_status = valor_entrou - valor_saiu
+
+    # --- TÍTULO PRINCIPAL ---
     if variacao_real < 0:
         cor_titulo = "#28a745"
         titulo = "✅ O Estoque Obsoleto REDUZIU neste mês"
@@ -41,23 +45,69 @@ def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_baixas, v
         cor_titulo = "#dc3545"
         titulo = "⚠️ O Estoque Obsoleto AUMENTOU neste mês"
 
-    saldo_status = valor_entrou - valor_saiu
+    # --- RESULTADO GERAL ---
+    texto_resultado = (
+        f"O estoque obsoleto variou **{moeda_br(abs(variacao_real))}** "
+        f"({'redução' if variacao_real < 0 else 'aumento'}) neste período."
+    )
 
+    # --- FLUXO DE STATUS ---
     if saldo_status > 0:
-        texto_fluxo = f"**⚠️ Ponto de Atenção (Fluxo de Status):** Entraram **{moeda_br(valor_entrou)}** em novos obsoletos contra **{moeda_br(valor_saiu)}** recuperados. A torneira está aberta."
+        texto_fluxo = (
+            f"⚠️ **Fluxo Operacional Negativo:** "
+            f"**{qtd_entrou} itens** ({moeda_br(valor_entrou)}) viraram obsoletos, "
+            f"contra apenas **{qtd_saiu} itens** ({moeda_br(valor_saiu)}) que saíram da obsolescência. "
+            f"O saldo do fluxo é de +{moeda_br(saldo_status)} — a torneira está aberta."
+        )
+        cor_fluxo = "#ff6b6b"
     else:
-        texto_fluxo = f"**✅ Ponto Positivo (Fluxo de Status):** Recuperamos **{moeda_br(valor_saiu)}** de obsoletos, mais do que os **{moeda_br(valor_entrou)}** que entraram."
+        texto_fluxo = (
+            f"✅ **Fluxo Operacional Positivo:** "
+            f"Recuperamos **{qtd_saiu} itens** ({moeda_br(valor_saiu)}) da obsolescência, "
+            f"mais do que os **{qtd_entrou} itens** ({moeda_br(valor_entrou)}) que entraram. "
+            f"O saldo do fluxo é de {moeda_br(saldo_status)}."
+        )
+        cor_fluxo = "#51cf66"
 
-    texto_baixas = f"**📦 Baixas:** Saíram definitivamente do estoque **{moeda_br(valor_baixas)}** em itens obsoletos."
-
-    if var_custo < 0:
-        texto_custo = f"**📉 Variação de Custo:** Itens já obsoletos tiveram redução de custo médio de **{moeda_br(abs(var_custo))}**."
-    elif var_custo > 0:
-        texto_custo = f"**📈 Variação de Custo:** Itens já obsoletos tiveram aumento de custo médio de **{moeda_br(var_custo)}**."
+    # --- BAIXAS ---
+    if valor_baixas > 0:
+        # Verificar se o resultado só foi positivo por causa das baixas
+        if variacao_real < 0 and saldo_status > 0:
+            texto_baixas = (
+                f"⚠️ **Atenção — Resultado mascarado pelas Baixas:** "
+                f"O obsoleto reduziu no mês, mas isso ocorreu principalmente pelo descarte/consumo de "
+                f"**{qtd_baixas} itens** ({moeda_br(valor_baixas)}) que saíram definitivamente do estoque. "
+                f"Sem as baixas, o obsoleto teria **aumentado** {moeda_br(saldo_status)}."
+            )
+            cor_baixas = "#ffa94d"
+        else:
+            texto_baixas = (
+                f"📦 **Baixas:** **{qtd_baixas} itens** ({moeda_br(valor_baixas)}) "
+                f"saíram definitivamente do estoque obsoleto neste período."
+            )
+            cor_baixas = "#aaa"
     else:
-        texto_custo = "Não houve variação de custo em itens já obsoletos."
+        texto_baixas = "Não houve baixas de itens obsoletos neste período."
+        cor_baixas = "#aaa"
 
-    return titulo, cor_titulo, texto_fluxo, texto_baixas, texto_custo
+    # --- VARIAÇÃO DE CUSTO ---
+    if abs(var_custo) < 1:
+        texto_custo = "A variação de custo médio dos itens já obsoletos foi irrelevante neste período."
+        cor_custo = "#aaa"
+    elif var_custo < 0:
+        texto_custo = (
+            f"📉 **Variação de Custo:** Itens já obsoletos tiveram redução de custo médio "
+            f"de **{moeda_br(abs(var_custo))}**, contribuindo para a redução do obsoleto."
+        )
+        cor_custo = "#51cf66"
+    else:
+        texto_custo = (
+            f"📈 **Variação de Custo:** Itens já obsoletos tiveram aumento de custo médio "
+            f"de **{moeda_br(var_custo)}**, pressionando o obsoleto para cima."
+        )
+        cor_custo = "#ff6b6b"
+
+    return titulo, cor_titulo, texto_resultado, texto_fluxo, cor_fluxo, texto_baixas, cor_baixas, texto_custo, cor_custo
 
 
 # -------------------------------------------------------
@@ -271,8 +321,9 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     if st.session_state["analise_visivel"]:
 
-        titulo, cor_titulo, texto_fluxo, texto_baixas, texto_custo = gerar_texto_analise(
-            variacao_real, valor_entrou, valor_saiu, valor_baixas, var_custo_val, moeda_br
+        titulo, cor_titulo, texto_resultado, texto_fluxo, cor_fluxo, texto_baixas, cor_baixas, texto_custo, cor_custo = gerar_texto_analise(
+            variacao_real, valor_entrou, valor_saiu, valor_baixas, var_custo_val,
+            qtd_entrou, qtd_saiu, qtd_baixas, moeda_br
         )
 
         st.markdown(f"""
@@ -284,9 +335,11 @@ def render(df_hist, moeda_br, data_selecionada=None):
             margin-bottom:15px;
         ">
         <h3 style="color:{cor_titulo}; margin-top:0;">{titulo}</h3>
-        <p style="color:white;">{texto_fluxo}</p>
-        <p style="color:white;">{texto_baixas}</p>
-        <p style="color:white;">{texto_custo}</p>
+        <p style="color:#ccc;">{texto_resultado}</p>
+        <hr style="border-color:#333">
+        <p style="color:{cor_fluxo};">{texto_fluxo}</p>
+        <p style="color:{cor_baixas};">{texto_baixas}</p>
+        <p style="color:{cor_custo};">{texto_custo}</p>
         </div>
         """, unsafe_allow_html=True)
 
