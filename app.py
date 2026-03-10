@@ -27,19 +27,40 @@ st.title("📊 Dashboard de Estoque e Obsolescência")
 
 st.markdown(
 """
-Este dashboard apresenta análises consolidadas do estoque da empresa, incluindo:
+Este painel apresenta análises consolidadas do estoque da empresa com base nos fechamentos mensais do ERP.
+
+As informações incluem:
 
 • Evolução do valor total em estoque  
 • Identificação de itens obsoletos  
 • Classificação por tempo sem movimentação  
-• Distribuição por empresa e filial  
-
-Os dados são atualizados a partir dos **fechamentos mensais do ERP**.
-
+• Distribuição por empresa e filial
 """
 )
 
 st.markdown("---")
+
+import glob
+
+arquivos = glob.glob("data/obsoletos/*.parquet")
+
+if arquivos:
+    
+    ultimo = max(arquivos, key=os.path.getmtime)
+    
+    data = os.path.basename(ultimo).replace(".parquet","")
+
+    st.info(f"📅 Última atualização de dados: **{data}**")
+
+else:
+
+    st.warning("Nenhuma base de dados encontrada.")
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("Empresas analisadas", "4")
+col2.metric("Tipo de análise", "Estoque e Obsolescência")
+col3.metric("Fonte", "ERP Protheus")
 
 st.info(
 """
