@@ -156,7 +156,6 @@ st.subheader("Tipo de processamento")
 tipo_processo = st.radio(
     "Escolha o tipo de processamento",
     [
-        "Atualizar Obsolescência",
         "Atualizar Evolução de Estoque"
     ]
 )
