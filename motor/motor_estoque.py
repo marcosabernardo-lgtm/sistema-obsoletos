@@ -145,7 +145,10 @@ def executar_motor_estoque(caminho_zip):
     # DATA FECHAMENTO
     # ------------------------------------------------------
 
-    df["Data Fechamento"] = pd.Timestamp.today().normalize()
+    df["Data Fechamento"] = pd.to_datetime(
+    df["Data Fechamento"],
+    errors="coerce"
+    )
 
     # ------------------------------------------------------
     # MARCAR MAQUINA USADA

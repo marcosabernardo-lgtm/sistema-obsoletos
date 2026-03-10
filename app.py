@@ -10,7 +10,7 @@ from storage.base_obsoletos_lake import salvar_fechamento_obsoletos
 from storage.base_estoque_lake import salvar_fechamento_estoque
 
 
-st.set_page_config(page_title="Upload Estoque", layout="wide")
+st.set_page_config(page_title="Processamento de Estoque", layout="wide")
 
 # ---------------------------------------------------------
 # GARANTIR ESTRUTURA DE PASTAS
@@ -19,17 +19,18 @@ st.set_page_config(page_title="Upload Estoque", layout="wide")
 os.makedirs("data", exist_ok=True)
 os.makedirs("data/obsoletos", exist_ok=True)
 os.makedirs("data/estoque", exist_ok=True)
-os.makedirs("data/uploads", exist_ok=True)
 
 LOG_PATH = "data/log_uploads.parquet"
-UPLOAD_DIR = "data/uploads"
 
 
-st.title("📦 Upload de Fechamento de Estoque")
+st.title("📦 Processamento de Fechamento de Estoque")
 
 st.markdown(
 """
-Faça o upload do arquivo **PROJETO_UPLOAD.zip** contendo as bases do ERP.
+Os arquivos ZIP devem estar dentro das pastas:
+
+• **dados_obsoleto** → arquivos mensais de obsolescência  
+• **dados_estoque** → arquivo acumulado de estoque  
 
 O sistema irá:
 
@@ -93,13 +94,13 @@ def mostrar_historico():
 
         df_view["Data"] = pd.to_datetime(df_view["Data"]).dt.strftime("%d/%m/%Y")
 
-        st.subheader("📂 Arquivos já importados")
+        st.subheader("📂 Arquivos já processados")
 
         st.dataframe(df_view, use_container_width=True, hide_index=True)
 
     else:
 
-        st.info("Nenhum arquivo importado ainda.")
+        st.info("Nenhum fechamento processado ainda.")
 
 
 mostrar_historico()
@@ -133,8 +134,11 @@ st.markdown("---")
 
 with st.expander("📊 Status da Base de Dados"):
 
-    st.write("Arquivos em obsoletos:", os.listdir("data/obsoletos"))
-    st.write("Arquivos em estoque:", os.listdir("data/estoque"))
+    if os.path.exists("data/obsoletos"):
+        st.write("Arquivos em obsoletos:", os.listdir("data/obsoletos"))
+
+    if os.path.exists("data/estoque"):
+        st.write("Arquivos em estoque:", os.listdir("data/estoque"))
 
 
 # ---------------------------------------------------------
@@ -155,82 +159,104 @@ st.markdown("---")
 
 
 # ---------------------------------------------------------
-# UPLOAD
+# DEFINIR PASTA DE DADOS
 # ---------------------------------------------------------
 
-uploaded_file = st.file_uploader(
-    "Selecione o arquivo PROJETO_UPLOAD.zip",
-    type=["zip"]
+if tipo_processo == "Atualizar Obsolescência":
+    PASTA_DADOS = "dados_obsoleto"
+else:
+    PASTA_DADOS = "dados_estoque"
+
+
+# ---------------------------------------------------------
+# LISTAR ARQUIVOS
+# ---------------------------------------------------------
+
+if not os.path.exists(PASTA_DADOS):
+    st.error(f"A pasta '{PASTA_DADOS}' não existe.")
+    st.stop()
+
+zip_files = [f for f in os.listdir(PASTA_DADOS) if f.endswith(".zip")]
+
+if len(zip_files) == 0:
+    st.warning("Nenhum arquivo ZIP encontrado.")
+    st.stop()
+
+
+# ---------------------------------------------------------
+# REGRA ESTOQUE
+# ---------------------------------------------------------
+
+if tipo_processo == "Atualizar Evolução de Estoque" and len(zip_files) > 1:
+    st.error("A pasta dados_estoque deve conter apenas um arquivo ZIP.")
+    st.stop()
+
+
+# ---------------------------------------------------------
+# SELEÇÃO
+# ---------------------------------------------------------
+
+arquivo_selecionado = st.selectbox(
+    "Selecione o fechamento para processar",
+    zip_files
 )
 
-if uploaded_file is not None:
 
-    nome_zip = uploaded_file.name
+# ---------------------------------------------------------
+# PROCESSAMENTO
+# ---------------------------------------------------------
 
-    caminho_upload = os.path.join(UPLOAD_DIR, nome_zip)
+if st.button("🚀 Processar Fechamento"):
 
-    st.write("Arquivo selecionado:", nome_zip)
+    caminho_upload = os.path.join(PASTA_DADOS, arquivo_selecionado)
+
+    st.write("Arquivo selecionado:", arquivo_selecionado)
 
     df_log = carregar_log()
 
-    if nome_zip in df_log["Arquivo"].values:
+    if arquivo_selecionado in df_log["Arquivo"].values:
 
-        st.error("⚠ Este arquivo já foi importado anteriormente.")
+        st.error("⚠ Este arquivo já foi processado anteriormente.")
         st.stop()
 
-    if st.button("🚀 Processar Arquivo"):
+    with st.spinner("Processando arquivo..."):
 
-        with st.spinner("Processando arquivo..."):
+        try:
 
-            try:
+            if tipo_processo == "Atualizar Obsolescência":
 
-                # -------------------------------------------------
-                # SALVAR ZIP EM DISCO
-                # -------------------------------------------------
+                df_final, df_export = executar_motor(caminho_upload)
 
-                with open(caminho_upload, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
+                caminho = salvar_fechamento_obsoletos(df_final)
 
-                # -------------------------------------------------
-                # PROCESSAMENTO
-                # -------------------------------------------------
+                tipo = "Obsolescência"
 
-                if tipo_processo == "Atualizar Obsolescência":
+            else:
 
-                    df_final, df_export = executar_motor(caminho_upload)
+                df_final, df_export = executar_motor_estoque(caminho_upload)
 
-                    caminho = salvar_fechamento_obsoletos(df_final)
+                caminho = salvar_fechamento_estoque(df_final)
 
-                    tipo = "Obsolescência"
+                tipo = "Evolução Estoque"
 
-                else:
+            qtd_registros = len(df_final)
 
-                    df_final, df_export = executar_motor_estoque(caminho_upload)
+            salvar_log(arquivo_selecionado, qtd_registros, tipo)
 
-                    caminho = salvar_fechamento_estoque(df_final)
+            st.success("✅ Processamento concluído!")
 
-                    tipo = "Evolução Estoque"
+            st.write("Arquivo salvo em:", caminho)
 
-                qtd_registros = len(df_final)
+            st.write("Registros:", qtd_registros)
 
-                salvar_log(nome_zip, qtd_registros, tipo)
+            st.download_button(
+                label="📥 Baixar Excel Final",
+                data=df_export,
+                file_name=f"{arquivo_selecionado.replace('.zip','')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
-                st.success("✅ Processamento concluído!")
+        except Exception as e:
 
-                st.rerun()
-
-                st.write("Arquivo salvo em:", caminho)
-
-                st.write("Registros:", qtd_registros)
-
-                st.download_button(
-                    label="📥 Baixar Excel Final",
-                    data=df_export,
-                    file_name=f"{nome_zip.replace('.zip','')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
-            except Exception as e:
-
-                st.error("Erro inesperado durante o processamento.")
-                st.exception(e)
+            st.error("Erro inesperado durante o processamento.")
+            st.exception(e)
