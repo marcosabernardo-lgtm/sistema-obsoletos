@@ -23,26 +23,32 @@ os.makedirs("data/estoque", exist_ok=True)
 LOG_PATH = "data/log_uploads.parquet"
 
 
-st.title("📦 Processamento de Fechamento de Estoque")
+st.title("📊 Dashboard de Estoque e Obsolescência")
 
 st.markdown(
 """
-Os arquivos ZIP devem estar dentro das pastas:
+Este dashboard apresenta análises consolidadas do estoque da empresa, incluindo:
 
-• **dados_obsoleto** → arquivos mensais de obsolescência  
-• **dados_estoque** → arquivo acumulado de estoque  
+• Evolução do valor total em estoque  
+• Identificação de itens obsoletos  
+• Classificação por tempo sem movimentação  
+• Distribuição por empresa e filial  
 
-O sistema irá:
+Os dados são atualizados a partir dos **fechamentos mensais do ERP**.
 
-• Processar o estoque  
-• Calcular movimentações  
-• Classificar obsolescência  
-• Atualizar a base histórica
 """
 )
 
 st.markdown("---")
 
+st.info(
+"""
+**Fonte dos dados**
+
+• Fechamentos mensais do ERP  
+• Atualização realizada pela área de Supply Chain
+"""
+)
 
 # ---------------------------------------------------------
 # FUNÇÕES DE LOG
