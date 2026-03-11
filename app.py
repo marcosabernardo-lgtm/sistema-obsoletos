@@ -40,37 +40,6 @@ As informações incluem:
 
 st.markdown("---")
 
-import glob
-
-arquivos = glob.glob("data/obsoletos/*.parquet")
-
-if arquivos:
-    
-    ultimo = max(arquivos, key=os.path.getmtime)
-    
-    data = os.path.basename(ultimo).replace(".parquet","")
-
-    st.info(f"📅 Última atualização de dados: **{data}**")
-
-else:
-
-    st.warning("Nenhuma base de dados encontrada.")
-
-col1, col2, col3 = st.columns(3)
-
-col1.metric("Empresas analisadas", "4")
-col2.metric("Tipo de análise", "Estoque e Obsolescência")
-col3.metric("Fonte", "ERP Protheus")
-
-st.info(
-"""
-**Fonte dos dados**
-
-• Fechamentos mensais do ERP  
-• Atualização realizada pela área de Supply Chain
-"""
-)
-
 # ---------------------------------------------------------
 # FUNÇÕES DE LOG
 # ---------------------------------------------------------
@@ -105,34 +74,6 @@ def salvar_log(nome_zip, registros, tipo):
     df_log.to_parquet(LOG_PATH, index=False)
 
     return df_log
-
-
-# ---------------------------------------------------------
-# HISTÓRICO
-# ---------------------------------------------------------
-
-def mostrar_historico():
-
-    df_log = carregar_log()
-
-    if len(df_log) > 0:
-
-        df_view = df_log.sort_values("Data", ascending=False).copy()
-
-        df_view["Data"] = pd.to_datetime(df_view["Data"]).dt.strftime("%d/%m/%Y")
-
-        st.subheader("📂 Arquivos já processados")
-
-        st.dataframe(df_view, use_container_width=True, hide_index=True)
-
-    else:
-
-        st.info("Nenhum fechamento processado ainda.")
-
-
-mostrar_historico()
-
-st.markdown("---")
 
 
 # ---------------------------------------------------------
