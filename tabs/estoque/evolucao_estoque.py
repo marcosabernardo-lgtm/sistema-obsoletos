@@ -14,6 +14,7 @@ def render(df_hist, moeda_br):
     df = df_hist.copy()
 
     df["Data Fechamento"] = pd.to_datetime(df["Data Fechamento"])
+    df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce").fillna(0)
 
     # -------------------------------------------------
     # KPI BASE
@@ -72,16 +73,30 @@ def render(df_hist, moeda_br):
         df.groupby("Data Fechamento")["Custo Total"]
         .sum()
         .reset_index()
+        .sort_values("Data Fechamento")
     )
+
+    # criar coluna mês/ano
+    evolucao["MesAno"] = evolucao["Data Fechamento"].dt.strftime("%b/%y")
 
     chart = alt.Chart(evolucao).mark_line(
         point=True
     ).encode(
-        x="Data Fechamento:T",
-        y="Custo Total:Q",
-        tooltip=["Data Fechamento", "Custo Total"]
+        x=alt.X(
+            "MesAno:N",
+            title="Fechamento Mensal",
+            sort=None
+        ),
+        y=alt.Y(
+            "Custo Total:Q",
+            title="Valor do Estoque"
+        ),
+        tooltip=[
+            alt.Tooltip("MesAno", title="Mês"),
+            alt.Tooltip("Custo Total", title="Valor")
+        ]
     ).properties(
-        height=400
+        height=420
     )
 
     st.altair_chart(chart, use_container_width=True)
@@ -100,9 +115,13 @@ def render(df_hist, moeda_br):
         .reset_index()
     )
 
-    chart_empresa = alt.Chart(empresa).mark_line().encode(
-        x="Data Fechamento:T",
-        y="Custo Total:Q",
+    empresa["MesAno"] = empresa["Data Fechamento"].dt.strftime("%b/%y")
+
+    chart_empresa = alt.Chart(empresa).mark_line(
+        point=True
+    ).encode(
+        x=alt.X("MesAno:N", title="Fechamento"),
+        y=alt.Y("Custo Total:Q", title="Valor"),
         color="Empresa / Filial:N",
         tooltip=["Empresa / Filial", "Custo Total"]
     ).properties(
@@ -127,8 +146,8 @@ def render(df_hist, moeda_br):
     )
 
     chart_conta = alt.Chart(conta).mark_bar().encode(
-        x="Custo Total:Q",
-        y=alt.Y("Conta:N", sort="-x"),
+        x=alt.X("Custo Total:Q", title="Valor"),
+        y=alt.Y("Conta:N", sort="-x", title="Conta"),
         tooltip=["Conta", "Custo Total"]
     ).properties(
         height=400
