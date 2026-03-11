@@ -11,6 +11,7 @@ from tabs.obsoletos.graficos import render as render_graficos
 from tabs.obsoletos.movimentacao_obsoleto import render as render_movimentacao
 from tabs.obsoletos.evolucao_estoque import render as render_evolucao
 
+
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 
 # -------------------------------------------------
@@ -87,7 +88,6 @@ div[data-testid="stDataFrame"] div[role="gridcell"]{
 """, unsafe_allow_html=True)
 
 st.title("📊 Dashboard de Estoque Obsoleto")
-
 st.markdown("---")
 
 # -------------------------------------------------
@@ -97,6 +97,30 @@ st.markdown("---")
 def moeda_br(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
+
+@st.cache_data
+def carregar_base(pasta):
+
+    arquivos = [
+        os.path.join(pasta, f)
+        for f in os.listdir(pasta)
+        if f.endswith(".parquet")
+    ]
+
+    lista = []
+
+    for arq in arquivos:
+        df = pd.read_parquet(arq)
+        lista.append(df)
+
+    df_hist = pd.concat(lista, ignore_index=True)
+
+    df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"])
+    df_hist = df_hist.sort_values("Data Fechamento")
+
+    return df_hist
+
+
 # -------------------------------------------------
 # CARREGAR BASE
 # -------------------------------------------------
@@ -104,29 +128,16 @@ def moeda_br(valor):
 PASTA_OBSOLETOS = "data/obsoletos"
 
 if not os.path.exists(PASTA_OBSOLETOS):
-    st.warning("⚠️ Nenhuma base de dados encontrada. Acesse a página **app** para fazer o upload dos arquivos.")
+    st.warning("⚠️ Nenhuma base encontrada em **data/obsoletos**.")
     st.stop()
 
-arquivos = [
-    os.path.join(PASTA_OBSOLETOS, f)
-    for f in os.listdir(PASTA_OBSOLETOS)
-    if f.endswith(".parquet")
-]
+arquivos = [f for f in os.listdir(PASTA_OBSOLETOS) if f.endswith(".parquet")]
 
 if not arquivos:
-    st.warning("⚠️ Nenhuma base de dados encontrada. Acesse a página **app** para fazer o upload dos arquivos.")
+    st.warning("⚠️ Nenhum arquivo parquet encontrado.")
     st.stop()
 
-lista = []
-
-for arq in arquivos:
-    df = pd.read_parquet(arq)
-    lista.append(df)
-
-df_hist = pd.concat(lista, ignore_index=True)
-
-df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"])
-df_hist = df_hist.sort_values("Data Fechamento")
+df_hist = carregar_base(PASTA_OBSOLETOS)
 
 # -------------------------------------------------
 # FILTROS
@@ -135,7 +146,10 @@ df_hist = df_hist.sort_values("Data Fechamento")
 st.sidebar.header("Filtros")
 
 datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=True)
-datas_fmt = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
+
+datas_fmt = {
+    d.strftime("%d/%m/%Y"): d for d in datas_disponiveis
+}
 
 data_sel = st.sidebar.selectbox(
     "Data de Fechamento",
@@ -177,26 +191,19 @@ df_filtrado = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"].copy()
 # KPIs
 # -------------------------------------------------
 
-if not df_kpi.empty:
+estoque_total = df_kpi["Custo Total"].sum()
 
-    estoque_total = df_kpi["Custo Total"].sum()
+estoque_obsoleto = df_kpi[
+    df_kpi["Status Estoque"] == "Obsoleto"
+]["Custo Total"].sum()
 
-    estoque_obsoleto = df_kpi[
-        df_kpi["Status Estoque"] == "Obsoleto"
-    ]["Custo Total"].sum()
+perc_obsoleto = (
+    estoque_obsoleto / estoque_total if estoque_total > 0 else 0
+)
 
-    perc_obsoleto = estoque_obsoleto / estoque_total if estoque_total > 0 else 0
-
-    itens_obsoletos = df_kpi[
-        df_kpi["Status Estoque"] == "Obsoleto"
-    ]["Produto"].nunique()
-
-else:
-
-    estoque_total = 0
-    estoque_obsoleto = 0
-    perc_obsoleto = 0
-    itens_obsoletos = 0
+itens_obsoletos = df_kpi[
+    df_kpi["Status Estoque"] == "Obsoleto"
+]["Produto"].nunique()
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -231,16 +238,20 @@ col4.markdown(f"""
 st.markdown("---")
 
 # -------------------------------------------------
-# BASE HISTÓRICA COMPLETA
+# BASE HISTÓRICA FILTRADA
 # -------------------------------------------------
 
 df_hist_filtrado = df_hist.copy()
 
 if empresas_sel:
-    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Empresa / Filial"].isin(empresas_sel)]
+    df_hist_filtrado = df_hist_filtrado[
+        df_hist_filtrado["Empresa / Filial"].isin(empresas_sel)
+    ]
 
 if contas_sel:
-    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Conta"].isin(contas_sel)]
+    df_hist_filtrado = df_hist_filtrado[
+        df_hist_filtrado["Conta"].isin(contas_sel)
+    ]
 
 # -------------------------------------------------
 # ABAS
