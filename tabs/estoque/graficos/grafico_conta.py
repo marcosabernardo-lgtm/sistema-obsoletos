@@ -53,72 +53,62 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
         return "color:#ff6b6b" if v < 0 else "color:white"
 
     def icone_perc(perc):
-        if perc > 1:    return f'<span style="color:#51cf66;font-weight:700">⬆ {abs(perc):.0f}%</span>'
-        elif perc < -1: return f'<span style="color:#ff6b6b;font-weight:700">⬇ {abs(perc):.0f}%</span>'
-        else:           return f'<span style="color:#f0a500;font-weight:700">● {abs(perc):.0f}%</span>'
+        if perc > 1:
+            return '<span style="color:#51cf66;font-weight:700">&#11014; ' + f'{abs(perc):.0f}%</span>'
+        elif perc < -1:
+            return '<span style="color:#ff6b6b;font-weight:700">&#11015; ' + f'{abs(perc):.0f}%</span>'
+        else:
+            return '<span style="color:#f0a500;font-weight:700">&#9679; ' + f'{abs(perc):.0f}%</span>'
 
     # Montar linhas HTML
     linhas_html = ""
     for _, row in df_tabela.iterrows():
         cv = cor_valor(row["Var MoM"])
-        linhas_html += f"""
-        <tr>
-            <td>{row['Conta']}</td>
-            <td>{moeda_br(row['Valor Estoque'])}</td>
-            <td style="{cv}">{moeda_br(row['Var MoM'])}</td>
-            <td>{icone_perc(row['Perc MoM'])}</td>
-        </tr>"""
+        linhas_html += (
+            "<tr>"
+            "<td>" + str(row['Conta']) + "</td>"
+            "<td>" + moeda_br(row['Valor Estoque']) + "</td>"
+            "<td style='" + cv + "'>" + moeda_br(row['Var MoM']) + "</td>"
+            "<td>" + icone_perc(row['Perc MoM']) + "</td>"
+            "</tr>"
+        )
 
-    # Linha total
     cv_total = cor_valor(total_var)
-    total_html = f"""
-        <tr style="font-weight:700;border-top:2px solid #EC6E21">
-            <td>Total</td>
-            <td>{moeda_br(total_atual)}</td>
-            <td style="{cv_total}">{moeda_br(total_var)}</td>
-            <td>{icone_perc(total_perc)}</td>
-        </tr>"""
+    total_html = (
+        "<tr style='font-weight:700;border-top:2px solid #EC6E21'>"
+        "<td>Total</td>"
+        "<td>" + moeda_br(total_atual) + "</td>"
+        "<td style='" + cv_total + "'>" + moeda_br(total_var) + "</td>"
+        "<td>" + icone_perc(total_perc) + "</td>"
+        "</tr>"
+    )
 
-    html = f"""
-    <style>
-    .tb-conta {{
-        width:100%;
-        border-collapse:collapse;
-        font-size:14px;
-        color:white;
-    }}
-    .tb-conta th {{
-        background-color:#0f5a60;
-        color:white;
-        padding:10px 14px;
-        text-align:left;
-        border-bottom:2px solid #EC6E21;
-        font-weight:700;
-    }}
-    .tb-conta th:not(:first-child) {{ text-align:right; }}
-    .tb-conta td {{
-        padding:8px 14px;
-        border-bottom:1px solid #1a6e75;
-        background-color:#005562;
-        color:white;
-    }}
-    .tb-conta td:not(:first-child) {{ text-align:right; }}
-    .tb-conta tr:hover td {{ background-color:#0a6570; }}
-    </style>
-    <table class="tb-conta">
-        <thead>
-            <tr>
-                <th>Conta</th>
-                <th>Valor Estoque (Total)</th>
-                <th>Vir Est MoM</th>
-                <th>% MoM</th>
-            </tr>
-        </thead>
-        <tbody>
-            {linhas_html}
-            {total_html}
-        </tbody>
-    </table>
-    """
+    css = (
+        "<style>"
+        ".tb-conta{width:100%;border-collapse:collapse;font-size:14px;color:white;}"
+        ".tb-conta th{background-color:#0f5a60;color:white;padding:10px 14px;text-align:left;"
+        "border-bottom:2px solid #EC6E21;font-weight:700;}"
+        ".tb-conta th:not(:first-child){text-align:right;}"
+        ".tb-conta td{padding:8px 14px;border-bottom:1px solid #1a6e75;"
+        "background-color:#005562;color:white;}"
+        ".tb-conta td:not(:first-child){text-align:right;}"
+        ".tb-conta tr:hover td{background-color:#0a6570;}"
+        "</style>"
+    )
 
-    st.markdown(html, unsafe_allow_html=True)
+    tabela = (
+        css
+        + "<table class='tb-conta'>"
+        + "<thead><tr>"
+        + "<th>Conta</th>"
+        + "<th>Valor Estoque (Total)</th>"
+        + "<th>Vir Est MoM</th>"
+        + "<th>% MoM</th>"
+        + "</tr></thead>"
+        + "<tbody>"
+        + linhas_html
+        + total_html
+        + "</tbody></table>"
+    )
+
+    st.html(tabela)
