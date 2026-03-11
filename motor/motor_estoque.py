@@ -118,6 +118,8 @@ def executar_motor_estoque(caminho_zip):
         "Quantidade": "Saldo Atual"
     })
 
+    df["Conta"] = df["Conta"].astype(str).str.strip().str.title()
+
     df["Empresa"] = df["Empresa"].apply(normalizar_empresa)
 
     df["Filial"] = df["Filial"].astype(str).str.title()
@@ -146,8 +148,8 @@ def executar_motor_estoque(caminho_zip):
     # ------------------------------------------------------
 
     df["Data Fechamento"] = pd.to_datetime(
-    df["Data Fechamento"],
-    errors="coerce"
+        df["Data Fechamento"],
+        errors="coerce"
     )
 
     # ------------------------------------------------------
