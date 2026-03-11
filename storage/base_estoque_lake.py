@@ -1,7 +1,9 @@
 import pandas as pd
 import os
 
-CAMINHO = "data/estoque/estoque_historico.parquet"
+# Caminho absoluto baseado na localização do próprio arquivo
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CAMINHO = os.path.join(BASE_DIR, "data", "estoque", "estoque_historico.parquet")
 
 
 def salvar_fechamento_estoque(df_novo):
