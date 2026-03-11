@@ -32,9 +32,7 @@ def render(df_hist, moeda_br, df_kpi=None, data_selecionada=None, valor_mom=None
 
     with tab5:
         st.info("Gráfico ainda não implementado")
-    with tab2:
-        st.info("Gráfico ainda não implementado")
-
+    
     with tab3:
         st.info("Gráfico ainda não implementado")
 
