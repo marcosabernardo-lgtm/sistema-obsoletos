@@ -3,6 +3,7 @@ import streamlit as st
 from tabs.estoque.graficos.grafico_evolucao import render as grafico_evolucao
 from tabs.estoque.graficos.grafico_empresa import render as grafico_empresa
 from tabs.estoque.graficos.grafico_conta import render as grafico_conta
+from tabs.estoque.graficos.grafico_top_produtos import render as grafico_top_produtos
 
 
 def render(df_hist, moeda_br, df_kpi=None, data_selecionada=None, valor_mom=None, valor_yoy=None):
@@ -29,7 +30,7 @@ def render(df_hist, moeda_br, df_kpi=None, data_selecionada=None, valor_mom=None
         grafico_conta(df, moeda_br, data_selecionada)
 
     with tab4:
-        st.info("Gráfico ainda não implementado")
+        grafico_top_produtos(df, moeda_br, data_selecionada)
 
     with tab5:
         st.info("Gráfico ainda não implementado")
