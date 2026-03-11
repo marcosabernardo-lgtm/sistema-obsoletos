@@ -12,6 +12,7 @@ from storage.base_estoque_lake import salvar_fechamento_estoque
 
 st.set_page_config(page_title="Processamento de Estoque", layout="wide")
 
+
 # ---------------------------------------------------------
 # GARANTIR ESTRUTURA DE PASTAS
 # ---------------------------------------------------------
@@ -39,6 +40,7 @@ As informações incluem:
 )
 
 st.markdown("---")
+
 
 # ---------------------------------------------------------
 # FUNÇÕES DE LOG
@@ -91,7 +93,10 @@ with st.expander("⚠️ Zona de Perigo — Resetar Base"):
 
         st.success("Bases removidas")
 
+        st.cache_data.clear()
+
         st.rerun()
+
 
 st.markdown("---")
 
@@ -181,10 +186,29 @@ if st.button("🚀 Processar Fechamento"):
 
     df_log = carregar_log()
 
+    # -----------------------------------------------------
+    # VERIFICAÇÃO DE BLOQUEIO INTELIGENTE
+    # -----------------------------------------------------
+
+    bloquear = False
+
     if arquivo_selecionado in df_log["Arquivo"].values:
+
+        if tipo_processo == "Atualizar Evolução de Estoque":
+
+            # verifica se parquet existe
+            if os.listdir("data/estoque"):
+                bloquear = True
+
+        else:
+
+            bloquear = True
+
+    if bloquear:
 
         st.error("⚠ Este arquivo já foi processado anteriormente.")
         st.stop()
+
 
     with st.spinner("Processando arquivo..."):
 
@@ -222,6 +246,11 @@ if st.button("🚀 Processar Fechamento"):
                 file_name=f"{arquivo_selecionado.replace('.zip','')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
+            # limpar cache para dashboards atualizarem
+            st.cache_data.clear()
+
+            st.rerun()
 
         except Exception as e:
 
