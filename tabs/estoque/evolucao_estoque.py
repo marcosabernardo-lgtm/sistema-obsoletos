@@ -64,155 +64,138 @@ def render(df_hist, moeda_br):
     st.markdown("---")
 
     # -------------------------------------------------
-    # EVOLUÇÃO TOTAL
+    # ABAS DE GRÁFICOS
     # -------------------------------------------------
 
-    st.subheader("Evolução do Valor de Estoque")
-
-    evolucao = (
-        df.groupby("Data Fechamento")["Custo Total"]
-        .sum()
-        .reset_index()
-        .sort_values("Data Fechamento")
-    )
-
-    # criar coluna mês/ano
-    evolucao["MesAno"] = evolucao["Data Fechamento"].dt.strftime("%b/%y")
-
-    chart = alt.Chart(evolucao).mark_line(
-        point=True
-    ).encode(
-        x=alt.X(
-            "MesAno:N",
-            title="Fechamento Mensal",
-            sort=None
-        ),
-        y=alt.Y(
-            "Custo Total:Q",
-            title="Valor do Estoque"
-        ),
-        tooltip=[
-            alt.Tooltip("MesAno", title="Mês"),
-            alt.Tooltip("Custo Total", title="Valor")
-        ]
-    ).properties(
-        height=420
-    )
-
-    st.altair_chart(chart, use_container_width=True)
-
-    st.markdown("---")
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📈 Evolução Estoque",
+        "🏢 Por Empresa",
+        "📊 Por Conta",
+        "⬆ Top Produtos",
+        "⬇ Redução Estoque"
+    ])
 
     # -------------------------------------------------
-    # EVOLUÇÃO POR EMPRESA
+    # GRAFICO 1
     # -------------------------------------------------
 
-    st.subheader("Evolução por Empresa")
+    with tab1:
 
-    empresa = (
-        df.groupby(["Data Fechamento", "Empresa / Filial"])["Custo Total"]
-        .sum()
-        .reset_index()
-    )
+        evolucao = (
+            df.groupby("Data Fechamento")["Custo Total"]
+            .sum()
+            .reset_index()
+            .sort_values("Data Fechamento")
+        )
 
-    empresa["MesAno"] = empresa["Data Fechamento"].dt.strftime("%b/%y")
+        evolucao["MesAno"] = evolucao["Data Fechamento"].dt.strftime("%b/%y")
 
-    chart_empresa = alt.Chart(empresa).mark_line(
-        point=True
-    ).encode(
-        x=alt.X("MesAno:N", title="Fechamento"),
-        y=alt.Y("Custo Total:Q", title="Valor"),
-        color="Empresa / Filial:N",
-        tooltip=["Empresa / Filial", "Custo Total"]
-    ).properties(
-        height=400
-    )
+        chart = alt.Chart(evolucao).mark_line(
+            point=True
+        ).encode(
+            x=alt.X("MesAno:N", title="Fechamento"),
+            y=alt.Y("Custo Total:Q", title="Valor Estoque"),
+            tooltip=["MesAno", "Custo Total"]
+        ).properties(height=420)
 
-    st.altair_chart(chart_empresa, use_container_width=True)
-
-    st.markdown("---")
+        st.altair_chart(chart, use_container_width=True)
 
     # -------------------------------------------------
-    # DISTRIBUIÇÃO POR CONTA
+    # GRAFICO 2
     # -------------------------------------------------
 
-    st.subheader("Distribuição do Estoque por Conta")
+    with tab2:
 
-    conta = (
-        df_atual.groupby("Conta")["Custo Total"]
-        .sum()
-        .sort_values(ascending=False)
-        .reset_index()
-    )
+        empresa = (
+            df.groupby(["Data Fechamento", "Empresa / Filial"])["Custo Total"]
+            .sum()
+            .reset_index()
+        )
 
-    chart_conta = alt.Chart(conta).mark_bar().encode(
-        x=alt.X("Custo Total:Q", title="Valor"),
-        y=alt.Y("Conta:N", sort="-x", title="Conta"),
-        tooltip=["Conta", "Custo Total"]
-    ).properties(
-        height=400
-    )
+        empresa["MesAno"] = empresa["Data Fechamento"].dt.strftime("%b/%y")
 
-    st.altair_chart(chart_conta, use_container_width=True)
+        chart_empresa = alt.Chart(empresa).mark_line(
+            point=True
+        ).encode(
+            x="MesAno:N",
+            y="Custo Total:Q",
+            color="Empresa / Filial:N",
+            tooltip=["Empresa / Filial", "Custo Total"]
+        ).properties(height=420)
 
-    st.markdown("---")
+        st.altair_chart(chart_empresa, use_container_width=True)
 
     # -------------------------------------------------
-    # VARIAÇÃO POR PRODUTO
+    # GRAFICO 3
     # -------------------------------------------------
 
-    st.subheader("Produtos que mais aumentaram estoque")
+    with tab3:
 
-    base_prod = df.groupby(
-        ["Data Fechamento", "Produto", "Descricao"]
-    )["Custo Total"].sum().reset_index()
+        conta = (
+            df_atual.groupby("Conta")["Custo Total"]
+            .sum()
+            .sort_values(ascending=False)
+            .reset_index()
+        )
 
-    atual = base_prod[base_prod["Data Fechamento"] == ultima_data]
-    anterior = base_prod[base_prod["Data Fechamento"] == data_anterior]
+        chart_conta = alt.Chart(conta).mark_bar().encode(
+            x="Custo Total:Q",
+            y=alt.Y("Conta:N", sort="-x"),
+            tooltip=["Conta", "Custo Total"]
+        ).properties(height=420)
 
-    merged = atual.merge(
-        anterior,
-        on=["Produto", "Descricao"],
-        how="left",
-        suffixes=("_atual", "_anterior")
-    )
+        st.altair_chart(chart_conta, use_container_width=True)
 
-    merged["Custo Total_anterior"] = merged["Custo Total_anterior"].fillna(0)
+    # -------------------------------------------------
+    # GRAFICO 4
+    # -------------------------------------------------
 
-    merged["Variacao"] = (
-        merged["Custo Total_atual"] -
-        merged["Custo Total_anterior"]
-    )
+    with tab4:
 
-    top_up = merged.sort_values(
-        "Variacao",
-        ascending=False
-    ).head(10)
+        base_prod = df.groupby(
+            ["Data Fechamento", "Produto", "Descricao"]
+        )["Custo Total"].sum().reset_index()
 
-    st.dataframe(
-        top_up[[
-            "Produto",
-            "Descricao",
-            "Custo Total_atual",
-            "Variacao"
-        ]],
-        use_container_width=True
-    )
+        atual = base_prod[base_prod["Data Fechamento"] == ultima_data]
+        anterior = base_prod[base_prod["Data Fechamento"] == data_anterior]
 
-    st.markdown("---")
+        merged = atual.merge(
+            anterior,
+            on=["Produto", "Descricao"],
+            how="left",
+            suffixes=("_atual", "_anterior")
+        )
 
-    st.subheader("Produtos que mais reduziram estoque")
+        merged["Custo Total_anterior"] = merged["Custo Total_anterior"].fillna(0)
 
-    top_down = merged.sort_values(
-        "Variacao"
-    ).head(10)
+        merged["Variacao"] = merged["Custo Total_atual"] - merged["Custo Total_anterior"]
 
-    st.dataframe(
-        top_down[[
-            "Produto",
-            "Descricao",
-            "Custo Total_atual",
-            "Variacao"
-        ]],
-        use_container_width=True
-    )
+        top_up = merged.sort_values("Variacao", ascending=False).head(10)
+
+        st.dataframe(
+            top_up[[
+                "Produto",
+                "Descricao",
+                "Custo Total_atual",
+                "Variacao"
+            ]],
+            use_container_width=True
+        )
+
+    # -------------------------------------------------
+    # GRAFICO 5
+    # -------------------------------------------------
+
+    with tab5:
+
+        top_down = merged.sort_values("Variacao").head(10)
+
+        st.dataframe(
+            top_down[[
+                "Produto",
+                "Descricao",
+                "Custo Total_atual",
+                "Variacao"
+            ]],
+            use_container_width=True
+        )
