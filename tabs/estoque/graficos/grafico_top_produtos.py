@@ -99,6 +99,13 @@ def render(df_hist, moeda_br, data_selecionada):
 
         df_var = grp_atual.merge(grp_mom, on="Produto", how="outer").fillna(0)
         df_var = df_var.merge(desc, on="Produto", how="left")
+        # Deduplicar — se produto aparece mais de uma vez (mudança de conta), somar
+        df_var = df_var.groupby("Produto").agg(
+            Valor_Atual=("Valor Atual", "sum"),
+            Valor_MoM=("Valor MoM", "sum"),
+            Descricao=("Descricao", "first"),
+        ).reset_index()
+        df_var.columns = ["Produto", "Valor Atual", "Valor MoM", "Descricao"]
         df_var["Variacao"] = df_var["Valor Atual"] - df_var["Valor MoM"]
         df_var["ProdDesc"] = df_var["Produto"] + " — " + df_var["Descricao"].fillna("").str[:40]
 
