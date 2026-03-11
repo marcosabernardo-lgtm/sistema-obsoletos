@@ -49,7 +49,7 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
     total_perc  = (total_var / total_mom * 100) if total_mom != 0 else 0
 
     def formatar_perc(perc):
-        if perc > 1:   return f"⬆ {abs(perc):.0f}%"
+        if perc > 1:    return f"⬆ {abs(perc):.0f}%"
         elif perc < -1: return f"⬇ {abs(perc):.0f}%"
         else:           return f"● {abs(perc):.0f}%"
 
@@ -73,9 +73,13 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
 
     df_display = pd.DataFrame(linhas)
 
+    # Guardar _perc antes de dropar
+    percs = df_display["_perc"].tolist()
+    df_display = df_display.drop(columns=["_perc"])
+
     # Styler
     def colorir_perc(row):
-        perc   = row["_perc"]
+        perc   = percs[row.name] if row.name < len(percs) else 0
         styles = [""] * len(row)
         idx_p  = list(row.index).index("% MoM")
         if perc > 1:    styles[idx_p] = "color: #ff6b6b; font-weight: 600"
@@ -108,7 +112,6 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
             ]},
         ])
         .hide(axis="index")
-        .hide(["_perc"], axis="columns")
     )
 
     st.dataframe(styled, use_container_width=True, height=500)
