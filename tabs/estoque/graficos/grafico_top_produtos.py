@@ -47,7 +47,7 @@ def render(df_hist, moeda_br, data_selecionada):
         )
         df_valor["ProdDesc"] = df_valor["Produto"] + " — " + df_valor["Descricao"].str[:40]
 
-        chart_valor = alt.Chart(df_valor).mark_bar(color="#EC6E21", cornerRadiusTopRight=4, cornerRadiusBottomRight=4).encode(
+        chart_valor = alt.Chart(df_valor).mark_bar(color="#FF9A4D", cornerRadiusTopRight=4, cornerRadiusBottomRight=4).encode(
             y=alt.Y("ProdDesc:N", sort="-x", title=None,
                     axis=alt.Axis(labelColor="white", labelFontSize=11, labelLimit=300)),
             x=alt.X("Valor Estoque:Q", title=None,

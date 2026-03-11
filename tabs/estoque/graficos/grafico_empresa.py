@@ -22,7 +22,7 @@ def render(df, moeda_br):
     )
 
     bars = alt.Chart(empresa).mark_bar(
-        color="#ff7f0e",
+        color="#FF9A4D",
         cornerRadiusTopLeft=4,
         cornerRadiusTopRight=4
     ).encode(
