@@ -180,6 +180,7 @@ col1.markdown(f"""
 <div class="kpi-card">
     <div class="kpi-title">Valor Estoque {data_selecionada.strftime('%y-%b').lower()}</div>
     <div class="kpi-value">{moeda_br(valor_atual)}</div>
+    <div class="kpi-sub">&nbsp;</div>
 </div>
 """, unsafe_allow_html=True)
 
