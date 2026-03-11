@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
-import os
 import glob
 
-from tabs.estoque.evolucao_estoque_total import render as render_estoque_total
+from tabs.estoque.evolucao_estoque import render as render_evolucao_estoque
 
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
@@ -62,7 +61,7 @@ df_hist = pd.concat(dfs, ignore_index=True)
 
 
 # -------------------------------------------------
-# VERIFICAR E TRATAR DADOS
+# TRATAR DADOS
 # -------------------------------------------------
 
 if df_hist.empty:
@@ -78,6 +77,7 @@ df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"])
 # -------------------------------------------------
 
 try:
-    render_estoque_total(df_hist)
+    render_evolucao_estoque(df_hist, moeda_br)
+
 except Exception as e:
     st.exception(e)
