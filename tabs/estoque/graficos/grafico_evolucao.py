@@ -16,28 +16,19 @@ def render(df):
         .sort_values("Data Fechamento")
     )
 
-    # -----------------------------
-    # calendário estilo Power BI
-    # -----------------------------
-
+    # calendário
     evolucao["Ano"] = evolucao["Data Fechamento"].dt.year
     evolucao["Mes"] = evolucao["Data Fechamento"].dt.month
     evolucao["AnoMes"] = evolucao["Ano"] * 100 + evolucao["Mes"]
 
     evolucao["AnoMesLabel"] = evolucao["Data Fechamento"].dt.strftime("%y-%b").str.lower()
 
-    # -----------------------------
-    # label dos valores
-    # -----------------------------
-
+    # label valor
     evolucao["Label"] = evolucao["Custo Total"].apply(
         lambda x: f"R$ {x/1_000_000:.1f} Mi"
     )
 
-    # -----------------------------
-    # base
-    # -----------------------------
-
+    # gráfico base
     base = alt.Chart(evolucao).encode(
 
         x=alt.X(
@@ -48,57 +39,45 @@ def render(df):
                 labelAngle=0,
                 labelColor="white",
                 labelFontSize=11,
-                tickSize=0
+                grid=False
             )
         ),
 
         y=alt.Y(
             "Custo Total:Q",
-            axis=None   # remove eixo Y completamente
+            axis=None
         )
     )
-
-    # -----------------------------
-    # area
-    # -----------------------------
 
     area = base.mark_area(
         opacity=0.35,
         color="#ff7f0e"
     )
 
-    # -----------------------------
-    # linha
-    # -----------------------------
-
     line = base.mark_line(
         color="#ff7f0e",
         strokeWidth=3
     )
-
-    # -----------------------------
-    # pontos
-    # -----------------------------
 
     points = base.mark_circle(
         size=70,
         color="#ff7f0e"
     )
 
-    # -----------------------------
-    # labels
-    # -----------------------------
-
     labels = base.mark_text(
         dy=-12,
-        fontSize=11,
-        color="white"
+        color="white",
+        fontSize=11
     ).encode(
         text="Label"
     )
 
-    chart = (area + line + points + labels).properties(
+    chart = (
+        area + line + points + labels
+    ).properties(
         height=420
+    ).configure_axis(
+        grid=False
     )
 
     st.altair_chart(chart, use_container_width=True)
