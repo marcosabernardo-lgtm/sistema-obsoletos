@@ -40,7 +40,6 @@ def render(df_hist, moeda_br, data_selecionada):
             .reset_index(drop=True)
         )
 
-        df_valor["Rank"] = df_valor.index + 1
         df_valor["Label"] = df_valor["Valor Estoque"].apply(
             lambda x: f"R$ {x/1_000_000:.2f} Mi" if x >= 1_000_000
             else f"R$ {x/1_000:.1f} Mil"
@@ -82,18 +81,26 @@ def render(df_hist, moeda_br, data_selecionada):
             st.info("Sem dados do mês anterior para calcular variação.")
             return
 
+        # Agrupar por Produto apenas para evitar duplicações no merge
         grp_atual = (
-            df_atual.groupby(["Produto", "Descricao", "Conta"])["Custo Total"]
+            df_atual.groupby("Produto")["Custo Total"]
             .sum().reset_index().rename(columns={"Custo Total": "Valor Atual"})
         )
         grp_mom = (
-            df_mom.groupby(["Produto", "Descricao", "Conta"])["Custo Total"]
+            df_mom.groupby("Produto")["Custo Total"]
             .sum().reset_index().rename(columns={"Custo Total": "Valor MoM"})
         )
 
-        df_var = grp_atual.merge(grp_mom, on=["Produto", "Descricao", "Conta"], how="outer").fillna(0)
+        # Pegar descrição e conta do período atual
+        desc = (
+            df_atual.groupby("Produto")[["Descricao", "Conta"]]
+            .first().reset_index()
+        )
+
+        df_var = grp_atual.merge(grp_mom, on="Produto", how="outer").fillna(0)
+        df_var = df_var.merge(desc, on="Produto", how="left")
         df_var["Variacao"] = df_var["Valor Atual"] - df_var["Valor MoM"]
-        df_var["ProdDesc"] = df_var["Produto"] + " — " + df_var["Descricao"].str[:40]
+        df_var["ProdDesc"] = df_var["Produto"] + " — " + df_var["Descricao"].fillna("").str[:40]
 
         col1, col2 = st.columns(2)
 
@@ -106,8 +113,8 @@ def render(df_hist, moeda_br, data_selecionada):
                 .head(top_n).reset_index(drop=True)
             )
             df_alta["Label"] = df_alta["Variacao"].apply(
-                lambda x: f"R$ {x/1_000_000:.2f} Mi" if abs(x) >= 1_000_000
-                else f"R$ {x/1_000:.1f} Mil"
+                lambda x: f"R$ {abs(x)/1_000_000:.2f} Mi" if abs(x) >= 1_000_000
+                else f"R$ {abs(x)/1_000:.1f} Mil"
             )
 
             chart_alta = alt.Chart(df_alta).mark_bar(color="#ff6b6b", cornerRadiusTopRight=4, cornerRadiusBottomRight=4).encode(
@@ -144,24 +151,26 @@ def render(df_hist, moeda_br, data_selecionada):
                 .head(top_n).reset_index(drop=True)
             )
             df_queda["Label"] = df_queda["Variacao"].apply(
-                lambda x: f"R$ {x/1_000_000:.2f} Mi" if abs(x) >= 1_000_000
-                else f"R$ {x/1_000:.1f} Mil"
+                lambda x: f"R$ {abs(x)/1_000_000:.2f} Mi" if abs(x) >= 1_000_000
+                else f"R$ {abs(x)/1_000:.1f} Mil"
             )
+            # Usar valor absoluto para barras ficarem positivas (crescendo para direita)
+            df_queda["VariacaoAbs"] = df_queda["Variacao"].abs()
 
             chart_queda = alt.Chart(df_queda).mark_bar(color="#51cf66", cornerRadiusTopRight=4, cornerRadiusBottomRight=4).encode(
-                y=alt.Y("ProdDesc:N", sort="x", title=None,
+                y=alt.Y("ProdDesc:N", sort="-x", title=None,
                         axis=alt.Axis(labelColor="white", labelFontSize=10, labelLimit=250)),
-                x=alt.X("Variacao:Q", title=None,
+                x=alt.X("VariacaoAbs:Q", title=None,
                         axis=alt.Axis(labels=False, ticks=False, grid=False, domain=False)),
                 tooltip=[
                     alt.Tooltip("Produto:N", title="Código"),
                     alt.Tooltip("Descricao:N", title="Descrição"),
-                    alt.Tooltip("Label:N", title="Variação"),
+                    alt.Tooltip("Label:N", title="Redução"),
                 ]
             )
-            text_queda = alt.Chart(df_queda).mark_text(align="right", dx=-5, color="white", fontSize=10).encode(
-                y=alt.Y("ProdDesc:N", sort="x"),
-                x="Variacao:Q",
+            text_queda = alt.Chart(df_queda).mark_text(align="left", dx=5, color="white", fontSize=10).encode(
+                y=alt.Y("ProdDesc:N", sort="-x"),
+                x="VariacaoAbs:Q",
                 text="Label:N"
             )
             st.altair_chart(
