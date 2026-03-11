@@ -4,9 +4,7 @@ import altair as alt
 
 
 def render(df):
-
     df = df.copy()
-
     df["Data Fechamento"] = pd.to_datetime(df["Data Fechamento"])
 
     evolucao = (
@@ -16,21 +14,16 @@ def render(df):
         .sort_values("Data Fechamento")
     )
 
-    # calendário
     evolucao["Ano"] = evolucao["Data Fechamento"].dt.year
     evolucao["Mes"] = evolucao["Data Fechamento"].dt.month
     evolucao["AnoMes"] = evolucao["Ano"] * 100 + evolucao["Mes"]
-
     evolucao["AnoMesLabel"] = evolucao["Data Fechamento"].dt.strftime("%y-%b").str.lower()
 
-    # label valor
     evolucao["Label"] = evolucao["Custo Total"].apply(
         lambda x: f"R$ {x/1_000_000:.1f} Mi"
     )
 
-    # gráfico base
     base = alt.Chart(evolucao).encode(
-
         x=alt.X(
             "AnoMesLabel:N",
             sort=alt.SortField(field="AnoMes"),
@@ -39,10 +32,11 @@ def render(df):
                 labelAngle=0,
                 labelColor="white",
                 labelFontSize=11,
-                grid=False
+                grid=False,
+                tickColor="white",
+                domainColor="white"
             )
         ),
-
         y=alt.Y(
             "Custo Total:Q",
             axis=None
@@ -76,8 +70,14 @@ def render(df):
         area + line + points + labels
     ).properties(
         height=420
-    ).configure_axis(
-        grid=False
+    ).configure_view(
+        strokeWidth=0
+    ).configure_axisX(
+        grid=False,
+        labelColor="white",
+        labelAngle=0,
+        tickColor="white",
+        domainColor="white"
     )
 
     st.altair_chart(chart, use_container_width=True)
