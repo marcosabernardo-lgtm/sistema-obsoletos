@@ -1,19 +1,40 @@
 import pandas as pd
 import os
 
-PASTA = "data/estoque"
+CAMINHO = "data/estoque/estoque_historico.parquet"
 
 
-def salvar_fechamento_estoque(df):
+def salvar_fechamento_estoque(df_novo):
 
-    os.makedirs(PASTA, exist_ok=True)
+    # garantir datetime
+    df_novo["Data Fechamento"] = pd.to_datetime(df_novo["Data Fechamento"])
 
-    data_ref = pd.to_datetime(df["Data Fechamento"].iloc[0])
+    data_ref = df_novo["Data Fechamento"].iloc[0]
 
-    nome = data_ref.strftime("%Y_%m")
+    # -------------------------------------------------
+    # SE JÁ EXISTE BASE HISTÓRICA
+    # -------------------------------------------------
 
-    caminho = f"{PASTA}/{nome}.parquet"
+    if os.path.exists(CAMINHO):
 
-    df.to_parquet(caminho, index=False)
+        df_hist = pd.read_parquet(CAMINHO)
 
-    return caminho
+        df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"])
+
+        # remover mês que será substituído
+        df_hist = df_hist[df_hist["Data Fechamento"] != data_ref]
+
+        # concatenar novo fechamento
+        df_final = pd.concat([df_hist, df_novo], ignore_index=True)
+
+    else:
+
+        df_final = df_novo.copy()
+
+    # ordenar histórico
+    df_final = df_final.sort_values("Data Fechamento")
+
+    # salvar
+    df_final.to_parquet(CAMINHO, index=False)
+
+    return CAMINHO

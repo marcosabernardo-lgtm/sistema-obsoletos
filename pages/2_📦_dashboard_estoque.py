@@ -1,11 +1,14 @@
 import streamlit as st
 import pandas as pd
-import glob
+import os
 
 from tabs.estoque.evolucao_estoque import render as render_evolucao_estoque
 
 
-st.set_page_config(page_title="Dashboard Estoque", layout="wide")
+st.set_page_config(
+    page_title="Dashboard Estoque",
+    layout="wide"
+)
 
 st.title("📦 Dashboard Evolução de Estoque")
 
@@ -21,19 +24,17 @@ def moeda_br(valor):
 
 
 # -------------------------------------------------
-# PASTA DATA LAKE
+# CAMINHO DO DATA LAKE
 # -------------------------------------------------
 
-PASTA = "data/estoque"
+CAMINHO_BASE = "data/estoque/estoque_historico.parquet"
 
 
 # -------------------------------------------------
-# VERIFICAR SE EXISTEM FECHAMENTOS
+# VERIFICAR SE EXISTE BASE
 # -------------------------------------------------
 
-arquivos = glob.glob(f"{PASTA}/*.parquet")
-
-if len(arquivos) == 0:
+if not os.path.exists(CAMINHO_BASE):
 
     st.info("Nenhum fechamento de estoque processado ainda.")
 
@@ -48,36 +49,59 @@ Para utilizar este dashboard:
 
 
 # -------------------------------------------------
-# CARREGAR TODOS OS FECHAMENTOS
-# -------------------------------------------------
-
-dfs = []
-
-for arq in arquivos:
-    df = pd.read_parquet(arq)
-    dfs.append(df)
-
-df_hist = pd.concat(dfs, ignore_index=True)
-
-
-# -------------------------------------------------
-# TRATAR DADOS
-# -------------------------------------------------
-
-if df_hist.empty:
-    st.warning("⚠️ Base de dados vazia.")
-    st.stop()
-
-df_hist["Custo Total"] = pd.to_numeric(df_hist["Custo Total"], errors="coerce").fillna(0)
-df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"])
-
-
-# -------------------------------------------------
-# RENDER
+# CARREGAR BASE HISTÓRICA
 # -------------------------------------------------
 
 try:
-    render_evolucao_estoque(df_hist, moeda_br)
+
+    df_hist = pd.read_parquet(CAMINHO_BASE)
 
 except Exception as e:
+
+    st.error("Erro ao carregar a base de estoque.")
+    st.exception(e)
+    st.stop()
+
+
+# -------------------------------------------------
+# TRATAMENTO DOS DADOS
+# -------------------------------------------------
+
+if df_hist.empty:
+
+    st.warning("⚠️ Base de dados vazia.")
+    st.stop()
+
+df_hist["Custo Total"] = pd.to_numeric(
+    df_hist["Custo Total"],
+    errors="coerce"
+).fillna(0)
+
+df_hist["Data Fechamento"] = pd.to_datetime(
+    df_hist["Data Fechamento"],
+    errors="coerce"
+)
+
+
+# -------------------------------------------------
+# ORDENAR HISTÓRICO
+# -------------------------------------------------
+
+df_hist = df_hist.sort_values("Data Fechamento")
+
+
+# -------------------------------------------------
+# RENDER DASHBOARD
+# -------------------------------------------------
+
+try:
+
+    render_evolucao_estoque(
+        df_hist,
+        moeda_br
+    )
+
+except Exception as e:
+
+    st.error("Erro ao renderizar o dashboard.")
     st.exception(e)
