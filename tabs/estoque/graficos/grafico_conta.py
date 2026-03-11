@@ -50,21 +50,18 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
     total_perc  = ((total_atual - total_mom) / total_mom * 100) if total_mom != 0 else 0
 
     # Helpers
-    def cor_valor(v):
-        return "color:#ff6b6b" if v < 0 else "color:white"
-
+    # Estoque alto = ruim → subiu = vermelho, caiu = verde
     def icone_perc(perc):
         if perc > 1:
-            return '<span style="color:#51cf66;font-weight:700">&#11014; ' + f'{abs(perc):.0f}%</span>'
+            return '<span style="color:#ff6b6b;font-weight:700">&#11014; ' + f'{abs(perc):.0f}%</span>'
         elif perc < -1:
-            return '<span style="color:#ff6b6b;font-weight:700">&#11015; ' + f'{abs(perc):.0f}%</span>'
+            return '<span style="color:#51cf66;font-weight:700">&#11015; ' + f'{abs(perc):.0f}%</span>'
         else:
             return '<span style="color:#f0a500;font-weight:700">&#9679; ' + f'{abs(perc):.0f}%</span>'
 
     # Montar linhas HTML
     linhas_html = ""
     for _, row in df_tabela.iterrows():
-        cv = cor_valor(row["Valor MoM"] - row["Valor Estoque"])  # vermelho se MoM < atual (regrediu)
         linhas_html += (
             "<tr>"
             "<td>" + str(row['Conta']) + "</td>"
