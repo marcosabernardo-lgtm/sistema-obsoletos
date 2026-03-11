@@ -82,9 +82,9 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
         perc   = percs[row.name] if row.name < len(percs) else 0
         styles = [""] * len(row)
         idx_p  = list(row.index).index("% MoM")
-        if perc > 1:    styles[idx_p] = "color: #ff6b6b; font-weight: 600"
-        elif perc < -1: styles[idx_p] = "color: #51cf66; font-weight: 600"
-        else:           styles[idx_p] = "color: #f0a500; font-weight: 600"
+        if perc > 1:    styles[idx_p] = "color: #51cf66; font-weight: 600"  # verde ⬆
+        elif perc < -1: styles[idx_p] = "color: #ff6b6b; font-weight: 600"  # vermelho ⬇
+        else:           styles[idx_p] = "color: #f0a500; font-weight: 600"  # amarelo ●
         return styles
 
     def colorir_total(row):
