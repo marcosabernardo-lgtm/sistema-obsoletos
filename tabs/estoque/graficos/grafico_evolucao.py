@@ -5,10 +5,6 @@ import altair as alt
 
 def render(df):
 
-    # -------------------------------------------------
-    # BASE
-    # -------------------------------------------------
-
     df = df.copy()
 
     df["Data Fechamento"] = pd.to_datetime(df["Data Fechamento"])
@@ -21,7 +17,7 @@ def render(df):
     )
 
     # -------------------------------------------------
-    # COLUNAS CALENDÁRIO (MESMO CONCEITO DO POWER BI)
+    # COLUNAS CALENDÁRIO
     # -------------------------------------------------
 
     evolucao["Ano"] = evolucao["Data Fechamento"].dt.year
@@ -32,7 +28,7 @@ def render(df):
     evolucao["AnoMesLabel"] = evolucao["Data Fechamento"].dt.strftime("%y-%b").str.lower()
 
     # -------------------------------------------------
-    # LABEL DO VALOR
+    # LABEL DOS VALORES
     # -------------------------------------------------
 
     evolucao["Label"] = evolucao["Custo Total"].apply(
@@ -47,16 +43,18 @@ def render(df):
 
         x=alt.X(
             "AnoMesLabel:N",
-            title="Fechamento",
-            sort=alt.SortField(
-                field="AnoMes",
-                order="ascending"
+            sort=alt.SortField(field="AnoMes", order="ascending"),
+            axis=alt.Axis(
+                title=None,
+                labelAngle=0,
+                labelColor="white",
+                labelFontSize=11
             )
         ),
 
         y=alt.Y(
             "Custo Total:Q",
-            title="Valor Estoque"
+            axis=None
         )
     )
 
@@ -88,16 +86,19 @@ def render(df):
     )
 
     # -------------------------------------------------
-    # LABELS
+    # LABELS DOS VALORES
     # -------------------------------------------------
 
     labels = base.mark_text(
         dy=-12,
-        fontSize=11
+        fontSize=11,
+        color="white"
     ).encode(
         text="Label"
     )
 
-    chart = area + line + points + labels
+    chart = (area + line + points + labels).properties(
+        height=420
+    )
 
     st.altair_chart(chart, use_container_width=True)
