@@ -91,11 +91,10 @@ def render(df_hist, moeda_br, data_selecionada):
             .sum().reset_index().rename(columns={"Custo Total": "Valor MoM"})
         )
 
-        # Pegar descrição e conta do período atual
-        desc = (
-            df_atual.groupby("Produto")[["Descricao", "Conta"]]
-            .first().reset_index()
-        )
+        # Pegar descrição do atual com fallback para o anterior
+        desc_atual = df_atual.groupby("Produto")[["Descricao"]].first().reset_index()
+        desc_mom   = df_mom.groupby("Produto")[["Descricao"]].first().reset_index()
+        desc = pd.concat([desc_mom, desc_atual]).drop_duplicates(subset="Produto", keep="last")
 
         df_var = grp_atual.merge(grp_mom, on="Produto", how="outer").fillna(0)
         df_var = df_var.merge(desc, on="Produto", how="left")
