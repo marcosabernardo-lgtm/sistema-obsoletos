@@ -48,7 +48,7 @@ div[data-testid="stDataFrame"] div[role="gridcell"]{
 }
 .kpi-title{ font-size:13px; color:#ccc; }
 .kpi-value{ font-size:24px; font-weight:700; color:white; }
-.kpi-sub{ font-size:12px; color:#aaa; margin-top:4px; }
+.kpi-sub{ font-size:16px; color:#aaa; margin-top:6px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -179,7 +179,7 @@ col1, col2, col3 = st.columns(3)
 col1.markdown(f"""
 <div class="kpi-card">
     <div class="kpi-title">Valor Estoque {data_selecionada.strftime('%y-%b').lower()}</div>
-    <div class="kpi-value">{moeda_br_curta(valor_atual)}</div>
+    <div class="kpi-value">{moeda_br(valor_atual)}</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -188,7 +188,7 @@ if valor_mom is not None:
     col2.markdown(f"""
 <div class="kpi-card">
     <div class="kpi-title">Valor Estoque MoM {pd.Timestamp(data_mom).strftime('%y-%b').lower()}</div>
-    <div class="kpi-value">{moeda_br_curta(valor_mom)}</div>
+    <div class="kpi-value">{moeda_br(valor_mom)}</div>
     {sub_mom}
 </div>
 """, unsafe_allow_html=True)
@@ -200,7 +200,7 @@ if valor_yoy is not None:
     col3.markdown(f"""
 <div class="kpi-card">
     <div class="kpi-title">Valor Estoque YoY {pd.Timestamp(data_yoy).strftime('%y-%b').lower()}</div>
-    <div class="kpi-value">{moeda_br_curta(valor_yoy)}</div>
+    <div class="kpi-value">{moeda_br(valor_yoy)}</div>
     {sub_yoy}
 </div>
 """, unsafe_allow_html=True)
