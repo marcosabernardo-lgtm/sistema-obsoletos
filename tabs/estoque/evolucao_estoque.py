@@ -3,7 +3,7 @@ import streamlit as st
 from tabs.estoque.graficos.grafico_evolucao import render as grafico_evolucao
 
 
-def render(df_hist, moeda_br):
+def render(df_hist, moeda_br, df_kpi=None, data_selecionada=None, valor_mom=None, valor_yoy=None):
 
     st.subheader("📦 Evolução de Estoque")
 
