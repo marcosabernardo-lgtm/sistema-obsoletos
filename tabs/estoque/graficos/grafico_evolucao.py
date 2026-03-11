@@ -16,78 +16,78 @@ def render(df):
         .sort_values("Data Fechamento")
     )
 
-    # -------------------------------------------------
-    # COLUNAS CALENDÁRIO
-    # -------------------------------------------------
+    # -----------------------------
+    # calendário estilo Power BI
+    # -----------------------------
 
     evolucao["Ano"] = evolucao["Data Fechamento"].dt.year
     evolucao["Mes"] = evolucao["Data Fechamento"].dt.month
-
     evolucao["AnoMes"] = evolucao["Ano"] * 100 + evolucao["Mes"]
 
     evolucao["AnoMesLabel"] = evolucao["Data Fechamento"].dt.strftime("%y-%b").str.lower()
 
-    # -------------------------------------------------
-    # LABEL DOS VALORES
-    # -------------------------------------------------
+    # -----------------------------
+    # label dos valores
+    # -----------------------------
 
     evolucao["Label"] = evolucao["Custo Total"].apply(
         lambda x: f"R$ {x/1_000_000:.1f} Mi"
     )
 
-    # -------------------------------------------------
-    # BASE DO GRÁFICO
-    # -------------------------------------------------
+    # -----------------------------
+    # base
+    # -----------------------------
 
     base = alt.Chart(evolucao).encode(
 
         x=alt.X(
             "AnoMesLabel:N",
-            sort=alt.SortField(field="AnoMes", order="ascending"),
+            sort=alt.SortField(field="AnoMes"),
             axis=alt.Axis(
                 title=None,
                 labelAngle=0,
                 labelColor="white",
-                labelFontSize=11
+                labelFontSize=11,
+                tickSize=0
             )
         ),
 
         y=alt.Y(
             "Custo Total:Q",
-            axis=None
+            axis=None   # remove eixo Y completamente
         )
     )
 
-    # -------------------------------------------------
-    # AREA
-    # -------------------------------------------------
+    # -----------------------------
+    # area
+    # -----------------------------
 
     area = base.mark_area(
         opacity=0.35,
         color="#ff7f0e"
     )
 
-    # -------------------------------------------------
-    # LINHA
-    # -------------------------------------------------
+    # -----------------------------
+    # linha
+    # -----------------------------
 
     line = base.mark_line(
         color="#ff7f0e",
         strokeWidth=3
     )
 
-    # -------------------------------------------------
-    # PONTOS
-    # -------------------------------------------------
+    # -----------------------------
+    # pontos
+    # -----------------------------
 
     points = base.mark_circle(
         size=70,
         color="#ff7f0e"
     )
 
-    # -------------------------------------------------
-    # LABELS DOS VALORES
-    # -------------------------------------------------
+    # -----------------------------
+    # labels
+    # -----------------------------
 
     labels = base.mark_text(
         dy=-12,
