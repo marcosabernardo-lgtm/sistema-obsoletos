@@ -48,70 +48,77 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
     total_var   = total_atual - total_mom
     total_perc  = (total_var / total_mom * 100) if total_mom != 0 else 0
 
-    def formatar_perc(perc):
-        if perc > 1:    return f"⬆ {abs(perc):.0f}%"
-        elif perc < -1: return f"⬇ {abs(perc):.0f}%"
-        else:           return f"● {abs(perc):.0f}%"
+    # Helpers
+    def cor_valor(v):
+        return "color:#ff6b6b" if v < 0 else "color:white"
 
-    # Montar linhas
-    linhas = []
+    def icone_perc(perc):
+        if perc > 1:    return f'<span style="color:#51cf66;font-weight:700">⬆ {abs(perc):.0f}%</span>'
+        elif perc < -1: return f'<span style="color:#ff6b6b;font-weight:700">⬇ {abs(perc):.0f}%</span>'
+        else:           return f'<span style="color:#f0a500;font-weight:700">● {abs(perc):.0f}%</span>'
+
+    # Montar linhas HTML
+    linhas_html = ""
     for _, row in df_tabela.iterrows():
-        linhas.append({
-            "Conta":                 row["Conta"],
-            "Valor Estoque (Total)": moeda_br(row["Valor Estoque"]),
-            "Vir Est MoM":           moeda_br(row["Var MoM"]),
-            "% MoM":                 formatar_perc(row["Perc MoM"]),
-            "_perc":                 row["Perc MoM"],
-        })
-    linhas.append({
-        "Conta":                 "Total",
-        "Valor Estoque (Total)": moeda_br(total_atual),
-        "Vir Est MoM":           moeda_br(total_var),
-        "% MoM":                 formatar_perc(total_perc),
-        "_perc":                 total_perc,
-    })
+        cv = cor_valor(row["Var MoM"])
+        linhas_html += f"""
+        <tr>
+            <td>{row['Conta']}</td>
+            <td>{moeda_br(row['Valor Estoque'])}</td>
+            <td style="{cv}">{moeda_br(row['Var MoM'])}</td>
+            <td>{icone_perc(row['Perc MoM'])}</td>
+        </tr>"""
 
-    df_display = pd.DataFrame(linhas)
+    # Linha total
+    cv_total = cor_valor(total_var)
+    total_html = f"""
+        <tr style="font-weight:700;border-top:2px solid #EC6E21">
+            <td>Total</td>
+            <td>{moeda_br(total_atual)}</td>
+            <td style="{cv_total}">{moeda_br(total_var)}</td>
+            <td>{icone_perc(total_perc)}</td>
+        </tr>"""
 
-    # Guardar _perc antes de dropar
-    percs = df_display["_perc"].tolist()
-    df_display = df_display.drop(columns=["_perc"])
+    html = f"""
+    <style>
+    .tb-conta {{
+        width:100%;
+        border-collapse:collapse;
+        font-size:14px;
+        color:white;
+    }}
+    .tb-conta th {{
+        background-color:#0f5a60;
+        color:white;
+        padding:10px 14px;
+        text-align:left;
+        border-bottom:2px solid #EC6E21;
+        font-weight:700;
+    }}
+    .tb-conta th:not(:first-child) {{ text-align:right; }}
+    .tb-conta td {{
+        padding:8px 14px;
+        border-bottom:1px solid #1a6e75;
+        background-color:#005562;
+        color:white;
+    }}
+    .tb-conta td:not(:first-child) {{ text-align:right; }}
+    .tb-conta tr:hover td {{ background-color:#0a6570; }}
+    </style>
+    <table class="tb-conta">
+        <thead>
+            <tr>
+                <th>Conta</th>
+                <th>Valor Estoque (Total)</th>
+                <th>Vir Est MoM</th>
+                <th>% MoM</th>
+            </tr>
+        </thead>
+        <tbody>
+            {linhas_html}
+            {total_html}
+        </tbody>
+    </table>
+    """
 
-    # Styler
-    def colorir_perc(row):
-        perc   = percs[row.name] if row.name < len(percs) else 0
-        styles = [""] * len(row)
-        idx_p  = list(row.index).index("% MoM")
-        if perc > 1:    styles[idx_p] = "color: #51cf66; font-weight: 600"  # verde ⬆
-        elif perc < -1: styles[idx_p] = "color: #ff6b6b; font-weight: 600"  # vermelho ⬇
-        else:           styles[idx_p] = "color: #f0a500; font-weight: 600"  # amarelo ●
-        return styles
-
-    def colorir_total(row):
-        if row["Conta"] == "Total":
-            return ["font-weight: 700; border-top: 2px solid #EC6E21"] * len(row)
-        return [""] * len(row)
-
-    styled = (
-        df_display.style
-        .apply(colorir_perc, axis=1)
-        .apply(colorir_total, axis=1)
-        .set_properties(**{
-            "background-color": "#005562",
-            "color": "white",
-            "border": "1px solid #1a6e75",
-            "padding": "8px 12px",
-        })
-        .set_table_styles([
-            {"selector": "th", "props": [
-                ("background-color", "#0f5a60"),
-                ("color", "white"),
-                ("font-weight", "700"),
-                ("border-bottom", "2px solid #EC6E21"),
-                ("padding", "10px 12px"),
-            ]},
-        ])
-        .hide(axis="index")
-    )
-
-    st.dataframe(styled, use_container_width=True, height=500)
+    st.markdown(html, unsafe_allow_html=True)
