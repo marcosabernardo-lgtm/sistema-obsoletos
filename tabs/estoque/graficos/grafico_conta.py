@@ -36,17 +36,18 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
 
     df_tabela = grp_atual.merge(grp_mom, on="Conta", how="left")
     df_tabela["Valor MoM"] = df_tabela["Valor MoM"].fillna(0)
-    df_tabela["Var MoM"]   = df_tabela["Valor Estoque"] - df_tabela["Valor MoM"]
-    df_tabela["Perc MoM"]  = df_tabela.apply(
-        lambda r: (r["Var MoM"] / r["Valor MoM"] * 100) if r["Valor MoM"] != 0 else 0, axis=1
+
+    # % MoM = (atual - anterior) / anterior * 100
+    df_tabela["Perc MoM"] = df_tabela.apply(
+        lambda r: ((r["Valor Estoque"] - r["Valor MoM"]) / r["Valor MoM"] * 100) if r["Valor MoM"] != 0 else 0,
+        axis=1
     )
     df_tabela = df_tabela.sort_values("Conta").reset_index(drop=True)
 
     # Totais
     total_atual = df_tabela["Valor Estoque"].sum()
     total_mom   = df_tabela["Valor MoM"].sum()
-    total_var   = total_atual - total_mom
-    total_perc  = (total_var / total_mom * 100) if total_mom != 0 else 0
+    total_perc  = ((total_atual - total_mom) / total_mom * 100) if total_mom != 0 else 0
 
     # Helpers
     def cor_valor(v):
@@ -63,22 +64,21 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
     # Montar linhas HTML
     linhas_html = ""
     for _, row in df_tabela.iterrows():
-        cv = cor_valor(row["Var MoM"])
+        cv = cor_valor(row["Valor MoM"] - row["Valor Estoque"])  # vermelho se MoM < atual (regrediu)
         linhas_html += (
             "<tr>"
             "<td>" + str(row['Conta']) + "</td>"
             "<td>" + moeda_br(row['Valor Estoque']) + "</td>"
-            "<td style='" + cv + "'>" + moeda_br(row['Var MoM']) + "</td>"
+            "<td>" + moeda_br(row['Valor MoM']) + "</td>"
             "<td>" + icone_perc(row['Perc MoM']) + "</td>"
             "</tr>"
         )
 
-    cv_total = cor_valor(total_var)
     total_html = (
         "<tr style='font-weight:700;border-top:2px solid #EC6E21'>"
         "<td>Total</td>"
         "<td>" + moeda_br(total_atual) + "</td>"
-        "<td style='" + cv_total + "'>" + moeda_br(total_var) + "</td>"
+        "<td>" + moeda_br(total_mom) + "</td>"
         "<td>" + icone_perc(total_perc) + "</td>"
         "</tr>"
     )
