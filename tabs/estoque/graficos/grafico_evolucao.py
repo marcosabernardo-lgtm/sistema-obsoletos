@@ -39,32 +39,20 @@ def render(df):
         ),
         y=alt.Y(
             "Custo Total:Q",
-            axis=None
+            axis=alt.Axis(
+                title=None,
+                labels=False,
+                ticks=False,
+                grid=False,
+                domain=False
+            )
         )
     )
 
-    area = base.mark_area(
-        opacity=0.35,
-        color="#ff7f0e"
-    )
-
-    line = base.mark_line(
-        color="#ff7f0e",
-        strokeWidth=3
-    )
-
-    points = base.mark_circle(
-        size=70,
-        color="#ff7f0e"
-    )
-
-    labels = base.mark_text(
-        dy=-12,
-        color="white",
-        fontSize=11
-    ).encode(
-        text="Label"
-    )
+    area = base.mark_area(opacity=0.35, color="#ff7f0e")
+    line = base.mark_line(color="#ff7f0e", strokeWidth=3)
+    points = base.mark_circle(size=70, color="#ff7f0e")
+    labels = base.mark_text(dy=-12, color="white", fontSize=11).encode(text="Label")
 
     chart = (
         area + line + points + labels
@@ -78,6 +66,12 @@ def render(df):
         labelAngle=0,
         tickColor="white",
         domainColor="white"
+    ).configure_axisY(
+        grid=False,
+        labels=False,
+        ticks=False,
+        domain=False,
+        title=None
     )
 
     st.altair_chart(chart, use_container_width=True)
