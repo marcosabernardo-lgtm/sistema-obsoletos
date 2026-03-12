@@ -13,24 +13,33 @@ def render(df_hist, moeda_br, data_selecionada):
     df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"]).dt.normalize()
     data_selecionada = pd.Timestamp(data_selecionada.date())
 
-    meses = st.slider("Meses para calcular consumo médio", min_value=2, max_value=24, value=6, step=1)
-
     datas_sorted = sorted([d for d in df_hist["Data Fechamento"].unique() if d <= data_selecionada])
 
     if len(datas_sorted) < 2:
         st.info("Histórico insuficiente para calcular DIO.")
         return
 
-    datas_janela = datas_sorted[-meses:] if len(datas_sorted) >= meses else datas_sorted
+    # Janela de 12 meses
+    datas_janela = datas_sorted[-12:] if len(datas_sorted) >= 12 else datas_sorted
 
+    # ── Estoque atual ──────────────────────────────────────────────────────────
     df_atual = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
     desc = df_atual.groupby("Produto")[["Descricao", "Conta", "Empresa / Filial"]].first().reset_index()
 
     grp_atual = (
         df_atual.groupby("Produto")["Custo Total"]
-        .sum().reset_index().rename(columns={"Custo Total": "Valor Atual"})
+        .sum().reset_index().rename(columns={"Custo Total": "Custo Total Atual"})
     )
 
+    # ── Saldo Inicial = valor do produto na data mais antiga da janela ─────────
+    data_inicial = datas_janela[0]
+    df_inicial = df_hist[df_hist["Data Fechamento"] == data_inicial].copy()
+    grp_inicial = (
+        df_inicial.groupby("Produto")["Custo Total"]
+        .sum().reset_index().rename(columns={"Custo Total": "Saldo Inicial"})
+    )
+
+    # ── CPV 12 meses = soma de todas as reduções mensais na janela ─────────────
     df_janela = df_hist[df_hist["Data Fechamento"].isin(datas_janela)].copy()
 
     pivot = (
@@ -40,50 +49,76 @@ def render(df_hist, moeda_br, data_selecionada):
         .sort_index(axis=1)
     )
 
-    consumo_list = []
+    cpv_list = []
+    ult_mov_list = []
+
     for produto in pivot.index:
         valores = pivot.loc[produto].values
+        datas   = list(pivot.columns)
+
         reducoes = [max(0, valores[i] - valores[i+1]) for i in range(len(valores)-1)]
-        consumo_medio = np.mean(reducoes) if reducoes else 0
-        consumo_list.append({"Produto": produto, "Consumo Medio Mensal": consumo_medio})
+        cpv = sum(reducoes)
 
-    df_consumo = pd.DataFrame(consumo_list)
+        # Última movimentação = última data em que houve redução
+        ult_mov = None
+        for i in range(len(valores)-2, -1, -1):
+            if valores[i] > valores[i+1]:
+                ult_mov = datas[i+1]
+                break
 
-    df_dio = grp_atual.merge(df_consumo, on="Produto", how="left")
+        cpv_list.append({"Produto": produto, "CPV 12m": cpv})
+        ult_mov_list.append({"Produto": produto, "Ult Mov": ult_mov})
+
+    df_cpv    = pd.DataFrame(cpv_list)
+    df_ultmov = pd.DataFrame(ult_mov_list)
+
+    # ── Merge ──────────────────────────────────────────────────────────────────
+    df_dio = grp_atual.merge(grp_inicial, on="Produto", how="left")
+    df_dio = df_dio.merge(df_cpv, on="Produto", how="left")
+    df_dio = df_dio.merge(df_ultmov, on="Produto", how="left")
     df_dio = df_dio.merge(desc, on="Produto", how="left")
-    df_dio["Consumo Medio Mensal"] = df_dio["Consumo Medio Mensal"].fillna(0)
+
+    df_dio["Saldo Inicial"] = df_dio["Saldo Inicial"].fillna(0)
+    df_dio["CPV 12m"]       = df_dio["CPV 12m"].fillna(0)
+
+    # ── Cálculo DIO ───────────────────────────────────────────────────────────
+    # Estoque Médio = (Saldo Inicial + Custo Total Atual) / 2
+    # DIO = (Estoque Médio / CPV 12m) × 365
+    df_dio["Estoque Medio"] = (df_dio["Saldo Inicial"] + df_dio["Custo Total Atual"]) / 2
 
     def calcular_dio(row):
-        if row["Consumo Medio Mensal"] > 0:
-            return (row["Valor Atual"] / row["Consumo Medio Mensal"]) * 30
+        if row["CPV 12m"] > 0:
+            return (row["Estoque Medio"] / row["CPV 12m"]) * 365
         return None
 
     df_dio["DIO"] = df_dio.apply(calcular_dio, axis=1)
 
+    # ── Classificação ─────────────────────────────────────────────────────────
     def classificar(dio):
-        if dio is None:         return "Sem Consumo"
-        elif dio <= 30:         return "Giro Alto (≤30d)"
-        elif dio <= 90:         return "Giro Médio (31-90d)"
-        elif dio <= 180:        return "Giro Baixo (91-180d)"
-        else:                   return "Crítico (>180d)"
+        if dio is None:    return "Sem Consumo"
+        elif dio <= 30:    return "Giro Alto (≤30d)"
+        elif dio <= 90:    return "Giro Médio (31-90d)"
+        elif dio <= 180:   return "Giro Baixo (91-180d)"
+        else:              return "Crítico (>180d)"
 
     df_dio["Classificação"] = df_dio["DIO"].apply(classificar)
 
-    # Cards
-    total_estoque = df_dio["Valor Atual"].sum()
-
-    # DIO mediano — ignorar valores absurdos acima de 9999 dias
-    dio_validos  = df_dio[df_dio["DIO"].notna() & (df_dio["DIO"] < 9999)]["DIO"]
-    dio_mediano  = dio_validos.median() if not dio_validos.empty else None
+    # ── Cards ──────────────────────────────────────────────────────────────────
+    total_estoque = df_dio["Custo Total Atual"].sum()
+    dio_validos   = df_dio[df_dio["DIO"].notna() & (df_dio["DIO"] < 99999)]["DIO"]
+    dio_mediano   = dio_validos.median() if not dio_validos.empty else None
 
     qtd_alto    = len(df_dio[df_dio["Classificação"] == "Giro Alto (≤30d)"])
     qtd_medio   = len(df_dio[df_dio["Classificação"] == "Giro Médio (31-90d)"])
-    qtd_baixo   = len(df_dio[df_dio["Classificação"] == "Giro Baixo (91-180d)"])
     qtd_critico = len(df_dio[df_dio["Classificação"] == "Crítico (>180d)"])
     qtd_sem     = len(df_dio[df_dio["Classificação"] == "Sem Consumo"])
 
-    val_critico  = df_dio[df_dio["Classificação"].isin(["Crítico (>180d)", "Sem Consumo"])]["Valor Atual"].sum()
+    val_critico  = df_dio[df_dio["Classificação"].isin(["Crítico (>180d)", "Sem Consumo"])]["Custo Total Atual"].sum()
     perc_critico = (val_critico / total_estoque * 100) if total_estoque > 0 else 0
+
+    label_inicial = pd.Timestamp(data_inicial).strftime("%d/%m/%Y")
+    label_atual   = data_selecionada.strftime("%d/%m/%Y")
+    n_meses       = len(datas_janela)
 
     st.markdown("""
     <style>
@@ -107,7 +142,7 @@ def render(df_hist, moeda_br, data_selecionada):
     <div class="card-dio">
         <div class="titulo">DIO Mediano</div>
         <div class="valor">{f"{dio_mediano:.0f} dias" if dio_mediano is not None else "—"}</div>
-        <div class="sub" style="color:#ccc">últimos {meses} meses</div>
+        <div class="sub" style="color:#ccc">{label_inicial} → {label_atual} ({n_meses}m)</div>
     </div>""", unsafe_allow_html=True)
 
     c3.markdown(f"""
@@ -126,13 +161,14 @@ def render(df_hist, moeda_br, data_selecionada):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Tabela resumo por classificação
+    # ── Tabela resumo ──────────────────────────────────────────────────────────
+    ordem = ["Giro Alto (≤30d)", "Giro Médio (31-90d)", "Giro Baixo (91-180d)", "Crítico (>180d)", "Sem Consumo"]
+
     resumo = df_dio.groupby("Classificação").agg(
         Produtos=("Produto", "count"),
-        Valor=("Valor Atual", "sum")
+        Valor=("Custo Total Atual", "sum")
     ).reset_index()
 
-    ordem = ["Giro Alto (≤30d)", "Giro Médio (31-90d)", "Giro Baixo (91-180d)", "Crítico (>180d)", "Sem Consumo"]
     resumo["_ordem"] = resumo["Classificação"].apply(lambda x: ordem.index(x) if x in ordem else 99)
     resumo = resumo.sort_values("_ordem").drop(columns="_ordem")
 
@@ -169,7 +205,7 @@ def render(df_hist, moeda_br, data_selecionada):
         + "<th>Classificação</th><th>Produtos</th><th>Valor</th><th>% Estoque</th>"
         + "</tr></thead><tbody>" + linhas_resumo + "</tbody></table>")
 
-    # Filtro e tabela detalhada
+    # ── Filtro e tabela detalhada ──────────────────────────────────────────────
     filtro = st.selectbox("Filtrar por classificação", ["Todos"] + ordem)
 
     df_tabela = df_dio.copy() if filtro == "Todos" else df_dio[df_dio["Classificação"] == filtro].copy()
@@ -177,9 +213,9 @@ def render(df_hist, moeda_br, data_selecionada):
 
     linhas = ""
     for _, row in df_tabela.iterrows():
-        dio_val = row["DIO"]
-        dio_str = f"{dio_val:.0f} dias" if dio_val is not None and not (isinstance(dio_val, float) and np.isnan(dio_val)) else "—"
-        consumo_str = moeda_br(row["Consumo Medio Mensal"]) if row["Consumo Medio Mensal"] > 0 else "—"
+        dio_val  = row["DIO"]
+        dio_str  = f"{dio_val:.0f}" if dio_val is not None and not (isinstance(dio_val, float) and np.isnan(dio_val)) else "—"
+        ult_mov  = pd.Timestamp(row["Ult Mov"]).strftime("%d/%m/%Y") if pd.notna(row.get("Ult Mov")) else "—"
         linhas += (
             "<tr>"
             "<td>" + str(row["Produto"]) + "</td>"
@@ -187,9 +223,12 @@ def render(df_hist, moeda_br, data_selecionada):
             "<td>" + str(row.get("Conta", "")) + "</td>"
             "<td>" + str(row.get("Empresa / Filial", "")) + "</td>"
             "<td style='" + cor_class(row["Classificação"]) + "'>" + str(row["Classificação"]) + "</td>"
-            "<td>" + consumo_str + "</td>"
-            "<td>" + moeda_br(row["Valor Atual"]) + "</td>"
+            "<td>" + moeda_br(row["Saldo Inicial"]) + "</td>"
+            "<td>" + moeda_br(row["Custo Total Atual"]) + "</td>"
+            "<td>" + moeda_br(row["Estoque Medio"]) + "</td>"
+            "<td>" + moeda_br(row["CPV 12m"]) + "</td>"
             "<td>" + dio_str + "</td>"
+            "<td>" + ult_mov + "</td>"
             "</tr>"
         )
 
@@ -210,7 +249,8 @@ def render(df_hist, moeda_br, data_selecionada):
         + f"<p style='color:#aaa;font-size:12px'>{len(df_tabela)} produtos</p>"
         + "<table class='tb-dio'><thead><tr>"
         + "<th>Código</th><th>Descrição</th><th>Conta</th><th>Empresa / Filial</th>"
-        + "<th>Classificação</th><th>Consumo Médio/Mês</th><th>Valor Atual</th><th>DIO</th>"
+        + "<th>Classificação</th><th>Saldo Inicial</th><th>Estoque Final</th>"
+        + "<th>Estoque Médio</th><th>CPV (12m)</th><th>DIO (dias)</th><th>Ult Mov</th>"
         + "</tr></thead><tbody>"
         + linhas
         + "</tbody></table>"
