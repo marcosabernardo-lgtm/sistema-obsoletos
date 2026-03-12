@@ -116,6 +116,22 @@ def render(df_hist, moeda_br, data_selecionada):
 
     df_dio["Classificacao"] = df_dio["DIO"].apply(classificar)
 
+    total_estoque = df_dio["Custo Total Atual"].sum()
+
+    dio_validos = df_dio[df_dio["DIO"].notna() & (df_dio["DIO"] < 99999)]["DIO"]
+    dio_mediano = dio_validos.median() if not dio_validos.empty else None
+
+    qtd_alto = len(df_dio[df_dio["Classificacao"] == "Giro Alto (<=30d)"])
+    qtd_medio = len(df_dio[df_dio["Classificacao"] == "Giro Medio (31-90d)"])
+    qtd_critico = len(df_dio[df_dio["Classificacao"] == "Critico (>180d)"])
+    qtd_sem = len(df_dio[df_dio["Classificacao"] == "Sem Consumo"])
+
+    val_critico = df_dio[
+        df_dio["Classificacao"].isin(["Critico (>180d)", "Sem Consumo"])
+    ]["Custo Total Atual"].sum()
+
+    perc_critico = (val_critico / total_estoque * 100) if total_estoque > 0 else 0
+
     st.markdown("<br>", unsafe_allow_html=True)
 
     filtro = st.selectbox(
@@ -133,26 +149,20 @@ def render(df_hist, moeda_br, data_selecionada):
     df_tabela = df_tabela.sort_values("DIO", ascending=False, na_position="first").reset_index(drop=True)
 
     # -------------------------------------------------
-    # BOTAO EXPORTAR EXCEL
+    # BOTÃO EXPORTAR EXCEL (ÚNICA ADIÇÃO)
     # -------------------------------------------------
 
-    output = BytesIO()
+    buffer = BytesIO()
 
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
         df_tabela.to_excel(writer, index=False, sheet_name="DIO")
 
-    excel_data = output.getvalue()
-
     st.download_button(
-        label="📥 Exportar para Excel",
-        data=excel_data,
-        file_name=f"DIO_Estoque_{data_selecionada.strftime('%Y_%m_%d')}.xlsx",
+        label="📤 Exportar para Excel",
+        data=buffer.getvalue(),
+        file_name="analise_dio_estoque.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-    # -------------------------------------------------
-    # TABELA ORIGINAL
-    # -------------------------------------------------
 
     linhas = ""
 
