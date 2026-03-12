@@ -84,18 +84,44 @@ def salvar_log(nome_zip, registros, tipo):
 
 with st.expander("⚠️ Zona de Perigo — Resetar Base"):
 
-    if st.button("🗑 Resetar tudo"):
+    col_r1, col_r2, col_r3 = st.columns(3)
 
-        import shutil
+    with col_r1:
+        if st.button("🗑 Resetar Estoque"):
+            import shutil
+            if os.path.exists("data/estoque"):
+                shutil.rmtree("data/estoque")
+                os.makedirs("data/estoque", exist_ok=True)
+            if os.path.exists(LOG_PATH):
+                df_log = carregar_log()
+                df_log = df_log[df_log["Tipo"] != "Evolução Estoque"]
+                df_log.to_parquet(LOG_PATH, index=False)
+            st.success("Base de estoque resetada.")
+            st.cache_data.clear()
+            st.rerun()
 
-        if os.path.exists("data"):
-            shutil.rmtree("data")
+    with col_r2:
+        if st.button("🗑 Resetar Obsoletos"):
+            import shutil
+            if os.path.exists("data/obsoletos"):
+                shutil.rmtree("data/obsoletos")
+                os.makedirs("data/obsoletos", exist_ok=True)
+            if os.path.exists(LOG_PATH):
+                df_log = carregar_log()
+                df_log = df_log[df_log["Tipo"] != "Obsolescência"]
+                df_log.to_parquet(LOG_PATH, index=False)
+            st.success("Base de obsoletos resetada.")
+            st.cache_data.clear()
+            st.rerun()
 
-        st.success("Bases removidas")
-
-        st.cache_data.clear()
-
-        st.rerun()
+    with col_r3:
+        if st.button("🗑 Resetar Tudo"):
+            import shutil
+            if os.path.exists("data"):
+                shutil.rmtree("data")
+            st.success("Todas as bases removidas.")
+            st.cache_data.clear()
+            st.rerun()
 
 
 st.markdown("---")
@@ -196,8 +222,7 @@ if st.button("🚀 Processar Fechamento"):
 
         if tipo_processo == "Atualizar Evolução de Estoque":
 
-            # verifica se parquet existe
-            if os.listdir("data/estoque"):
+            if os.path.exists("data/estoque/estoque_historico.parquet"):
                 bloquear = True
 
         else:
@@ -247,7 +272,6 @@ if st.button("🚀 Processar Fechamento"):
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            # limpar cache para dashboards atualizarem
             st.cache_data.clear()
 
             st.rerun()
