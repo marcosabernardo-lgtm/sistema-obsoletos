@@ -151,7 +151,7 @@ def render(df_hist, moeda_br, data_selecionada):
     )
 
     # -------------------------------------------------
-    # TABELA HTML
+    # TABELA ORIGINAL
     # -------------------------------------------------
 
     linhas = ""
@@ -189,7 +189,53 @@ def render(df_hist, moeda_br, data_selecionada):
         )
 
     st.html(
+        """
+        <style>
+
+        .tb-container{
+            overflow-x:auto;
+            width:100%;
+        }
+
+        .tb-dio{
+            width:100%;
+            min-width:1500px;
+            border-collapse:collapse;
+            font-size:13px;
+            color:white;
+        }
+
+        .tb-dio th{
+            background-color:#0f5a60;
+            padding:9px 12px;
+            border-bottom:2px solid #EC6E21;
+            text-align:left;
+            white-space:nowrap;
+        }
+
+        .tb-dio td{
+            padding:7px 12px;
+            border-bottom:1px solid #1a6e75;
+            background-color:#005562;
+            white-space:nowrap;
+        }
+
+        .tb-dio th:nth-child(n+6),
+        .tb-dio td:nth-child(n+6){
+            text-align:right;
+        }
+
+        .tb-dio tr:hover td{
+            background-color:#0a6570;
+        }
+
+        </style>
+        """
+        +
+        f"<p style='color:#aaa;font-size:12px'>{len(df_tabela)} produtos</p>"
+        +
         "<div class='tb-container'>"
+        +
         "<table class='tb-dio'>"
         "<thead>"
         "<tr>"
