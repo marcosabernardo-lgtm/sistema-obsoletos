@@ -101,36 +101,32 @@ def render(df_hist, moeda_br, data_selecionada):
 
         if dio is None:
             return "Sem Consumo"
-
         elif dio <= 30:
             return "Giro Alto (<=30d)"
-
         elif dio <= 90:
             return "Giro Medio (31-90d)"
-
         elif dio <= 180:
             return "Giro Baixo (91-180d)"
-
         else:
             return "Critico (>180d)"
 
     df_dio["Classificacao"] = df_dio["DIO"].apply(classificar)
 
     total_estoque = df_dio["Custo Total Atual"].sum()
+    val_critico = df_dio[df_dio["Classificacao"].isin(["Critico (>180d)", "Sem Consumo"])]["Custo Total Atual"].sum()
+    perc_critico = (val_critico / total_estoque * 100) if total_estoque > 0 else 0
 
-    dio_validos = df_dio[df_dio["DIO"].notna() & (df_dio["DIO"] < 99999)]["DIO"]
-    dio_mediano = dio_validos.median() if not dio_validos.empty else None
-
-    qtd_alto = len(df_dio[df_dio["Classificacao"] == "Giro Alto (<=30d)"])
-    qtd_medio = len(df_dio[df_dio["Classificacao"] == "Giro Medio (31-90d)"])
     qtd_critico = len(df_dio[df_dio["Classificacao"] == "Critico (>180d)"])
     qtd_sem = len(df_dio[df_dio["Classificacao"] == "Sem Consumo"])
 
-    val_critico = df_dio[
-        df_dio["Classificacao"].isin(["Critico (>180d)", "Sem Consumo"])
-    ]["Custo Total Atual"].sum()
+    # ---------------- CARDS ----------------
 
-    perc_critico = (val_critico / total_estoque * 100) if total_estoque > 0 else 0
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("Valor Total Estoque", moeda_br(total_estoque))
+    col2.metric("Valor Crítico", moeda_br(val_critico))
+    col3.metric("% Estoque Crítico", f"{perc_critico:.1f}%")
+    col4.metric("Itens Críticos", qtd_critico + qtd_sem)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -145,11 +141,12 @@ def render(df_hist, moeda_br, data_selecionada):
     )
 
     df_tabela = df_dio.copy() if filtro == "Todos" else df_dio[df_dio["Classificacao"] == filtro].copy()
-
     df_tabela = df_tabela.sort_values("DIO", ascending=False, na_position="first").reset_index(drop=True)
 
-    # BOTÃO EXPORTAR EXCEL
+    # ---------------- EXPORTAR EXCEL ----------------
+
     buffer = BytesIO()
+
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
         df_tabela.to_excel(writer, index=False, sheet_name="DIO")
 
@@ -159,6 +156,8 @@ def render(df_hist, moeda_br, data_selecionada):
         file_name="analise_dio_estoque.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+    # ---------------- TABELA ----------------
 
     linhas = ""
 
