@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from io import BytesIO
 
 
 def render(df_hist, moeda_br, data_selecionada):
@@ -50,7 +51,7 @@ def render(df_hist, moeda_br, data_selecionada):
     )
 
     cpv_list = []
-    ult_mov_list = []
+    ult_mov_list =[]
 
     for produto in pivot.index:
         valores = pivot.loc[produto].values
@@ -162,7 +163,7 @@ def render(df_hist, moeda_br, data_selecionada):
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Tabela resumo ──────────────────────────────────────────────────────────
-    ordem = ["Giro Alto (≤30d)", "Giro Médio (31-90d)", "Giro Baixo (91-180d)", "Crítico (>180d)", "Sem Consumo"]
+    ordem =["Giro Alto (≤30d)", "Giro Médio (31-90d)", "Giro Baixo (91-180d)", "Crítico (>180d)", "Sem Consumo"]
 
     resumo = df_dio.groupby("Classificação").agg(
         Produtos=("Produto", "count"),
@@ -210,6 +211,39 @@ def render(df_hist, moeda_br, data_selecionada):
 
     df_tabela = df_dio.copy() if filtro == "Todos" else df_dio[df_dio["Classificação"] == filtro].copy()
     df_tabela = df_tabela.sort_values("DIO", ascending=False, na_position="first").reset_index(drop=True)
+
+    # ── Exportação Excel ───────────────────────────────────────────────────────
+    df_export = df_tabela.rename(columns={
+        "Produto": "Código",
+        "Descricao": "Descrição",
+        "Custo Total Atual": "Estoque Final",
+        "Estoque Medio": "Estoque Médio",
+        "CPV 12m": "CPV (12m)",
+        "DIO": "DIO (dias)"
+    })
+    
+    colunas_excel =[
+        "Código", "Descrição", "Conta", "Empresa / Filial", "Classificação",
+        "Saldo Inicial", "Estoque Final", "Estoque Médio", "CPV (12m)",
+        "DIO (dias)", "Ult Mov"
+    ]
+    # Mantém apenas as colunas que existem no dataframe formatado
+    colunas_excel =[c for c in colunas_excel if c in df_export.columns]
+    df_export = df_export[colunas_excel]
+
+    # Gera o arquivo Excel em memória
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_export.to_excel(writer, index=False, sheet_name='Relatorio DIO')
+    excel_data = output.getvalue()
+
+    st.download_button(
+        label="📥 Exportar para Excel",
+        data=excel_data,
+        file_name="relatorio_dio.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    # ───────────────────────────────────────────────────────────────────────────
 
     linhas = ""
     for _, row in df_tabela.iterrows():
