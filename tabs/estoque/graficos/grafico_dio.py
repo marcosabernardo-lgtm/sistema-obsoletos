@@ -1,3 +1,4 @@
+cat > tabs/estoque/graficos/grafico_dio.py << 'EOF'
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -18,9 +19,17 @@ def render(df_hist, df_obsoleto, moeda_br, data_selecionada):
     df_hist["ID_UNICO"] = df_hist["Empresa / Filial"].astype(str) + "|" + df_hist["Produto"].astype(str)
     
     df_obsoleto = df_obsoleto.copy()
-    # Recriamos o ID_UNICO no obsoleto (pois o motor final deleta essa coluna)
     if "ID_UNICO" not in df_obsoleto.columns:
         df_obsoleto["ID_UNICO"] = df_obsoleto["Empresa / Filial"].astype(str) + "|" + df_obsoleto["Produto"].astype(str)
+
+    # ── DEDUPLICAR obsoleto: mantém só a última movimentação por ID_UNICO ──────
+    if "Ult_Movimentacao" in df_obsoleto.columns:
+        df_obsoleto["Ult_Movimentacao"] = pd.to_datetime(df_obsoleto["Ult_Movimentacao"], errors="coerce")
+        df_obsoleto = (
+            df_obsoleto
+            .sort_values("Ult_Movimentacao", ascending=False)
+            .drop_duplicates(subset="ID_UNICO", keep="first")
+        )
 
     datas_sorted = sorted([d for d in df_hist["Data Fechamento"].unique() if d <= data_selecionada])
 
@@ -59,7 +68,7 @@ def render(df_hist, df_obsoleto, moeda_br, data_selecionada):
         .sort_index(axis=1)
     )
 
-    cpv_list =[]
+    cpv_list = []
     for id_unico in pivot.index:
         valores = pivot.loc[id_unico].values
         reducoes = [max(0, valores[i] - valores[i+1]) for i in range(len(valores)-1)]
@@ -72,26 +81,21 @@ def render(df_hist, df_obsoleto, moeda_br, data_selecionada):
     df_dio = grp_atual.merge(grp_inicial, on="ID_UNICO", how="left")
     df_dio = df_dio.merge(df_cpv, on="ID_UNICO", how="left")
     
-    # Pegamos a verdadeira data de Última Movimentação do seu motor obsoleto!
     df_obs_sub = df_obsoleto[["ID_UNICO", "Ult_Movimentacao"]].copy()
     df_dio = df_dio.merge(df_obs_sub, on="ID_UNICO", how="left")
 
     df_dio["Saldo Inicial"] = df_dio["Saldo Inicial"].fillna(0)
     df_dio["Estoque Medio"] = (df_dio["Saldo Inicial"] + df_dio["Custo Total Atual"]) / 2
 
-    # ── 6. O Pulo do Gato: Trava do Sem Consumo ────────────────────────────────
+    # ── 6. Trava do Sem Consumo ────────────────────────────────────────────────
     def definir_cpv(row):
         cpv = row["CPV_Calculado"] if pd.notna(row.get("CPV_Calculado")) else 0
-        
-        # Se a última movimentação real foi há mais de 365 dias,
-        # ou se não existe registro de movimento, forçamos o consumo pra ZERO.
         if pd.notna(row.get("Ult_Movimentacao")):
             dias_sem_mov = (data_selecionada - pd.to_datetime(row["Ult_Movimentacao"])).days
             if dias_sem_mov >= 365:
                 cpv = 0
         else:
-            cpv = 0 # Sem registro de movimentação = Sem Consumo puro
-            
+            cpv = 0
         return cpv
 
     df_dio["CPV 12m"] = df_dio.apply(definir_cpv, axis=1)
@@ -172,7 +176,7 @@ def render(df_hist, df_obsoleto, moeda_br, data_selecionada):
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── 9. Tabela resumo ───────────────────────────────────────────────────────
-    ordem =["Giro Alto (≤30d)", "Giro Médio (31-90d)", "Giro Baixo (91-180d)", "Crítico (>180d)", "Sem Consumo"]
+    ordem = ["Giro Alto (≤30d)", "Giro Médio (31-90d)", "Giro Baixo (91-180d)", "Crítico (>180d)", "Sem Consumo"]
 
     resumo = df_dio.groupby("Classificação").agg(
         Produtos=("Produto", "count"),
@@ -230,13 +234,13 @@ def render(df_hist, df_obsoleto, moeda_br, data_selecionada):
         "CPV 12m": "CPV (12m)",
         "DIO": "DIO (dias)"
     })
-    
-    colunas_excel =[
+
+    colunas_excel = [
         "Código", "Descrição", "Conta", "Empresa / Filial", "Classificação",
         "Saldo Inicial", "Estoque Final", "Estoque Médio", "CPV (12m)",
         "DIO (dias)", "Ult_Movimentacao"
     ]
-    colunas_excel =[c for c in colunas_excel if c in df_export.columns]
+    colunas_excel = [c for c in colunas_excel if c in df_export.columns]
     df_export = df_export[colunas_excel]
 
     output = BytesIO()
@@ -250,16 +254,14 @@ def render(df_hist, df_obsoleto, moeda_br, data_selecionada):
         file_name="relatorio_dio.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-    # ───────────────────────────────────────────────────────────────────────────
 
+    # ── Tabela detalhada ───────────────────────────────────────────────────────
     linhas = ""
     for _, row in df_tabela.iterrows():
-        dio_val  = row["DIO"]
-        dio_str  = f"{dio_val:.0f}" if dio_val is not None and not (isinstance(dio_val, float) and np.isnan(dio_val)) else "—"
-        
-        # Agora a tela mostra a data REAL extraída pelo seu motor de obsoleto!
-        ult_mov  = pd.Timestamp(row["Ult_Movimentacao"]).strftime("%d/%m/%Y") if pd.notna(row.get("Ult_Movimentacao")) else "—"
-        
+        dio_val = row["DIO"]
+        dio_str = f"{dio_val:.0f}" if dio_val is not None and not (isinstance(dio_val, float) and np.isnan(dio_val)) else "—"
+        ult_mov = pd.Timestamp(row["Ult_Movimentacao"]).strftime("%d/%m/%Y") if pd.notna(row.get("Ult_Movimentacao")) else "—"
+
         linhas += (
             "<tr>"
             "<td>" + str(row["Produto"]) + "</td>"
@@ -301,3 +303,4 @@ def render(df_hist, df_obsoleto, moeda_br, data_selecionada):
     )
 
     st.html(tabela)
+EOF
