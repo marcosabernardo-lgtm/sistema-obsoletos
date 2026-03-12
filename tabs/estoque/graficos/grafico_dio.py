@@ -13,7 +13,6 @@ def render(df_hist, moeda_br, data_selecionada):
     df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"]).dt.normalize()
     data_selecionada = pd.Timestamp(data_selecionada.date())
 
-    # Slider de meses para calcular consumo médio
     meses = st.slider("Meses para calcular consumo médio", min_value=2, max_value=24, value=6, step=1)
 
     datas_sorted = sorted([d for d in df_hist["Data Fechamento"].unique() if d <= data_selecionada])
@@ -22,10 +21,8 @@ def render(df_hist, moeda_br, data_selecionada):
         st.info("Histórico insuficiente para calcular DIO.")
         return
 
-    # Janela de datas para calcular consumo
     datas_janela = datas_sorted[-meses:] if len(datas_sorted) >= meses else datas_sorted
 
-    # Produtos no estoque atual
     df_atual = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
     desc = df_atual.groupby("Produto")[["Descricao", "Conta", "Empresa / Filial"]].first().reset_index()
 
@@ -34,7 +31,6 @@ def render(df_hist, moeda_br, data_selecionada):
         .sum().reset_index().rename(columns={"Custo Total": "Valor Atual"})
     )
 
-    # Calcular consumo médio mensal por produto (média das variações negativas)
     df_janela = df_hist[df_hist["Data Fechamento"].isin(datas_janela)].copy()
 
     pivot = (
@@ -44,7 +40,6 @@ def render(df_hist, moeda_br, data_selecionada):
         .sort_index(axis=1)
     )
 
-    # Variações mensais — só considera reduções como consumo
     consumo_list = []
     for produto in pivot.index:
         valores = pivot.loc[produto].values
@@ -54,20 +49,17 @@ def render(df_hist, moeda_br, data_selecionada):
 
     df_consumo = pd.DataFrame(consumo_list)
 
-    # Merge
     df_dio = grp_atual.merge(df_consumo, on="Produto", how="left")
     df_dio = df_dio.merge(desc, on="Produto", how="left")
     df_dio["Consumo Medio Mensal"] = df_dio["Consumo Medio Mensal"].fillna(0)
 
-    # DIO = (Valor Atual / Consumo Médio Mensal) * 30
     def calcular_dio(row):
         if row["Consumo Medio Mensal"] > 0:
             return (row["Valor Atual"] / row["Consumo Medio Mensal"]) * 30
-        return None  # sem consumo = DIO indefinido
+        return None
 
     df_dio["DIO"] = df_dio.apply(calcular_dio, axis=1)
 
-    # Classificação
     def classificar(dio):
         if dio is None:         return "Sem Consumo"
         elif dio <= 30:         return "Giro Alto (≤30d)"
@@ -77,9 +69,12 @@ def render(df_hist, moeda_br, data_selecionada):
 
     df_dio["Classificação"] = df_dio["DIO"].apply(classificar)
 
-    # ── Cards ──────────────────────────────────────────────────────────────────
-    total_estoque   = df_dio["Valor Atual"].sum()
-    dio_medio       = df_dio[df_dio["DIO"].notna()]["DIO"].mean()
+    # Cards
+    total_estoque = df_dio["Valor Atual"].sum()
+
+    # DIO mediano — ignorar valores absurdos acima de 9999 dias
+    dio_validos  = df_dio[df_dio["DIO"].notna() & (df_dio["DIO"] < 9999)]["DIO"]
+    dio_mediano  = dio_validos.median() if not dio_validos.empty else None
 
     qtd_alto    = len(df_dio[df_dio["Classificação"] == "Giro Alto (≤30d)"])
     qtd_medio   = len(df_dio[df_dio["Classificação"] == "Giro Médio (31-90d)"])
@@ -87,7 +82,7 @@ def render(df_hist, moeda_br, data_selecionada):
     qtd_critico = len(df_dio[df_dio["Classificação"] == "Crítico (>180d)"])
     qtd_sem     = len(df_dio[df_dio["Classificação"] == "Sem Consumo"])
 
-    val_critico = df_dio[df_dio["Classificação"].isin(["Crítico (>180d)", "Sem Consumo"])]["Valor Atual"].sum()
+    val_critico  = df_dio[df_dio["Classificação"].isin(["Crítico (>180d)", "Sem Consumo"])]["Valor Atual"].sum()
     perc_critico = (val_critico / total_estoque * 100) if total_estoque > 0 else 0
 
     st.markdown("""
@@ -110,8 +105,8 @@ def render(df_hist, moeda_br, data_selecionada):
 
     c2.markdown(f"""
     <div class="card-dio">
-        <div class="titulo">DIO Médio</div>
-        <div class="valor">{f"{dio_medio:.0f} dias" if dio_medio and not np.isnan(dio_medio) else "—"}</div>
+        <div class="titulo">DIO Mediano</div>
+        <div class="valor">{f"{dio_mediano:.0f} dias" if dio_mediano is not None else "—"}</div>
         <div class="sub" style="color:#ccc">últimos {meses} meses</div>
     </div>""", unsafe_allow_html=True)
 
@@ -131,7 +126,7 @@ def render(df_hist, moeda_br, data_selecionada):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Resumo por classificação
+    # Tabela resumo por classificação
     resumo = df_dio.groupby("Classificação").agg(
         Produtos=("Produto", "count"),
         Valor=("Valor Atual", "sum")
@@ -142,10 +137,10 @@ def render(df_hist, moeda_br, data_selecionada):
     resumo = resumo.sort_values("_ordem").drop(columns="_ordem")
 
     def cor_class(c):
-        if c == "Giro Alto (≤30d)":    return "color:#51cf66;font-weight:700"
-        if c == "Giro Médio (31-90d)": return "color:#74c0fc;font-weight:700"
-        if c == "Giro Baixo (91-180d)":return "color:#f0a500;font-weight:700"
-        if c == "Crítico (>180d)":     return "color:#ff6b6b;font-weight:700"
+        if c == "Giro Alto (≤30d)":     return "color:#51cf66;font-weight:700"
+        if c == "Giro Médio (31-90d)":  return "color:#74c0fc;font-weight:700"
+        if c == "Giro Baixo (91-180d)": return "color:#f0a500;font-weight:700"
+        if c == "Crítico (>180d)":      return "color:#ff6b6b;font-weight:700"
         return "color:#aaa;font-weight:700"
 
     linhas_resumo = ""
@@ -169,11 +164,12 @@ def render(df_hist, moeda_br, data_selecionada):
         ".tb-resumo td:not(:first-child){text-align:right;}"
         "</style>"
     )
+
     st.html(css_resumo + "<table class='tb-resumo'><thead><tr>"
         + "<th>Classificação</th><th>Produtos</th><th>Valor</th><th>% Estoque</th>"
         + "</tr></thead><tbody>" + linhas_resumo + "</tbody></table>")
 
-    # ── Filtro e tabela detalhada ──────────────────────────────────────────────
+    # Filtro e tabela detalhada
     filtro = st.selectbox("Filtrar por classificação", ["Todos"] + ordem)
 
     df_tabela = df_dio.copy() if filtro == "Todos" else df_dio[df_dio["Classificação"] == filtro].copy()
@@ -181,7 +177,8 @@ def render(df_hist, moeda_br, data_selecionada):
 
     linhas = ""
     for _, row in df_tabela.iterrows():
-        dio_str = f"{row['DIO']:.0f} dias" if row["DIO"] is not None and not (isinstance(row["DIO"], float) and np.isnan(row["DIO"])) else "—"
+        dio_val = row["DIO"]
+        dio_str = f"{dio_val:.0f} dias" if dio_val is not None and not (isinstance(dio_val, float) and np.isnan(dio_val)) else "—"
         consumo_str = moeda_br(row["Consumo Medio Mensal"]) if row["Consumo Medio Mensal"] > 0 else "—"
         linhas += (
             "<tr>"
