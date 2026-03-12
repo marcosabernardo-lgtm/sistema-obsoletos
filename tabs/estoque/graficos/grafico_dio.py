@@ -148,12 +148,8 @@ def render(df_hist, moeda_br, data_selecionada):
 
     df_tabela = df_tabela.sort_values("DIO", ascending=False, na_position="first").reset_index(drop=True)
 
-    # -------------------------------------------------
-    # BOTÃO EXPORTAR EXCEL (ÚNICA ADIÇÃO)
-    # -------------------------------------------------
-
+    # BOTÃO EXPORTAR EXCEL
     buffer = BytesIO()
-
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
         df_tabela.to_excel(writer, index=False, sheet_name="DIO")
 
@@ -182,13 +178,26 @@ def render(df_hist, moeda_br, data_selecionada):
             else "--"
         )
 
+        classif = row["Classificacao"]
+
+        if classif == "Critico (>180d)":
+            cor = "#ff4b4b"
+        elif classif == "Giro Baixo (91-180d)":
+            cor = "#ffa500"
+        elif classif == "Giro Medio (31-90d)":
+            cor = "#ffd700"
+        elif classif == "Giro Alto (<=30d)":
+            cor = "#00ff9c"
+        else:
+            cor = "#bbbbbb"
+
         linhas += (
             "<tr>"
             f"<td>{row['Produto']}</td>"
             f"<td>{row.get('Descricao','')}</td>"
             f"<td>{row.get('Conta','')}</td>"
             f"<td>{row.get('Empresa / Filial','')}</td>"
-            f"<td>{row['Classificacao']}</td>"
+            f"<td style='color:{cor};font-weight:600'>{classif}</td>"
             f"<td>{moeda_br(row['Saldo Inicial'])}</td>"
             f"<td>{moeda_br(row['Custo Total Atual'])}</td>"
             f"<td>{moeda_br(row['Estoque Medio'])}</td>"
