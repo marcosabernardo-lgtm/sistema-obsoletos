@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 from io import BytesIO
 
-
 def render(df_hist, moeda_br, data_selecionada):
 
     if data_selecionada is None:
@@ -14,14 +13,15 @@ def render(df_hist, moeda_br, data_selecionada):
     df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"]).dt.normalize()
     data_selecionada = pd.Timestamp(data_selecionada.date())
 
+    # Filtra apenas o histórico até a data selecionada
     datas_sorted = sorted([d for d in df_hist["Data Fechamento"].unique() if d <= data_selecionada])
 
     if len(datas_sorted) < 2:
         st.info("Histórico insuficiente para calcular DIO.")
         return
 
-    # Janela de 12 meses
-    datas_janela = datas_sorted[-12:] if len(datas_sorted) >= 12 else datas_sorted
+    # MELHORIA AQUI: Para ter 12 meses de consumo (variações), precisamos de 13 datas de fechamento
+    datas_janela = datas_sorted[-13:] if len(datas_sorted) >= 13 else datas_sorted
 
     # ── Estoque atual ──────────────────────────────────────────────────────────
     df_atual = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
@@ -32,7 +32,8 @@ def render(df_hist, moeda_br, data_selecionada):
         .sum().reset_index().rename(columns={"Custo Total": "Custo Total Atual"})
     )
 
-    # ── Saldo Inicial = valor do produto na data mais antiga da janela ─────────
+    # ── Saldo Inicial = Valor do produto na primeira data da janela (exatos 12 meses atrás) ─────────
+    # Sem precisar usar nenhuma tabela externa "d_EstoqueInicial"
     data_inicial = datas_janela[0]
     df_inicial = df_hist[df_hist["Data Fechamento"] == data_inicial].copy()
     grp_inicial = (
@@ -40,7 +41,7 @@ def render(df_hist, moeda_br, data_selecionada):
         .sum().reset_index().rename(columns={"Custo Total": "Saldo Inicial"})
     )
 
-    # ── CPV 12 meses = soma de todas as reduções mensais na janela ─────────────
+    # ── CPV 12 meses = Soma das reduções mês a mês calculada apenas com os fechamentos ─────────────
     df_janela = df_hist[df_hist["Data Fechamento"].isin(datas_janela)].copy()
 
     pivot = (
@@ -57,6 +58,7 @@ def render(df_hist, moeda_br, data_selecionada):
         valores = pivot.loc[produto].values
         datas   = list(pivot.columns)
 
+        # Calcula a queda de estoque entre os fechamentos (isso substitui a d_ConsultaMovimentacoes)
         reducoes = [max(0, valores[i] - valores[i+1]) for i in range(len(valores)-1)]
         cpv = sum(reducoes)
 
@@ -79,6 +81,7 @@ def render(df_hist, moeda_br, data_selecionada):
     df_dio = df_dio.merge(df_ultmov, on="Produto", how="left")
     df_dio = df_dio.merge(desc, on="Produto", how="left")
 
+    # Se o produto não existia 12 meses atrás, o Saldo Inicial dele é 0
     df_dio["Saldo Inicial"] = df_dio["Saldo Inicial"].fillna(0)
     df_dio["CPV 12m"]       = df_dio["CPV 12m"].fillna(0)
 
@@ -119,7 +122,7 @@ def render(df_hist, moeda_br, data_selecionada):
 
     label_inicial = pd.Timestamp(data_inicial).strftime("%d/%m/%Y")
     label_atual   = data_selecionada.strftime("%d/%m/%Y")
-    n_meses       = len(datas_janela)
+    n_meses       = len(datas_janela) - 1 # Mostra 12m nos cards (13 datas = 12 meses de intervalo)
 
     st.markdown("""
     <style>
@@ -227,11 +230,9 @@ def render(df_hist, moeda_br, data_selecionada):
         "Saldo Inicial", "Estoque Final", "Estoque Médio", "CPV (12m)",
         "DIO (dias)", "Ult Mov"
     ]
-    # Mantém apenas as colunas que existem no dataframe formatado
-    colunas_excel =[c for c in colunas_excel if c in df_export.columns]
+    colunas_excel = [c for c in colunas_excel if c in df_export.columns]
     df_export = df_export[colunas_excel]
 
-    # Gera o arquivo Excel em memória
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_export.to_excel(writer, index=False, sheet_name='Relatorio DIO')
