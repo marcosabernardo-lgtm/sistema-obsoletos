@@ -25,7 +25,7 @@ def render(df_hist, moeda_br, df_kpi=None, data_selecionada=None, valor_mom=None
         grafico_evolucao(df)
 
     with tab2:
-        grafico_empresa(df, moeda_br)
+        grafico_empresa(df, moeda_br, data_selecionada)
 
     with tab3:
         grafico_conta(df, moeda_br, data_selecionada)
