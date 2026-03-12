@@ -69,7 +69,7 @@ def moeda_br_curta(valor):
     return moeda_br(valor)
 
 # -------------------------------------------------
-# CARREGAR BASE
+# CARREGAR BASE HISTÓRICA
 # -------------------------------------------------
 CAMINHO_BASE = "data/estoque/estoque_historico.parquet"
 
@@ -91,6 +91,30 @@ if df_hist.empty:
 df_hist["Custo Total"] = pd.to_numeric(df_hist["Custo Total"], errors="coerce").fillna(0)
 df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"], errors="coerce")
 df_hist = df_hist.sort_values("Data Fechamento")
+
+# -------------------------------------------------
+# CARREGAR BASE OBSOLETOS
+# -------------------------------------------------
+CAMINHO_OBSOLETOS_DIR = "data/obsoletos"
+
+if os.path.exists(CAMINHO_OBSOLETOS_DIR):
+    arquivos_obs = [
+        f for f in os.listdir(CAMINHO_OBSOLETOS_DIR)
+        if f.endswith(".parquet")
+    ]
+    if arquivos_obs:
+        try:
+            df_obsoleto = pd.concat([
+                pd.read_parquet(os.path.join(CAMINHO_OBSOLETOS_DIR, f))
+                for f in arquivos_obs
+            ], ignore_index=True)
+        except Exception as e:
+            st.warning("⚠️ Erro ao carregar base de obsoletos.")
+            df_obsoleto = pd.DataFrame()
+    else:
+        df_obsoleto = pd.DataFrame()
+else:
+    df_obsoleto = pd.DataFrame()
 
 # -------------------------------------------------
 # SIDEBAR — FILTROS
@@ -223,7 +247,7 @@ if contas_sel:
 # RENDER ABAS
 # -------------------------------------------------
 try:
-    render_evolucao_estoque(df_hist_filtrado, moeda_br, df_kpi, data_selecionada, valor_mom, valor_yoy)
+    render_evolucao_estoque(df_hist_filtrado, df_obsoleto, moeda_br, df_kpi, data_selecionada, valor_mom, valor_yoy)
 except Exception as e:
     st.error("Erro ao renderizar o dashboard.")
     st.exception(e)
