@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from io import BytesIO
-
+from io import BytesIO # IMPORT NECESSÁRIO PARA O EXCEL
 
 def render(df_hist, moeda_br, data_selecionada):
-
     if data_selecionada is None:
         st.warning("Selecione uma data de fechamento.")
         return
@@ -13,7 +11,6 @@ def render(df_hist, moeda_br, data_selecionada):
     df_hist = df_hist.copy()
     df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"]).dt.normalize()
     data_selecionada = pd.Timestamp(data_selecionada.date())
-
     datas_sorted = sorted([d for d in df_hist["Data Fechamento"].unique() if d <= data_selecionada])
 
     if len(datas_sorted) < 2:
@@ -21,9 +18,7 @@ def render(df_hist, moeda_br, data_selecionada):
         return
 
     datas_janela = datas_sorted[-12:] if len(datas_sorted) >= 12 else datas_sorted
-
     df_atual = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
-
     desc = df_atual.groupby("Produto")[["Descricao", "Conta", "Empresa / Filial"]].first().reset_index()
 
     grp_atual = (
@@ -34,9 +29,7 @@ def render(df_hist, moeda_br, data_selecionada):
     )
 
     data_inicial = datas_janela[0]
-
     df_inicial = df_hist[df_hist["Data Fechamento"] == data_inicial].copy()
-
     grp_inicial = (
         df_inicial.groupby("Produto")["Custo Total"]
         .sum()
@@ -45,7 +38,6 @@ def render(df_hist, moeda_br, data_selecionada):
     )
 
     df_janela = df_hist[df_hist["Data Fechamento"].isin(datas_janela)].copy()
-
     pivot = (
         df_janela.groupby(["Produto", "Data Fechamento"])["Custo Total"]
         .sum()
@@ -54,22 +46,20 @@ def render(df_hist, moeda_br, data_selecionada):
     )
 
     cpv_list = []
-    ult_mov_list = []
+    ult_mov_list =[]
 
     for produto in pivot.index:
-
         valores = pivot.loc[produto].values
         datas = list(pivot.columns)
-
         reducoes = [max(0, valores[i] - valores[i+1]) for i in range(len(valores)-1)]
         cpv = sum(reducoes)
-
+        
         ult_mov = None
         for i in range(len(valores)-2, -1, -1):
             if valores[i] > valores[i+1]:
                 ult_mov = datas[i+1]
                 break
-
+                
         cpv_list.append({"Produto": produto, "CPV 12m": cpv})
         ult_mov_list.append({"Produto": produto, "Ult Mov": ult_mov})
 
@@ -83,22 +73,16 @@ def render(df_hist, moeda_br, data_selecionada):
 
     df_dio["Saldo Inicial"] = df_dio["Saldo Inicial"].fillna(0)
     df_dio["CPV 12m"] = df_dio["CPV 12m"].fillna(0)
-
-    df_dio["Estoque Medio"] = (
-        df_dio["Saldo Inicial"] + df_dio["Custo Total Atual"]
-    ) / 2
+    df_dio["Estoque Medio"] = (df_dio["Saldo Inicial"] + df_dio["Custo Total Atual"]) / 2
 
     def calcular_dio(row):
-
         if row["CPV 12m"] > 0:
             return (row["Estoque Medio"] / row["CPV 12m"]) * 365
-
         return None
 
     df_dio["DIO"] = df_dio.apply(calcular_dio, axis=1)
 
     def classificar(dio):
-
         if dio is None:
             return "Sem Consumo"
         elif dio <= 30:
@@ -113,90 +97,99 @@ def render(df_hist, moeda_br, data_selecionada):
     df_dio["Classificacao"] = df_dio["DIO"].apply(classificar)
 
     total_estoque = df_dio["Custo Total Atual"].sum()
-    val_critico = df_dio[df_dio["Classificacao"].isin(["Critico (>180d)", "Sem Consumo"])]["Custo Total Atual"].sum()
-    perc_critico = (val_critico / total_estoque * 100) if total_estoque > 0 else 0
+    dio_validos = df_dio[df_dio["DIO"].notna() & (df_dio["DIO"] < 99999)]["DIO"]
+    dio_mediano = dio_validos.median() if not dio_validos.empty else None
 
+    qtd_alto = len(df_dio[df_dio["Classificacao"] == "Giro Alto (<=30d)"])
+    qtd_medio = len(df_dio[df_dio["Classificacao"] == "Giro Medio (31-90d)"])
     qtd_critico = len(df_dio[df_dio["Classificacao"] == "Critico (>180d)"])
     qtd_sem = len(df_dio[df_dio["Classificacao"] == "Sem Consumo"])
 
-    # ---------------- CARDS ----------------
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric("Valor Total Estoque", moeda_br(total_estoque))
-    col2.metric("Valor Crítico", moeda_br(val_critico))
-    col3.metric("% Estoque Crítico", f"{perc_critico:.1f}%")
-    col4.metric("Itens Críticos", qtd_critico + qtd_sem)
+    val_critico = df_dio[
+        df_dio["Classificacao"].isin(["Critico (>180d)", "Sem Consumo"])
+    ]["Custo Total Atual"].sum()
+    perc_critico = (val_critico / total_estoque * 100) if total_estoque > 0 else 0
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     filtro = st.selectbox(
-        "Filtrar por classificacao",
-        ["Todos",
-         "Giro Alto (<=30d)",
-         "Giro Medio (31-90d)",
-         "Giro Baixo (91-180d)",
-         "Critico (>180d)",
-         "Sem Consumo"]
+        "Filtrar por classificacao",["Todos", "Giro Alto (<=30d)", "Giro Medio (31-90d)", "Giro Baixo (91-180d)", "Critico (>180d)", "Sem Consumo"]
     )
 
-    df_tabela = df_dio.copy() if filtro == "Todos" else df_dio[df_dio["Classificacao"] == filtro].copy()
+    df_tabela = df_dio.copy()
+    if filtro != "Todos":
+        df_tabela = df_dio[df_dio["Classificacao"] == filtro].copy()
+
     df_tabela = df_tabela.sort_values("DIO", ascending=False, na_position="first").reset_index(drop=True)
 
-    # ---------------- EXPORTAR EXCEL ----------------
+    # ==========================================
+    # --- INÍCIO DA LÓGICA DE EXPORTAÇÃO ---
+    # ==========================================
+    
+    # 1. Ajustar nomes das colunas para ficar igual ao que o usuário vê na tela
+    df_export = df_tabela.rename(columns={
+        "Produto": "Codigo",
+        "Custo Total Atual": "Estoque Final",
+        "CPV 12m": "CPV (12m)",
+        "DIO": "DIO (dias)"
+    })
+    
+    # 2. Ordenar colunas e remover as que não vão pro Excel
+    colunas_excel =[
+        "Codigo", "Descricao", "Conta", "Empresa / Filial", "Classificacao",
+        "Saldo Inicial", "Estoque Final", "Estoque Medio", "CPV (12m)",
+        "DIO (dias)", "Ult Mov"
+    ]
+    # Garantir que as colunas existem antes de filtrar
+    colunas_excel =[c for c in colunas_excel if c in df_export.columns]
+    df_export = df_export[colunas_excel]
 
-    buffer = BytesIO()
+    # 3. Função para converter o dataframe em arquivo Excel na memória (buffer)
+    @st.cache_data
+    def convert_df_to_excel(df):
+        output = BytesIO()
+        # openpyxl é o motor padrão mais moderno para Excel no Pandas
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Relatorio DIO')
+        return output.getvalue()
 
-    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-        df_tabela.to_excel(writer, index=False, sheet_name="DIO")
+    excel_data = convert_df_to_excel(df_export)
 
-    st.download_button(
-        label="📤 Exportar para Excel",
-        data=buffer.getvalue(),
-        file_name="analise_dio_estoque.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    # ---------------- TABELA ----------------
+    # 4. Criar colunas para alinhar botão (opcional, deixa o layout mais limpo)
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        st.download_button(
+            label="📥 Exportar para Excel",
+            data=excel_data,
+            file_name="relatorio_dio.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    
+    # ==========================================
+    # --- FIM DA LÓGICA DE EXPORTAÇÃO ---
+    # ==========================================
 
     linhas = ""
-
     for _, row in df_tabela.iterrows():
-
         dio_val = row["DIO"]
-
         dio_str = (
             f"{dio_val:.0f}"
             if dio_val is not None and not (isinstance(dio_val, float) and np.isnan(dio_val))
             else "--"
         )
-
+        
         ult_mov = (
             pd.Timestamp(row["Ult Mov"]).strftime("%d/%m/%Y")
-            if pd.notna(row.get("Ult Mov"))
-            else "--"
+            if pd.notna(row.get("Ult Mov")) else "--"
         )
-
-        classif = row["Classificacao"]
-
-        if classif == "Critico (>180d)":
-            cor = "#ff4b4b"
-        elif classif == "Giro Baixo (91-180d)":
-            cor = "#ffa500"
-        elif classif == "Giro Medio (31-90d)":
-            cor = "#ffd700"
-        elif classif == "Giro Alto (<=30d)":
-            cor = "#00ff9c"
-        else:
-            cor = "#bbbbbb"
-
+        
         linhas += (
             "<tr>"
             f"<td>{row['Produto']}</td>"
             f"<td>{row.get('Descricao','')}</td>"
             f"<td>{row.get('Conta','')}</td>"
             f"<td>{row.get('Empresa / Filial','')}</td>"
-            f"<td style='color:{cor};font-weight:600'>{classif}</td>"
+            f"<td>{row['Classificacao']}</td>"
             f"<td>{moeda_br(row['Saldo Inicial'])}</td>"
             f"<td>{moeda_br(row['Custo Total Atual'])}</td>"
             f"<td>{moeda_br(row['Estoque Medio'])}</td>"
@@ -209,70 +202,59 @@ def render(df_hist, moeda_br, data_selecionada):
     st.html(
         """
         <style>
-
-        .tb-container{
-            overflow-x:auto;
-            width:100%;
-        }
-
-        .tb-dio{
-            width:100%;
-            min-width:1500px;
-            border-collapse:collapse;
-            font-size:13px;
-            color:white;
-        }
-
-        .tb-dio th{
-            background-color:#0f5a60;
-            padding:9px 12px;
-            border-bottom:2px solid #EC6E21;
-            text-align:left;
-            white-space:nowrap;
-        }
-
-        .tb-dio td{
-            padding:7px 12px;
-            border-bottom:1px solid #1a6e75;
-            background-color:#005562;
-            white-space:nowrap;
-        }
-
-        .tb-dio th:nth-child(n+6),
-        .tb-dio td:nth-child(n+6){
-            text-align:right;
-        }
-
-        .tb-dio tr:hover td{
-            background-color:#0a6570;
-        }
-
+            .tb-container{
+                overflow-x:auto;
+                width:100%;
+            }
+            .tb-dio{
+                width:100%;
+                min-width:1500px;
+                border-collapse:collapse;
+                font-size:13px;
+                color:white;
+            }
+            .tb-dio th{
+                background-color:#0f5a60;
+                padding:9px 12px;
+                border-bottom:2px solid #EC6E21;
+                text-align:left;
+                white-space:nowrap;
+            }
+            .tb-dio td{
+                padding:7px 12px;
+                border-bottom:1px solid #1a6e75;
+                background-color:#005562;
+                white-space:nowrap;
+            }
+            .tb-dio th:nth-child(n+6), .tb-dio td:nth-child(n+6){
+                text-align:right;
+            }
+            .tb-dio tr:hover td{
+                background-color:#0a6570;
+            }
         </style>
         """
-        +
-        f"<p style='color:#aaa;font-size:12px'>{len(df_tabela)} produtos</p>"
-        +
-        "<div class='tb-container'>"
-        +
-        "<table class='tb-dio'>"
-        "<thead>"
-        "<tr>"
-        "<th>Codigo</th>"
-        "<th>Descricao</th>"
-        "<th>Conta</th>"
-        "<th>Empresa / Filial</th>"
-        "<th>Classificacao</th>"
-        "<th>Saldo Inicial</th>"
-        "<th>Estoque Final</th>"
-        "<th>Estoque Medio</th>"
-        "<th>CPV (12m)</th>"
-        "<th>DIO (dias)</th>"
-        "<th>Ult Mov</th>"
-        "</tr>"
-        "</thead>"
-        "<tbody>"
-        + linhas +
-        "</tbody>"
-        "</table>"
-        "</div>"
+        + f"<p style='color:#aaa;font-size:12px'>{len(df_tabela)} produtos</p>"
+        + "<div class='tb-container'>"
+        + "<table class='tb-dio'>"
+          "<thead>"
+          "<tr>"
+          "<th>Codigo</th>"
+          "<th>Descricao</th>"
+          "<th>Conta</th>"
+          "<th>Empresa / Filial</th>"
+          "<th>Classificacao</th>"
+          "<th>Saldo Inicial</th>"
+          "<th>Estoque Final</th>"
+          "<th>Estoque Medio</th>"
+          "<th>CPV (12m)</th>"
+          "<th>DIO (dias)</th>"
+          "<th>Ult Mov</th>"
+          "</tr>"
+          "</thead>"
+          "<tbody>"
+        + linhas
+        + "</tbody>"
+          "</table>"
+          "</div>"
     )
