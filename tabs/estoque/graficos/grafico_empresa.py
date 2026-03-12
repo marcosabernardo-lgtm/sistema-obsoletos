@@ -8,7 +8,12 @@ def render(df, moeda_br, data_selecionada=None):
     df["Data Fechamento"] = pd.to_datetime(df["Data Fechamento"])
 
     ultima_data = df["Data Fechamento"].max()
-    data_ref = data_selecionada if data_selecionada is not None else ultima_data
+    data_ref = pd.Timestamp(data_selecionada) if data_selecionada is not None else ultima_data
+    # Normalizar para meia-noite sem timezone
+    data_ref = pd.Timestamp(data_ref.date())
+
+    # Normalizar datas do df também
+    df["Data Fechamento"] = df["Data Fechamento"].dt.normalize()
 
     base = df[df["Data Fechamento"] == data_ref]
 
@@ -92,10 +97,8 @@ def render(df, moeda_br, data_selecionada=None):
     # ── Tabela Por Empresa ─────────────────────────────────────────────────────
     st.markdown("---")
 
-    # Período atual
     df_atual = df[df["Data Fechamento"] == data_ref].copy()
 
-    # Período anterior (MoM)
     datas_sorted = sorted(df["Data Fechamento"].unique())
     idx = list(datas_sorted).index(data_ref) if data_ref in datas_sorted else -1
 
@@ -121,7 +124,6 @@ def render(df, moeda_br, data_selecionada=None):
     )
     df_tabela = df_tabela.sort_values("Valor Estoque", ascending=False).reset_index(drop=True)
 
-    # Totais
     total_atual = df_tabela["Valor Estoque"].sum()
     total_mom   = df_tabela["Valor MoM"].sum()
     total_perc  = ((total_atual - total_mom) / total_mom * 100) if total_mom != 0 else 0
