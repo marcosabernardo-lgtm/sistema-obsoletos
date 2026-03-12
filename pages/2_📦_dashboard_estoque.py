@@ -250,4 +250,4 @@ try:
     render_evolucao_estoque(df_hist_filtrado, df_obsoleto, moeda_br, df_kpi, data_selecionada, valor_mom, valor_yoy)
 except Exception as e:
     st.error("Erro ao renderizar o dashboard.")
-    st.exception(e)
+    st.exception(e)# redeploy
