@@ -35,4 +35,3 @@ def render(df_hist, moeda_br, df_kpi=None, data_selecionada=None, valor_mom=None
 
     with tab5:
         grafico_variacao_produto(df, moeda_br, data_selecionada)
-        grafico_reducao_estoque(df, moeda_br, data_selecionada)
