@@ -56,27 +56,27 @@ def render(df_hist, moeda_br, data_selecionada):
     total_reduz  = df_var[df_var["Status Mov"] == "Reduziu"]["Variacao"].abs().sum()
     total_zerado = df_var[df_var["Status Mov"] == "Zerado"]["Valor MoM"].sum()
 
-    qtd_zerado   = len(df_var[df_var["Status Mov"] == "Zerado"])
-    qtd_reduz    = len(df_var[df_var["Status Mov"] == "Reduziu"])
-    qtd_aument   = len(df_var[df_var["Status Mov"] == "Aumentou"])
-    qtd_manteve  = len(df_var[df_var["Status Mov"] == "Manteve"])
+    qtd_zerado  = len(df_var[df_var["Status Mov"] == "Zerado"])
+    qtd_reduz   = len(df_var[df_var["Status Mov"] == "Reduziu"])
+    qtd_aument  = len(df_var[df_var["Status Mov"] == "Aumentou"])
+    qtd_manteve = len(df_var[df_var["Status Mov"] == "Manteve"])
 
     label_mom   = pd.Timestamp(data_mom).strftime("%d/%m/%Y")
     label_atual = data_selecionada.strftime("%d/%m/%Y")
 
     # ── Cards de resumo ────────────────────────────────────────────────────────
-    st.markdown(f"""
+    st.markdown("""
     <style>
-    .card-mov {{
+    .card-mov {
         background-color:#005562;
         border:2px solid #EC6E21;
         border-radius:10px;
         padding:14px 16px;
         text-align:center;
-    }}
-    .card-mov .titulo {{ font-size:12px; color:#ccc; margin-bottom:4px; }}
-    .card-mov .valor  {{ font-size:20px; font-weight:700; color:white; }}
-    .card-mov .sub    {{ font-size:12px; margin-top:4px; }}
+    }
+    .card-mov .titulo { font-size:12px; color:#ccc; margin-bottom:4px; }
+    .card-mov .valor  { font-size:20px; font-weight:700; color:white; }
+    .card-mov .sub    { font-size:12px; margin-top:4px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -120,13 +120,12 @@ def render(df_hist, moeda_br, data_selecionada):
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Filtro por status ──────────────────────────────────────────────────────
-    # DEPOIS
     opcoes = ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"]
     status_sel = st.selectbox("Filtrar por Status Mov", opcoes)
 
     df_filtrado = df_var.copy()
     if status_sel != "Todos":
-    df_filtrado = df_filtrado[df_filtrado["Status Mov"] == status_sel]
+        df_filtrado = df_filtrado[df_filtrado["Status Mov"] == status_sel]
 
     df_filtrado = df_filtrado.sort_values("Variacao", key=abs, ascending=False).reset_index(drop=True)
 
@@ -137,10 +136,10 @@ def render(df_hist, moeda_br, data_selecionada):
         if s == "Zerado":   return "color:#51cf66;font-weight:700"
         return "color:#f0a500;font-weight:700"
 
-    def icone_perc(perc, status):
-        if status == "Aumentou": return f'<span style="color:#ff6b6b;font-weight:700">⬆ {abs(perc):.0f}%</span>'
-        if status in ("Reduziu","Zerado"): return f'<span style="color:#51cf66;font-weight:700">⬇ {abs(perc):.0f}%</span>'
-        return f'<span style="color:#f0a500;font-weight:700">● 0%</span>'
+    def icone_perc(perc, s):
+        if s == "Aumentou":           return f'<span style="color:#ff6b6b;font-weight:700">⬆ {abs(perc):.0f}%</span>'
+        if s in ("Reduziu", "Zerado"): return f'<span style="color:#51cf66;font-weight:700">⬇ {abs(perc):.0f}%</span>'
+        return '<span style="color:#f0a500;font-weight:700">● 0%</span>'
 
     linhas = ""
     for _, row in df_filtrado.iterrows():
@@ -148,9 +147,9 @@ def render(df_hist, moeda_br, data_selecionada):
         linhas += (
             "<tr>"
             "<td>" + str(row["Produto"]) + "</td>"
-            "<td>" + str(row.get("Descricao","")) + "</td>"
-            "<td>" + str(row.get("Conta","")) + "</td>"
-            "<td>" + str(row.get("Empresa / Filial","")) + "</td>"
+            "<td>" + str(row.get("Descricao", "")) + "</td>"
+            "<td>" + str(row.get("Conta", "")) + "</td>"
+            "<td>" + str(row.get("Empresa / Filial", "")) + "</td>"
             "<td style='" + cs + "'>" + str(row["Status Mov"]) + "</td>"
             "<td>" + moeda_br(row["Valor MoM"]) + "</td>"
             "<td>" + moeda_br(row["Valor Atual"]) + "</td>"
