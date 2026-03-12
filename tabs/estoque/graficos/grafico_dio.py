@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 from io import BytesIO
 
-def render(df_hist, moeda_br, data_selecionada):
+# ATENÇÃO: A função agora recebe o df_obsoleto como segundo argumento!
+def render(df_hist, df_obsoleto, moeda_br, data_selecionada):
 
     if data_selecionada is None:
         st.warning("Selecione uma data de fechamento.")
@@ -13,83 +14,89 @@ def render(df_hist, moeda_br, data_selecionada):
     df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"]).dt.normalize()
     data_selecionada = pd.Timestamp(data_selecionada.date())
 
-    # Filtra apenas o histórico até a data selecionada
+    # ── 1. Ajuste de Agrupamento (ID_UNICO) igual ao Power Query ──────────────
+    df_hist["ID_UNICO"] = df_hist["Empresa / Filial"].astype(str) + "|" + df_hist["Produto"].astype(str)
+    
+    df_obsoleto = df_obsoleto.copy()
+    # Recriamos o ID_UNICO no obsoleto (pois o motor final deleta essa coluna)
+    if "ID_UNICO" not in df_obsoleto.columns:
+        df_obsoleto["ID_UNICO"] = df_obsoleto["Empresa / Filial"].astype(str) + "|" + df_obsoleto["Produto"].astype(str)
+
     datas_sorted = sorted([d for d in df_hist["Data Fechamento"].unique() if d <= data_selecionada])
 
     if len(datas_sorted) < 2:
         st.info("Histórico insuficiente para calcular DIO.")
         return
 
-    # MELHORIA AQUI: Para ter 12 meses de consumo (variações), precisamos de 13 datas de fechamento
     datas_janela = datas_sorted[-13:] if len(datas_sorted) >= 13 else datas_sorted
 
-    # ── Estoque atual ──────────────────────────────────────────────────────────
+    # ── 2. Estoque atual ───────────────────────────────────────────────────────
     df_atual = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
-    desc = df_atual.groupby("Produto")[["Descricao", "Conta", "Empresa / Filial"]].first().reset_index()
+    
+    grp_atual = df_atual.groupby("ID_UNICO").agg({
+        "Produto": "first",
+        "Descricao": "first",
+        "Conta": "first",
+        "Empresa / Filial": "first",
+        "Custo Total": "sum"
+    }).rename(columns={"Custo Total": "Custo Total Atual"}).reset_index()
 
-    grp_atual = (
-        df_atual.groupby("Produto")["Custo Total"]
-        .sum().reset_index().rename(columns={"Custo Total": "Custo Total Atual"})
-    )
-
-    # ── Saldo Inicial = Valor do produto na primeira data da janela (exatos 12 meses atrás) ─────────
-    # Sem precisar usar nenhuma tabela externa "d_EstoqueInicial"
+    # ── 3. Saldo Inicial ───────────────────────────────────────────────────────
     data_inicial = datas_janela[0]
     df_inicial = df_hist[df_hist["Data Fechamento"] == data_inicial].copy()
     grp_inicial = (
-        df_inicial.groupby("Produto")["Custo Total"]
+        df_inicial.groupby("ID_UNICO")["Custo Total"]
         .sum().reset_index().rename(columns={"Custo Total": "Saldo Inicial"})
     )
 
-    # ── CPV 12 meses = Soma das reduções mês a mês calculada apenas com os fechamentos ─────────────
+    # ── 4. Queda Mensal (CPV Básico) ───────────────────────────────────────────
     df_janela = df_hist[df_hist["Data Fechamento"].isin(datas_janela)].copy()
 
     pivot = (
-        df_janela.groupby(["Produto", "Data Fechamento"])["Custo Total"]
+        df_janela.groupby(["ID_UNICO", "Data Fechamento"])["Custo Total"]
         .sum()
         .unstack(fill_value=0)
         .sort_index(axis=1)
     )
 
-    cpv_list = []
-    ult_mov_list =[]
-
-    for produto in pivot.index:
-        valores = pivot.loc[produto].values
-        datas   = list(pivot.columns)
-
-        # Calcula a queda de estoque entre os fechamentos (isso substitui a d_ConsultaMovimentacoes)
+    cpv_list =[]
+    for id_unico in pivot.index:
+        valores = pivot.loc[id_unico].values
         reducoes = [max(0, valores[i] - valores[i+1]) for i in range(len(valores)-1)]
         cpv = sum(reducoes)
+        cpv_list.append({"ID_UNICO": id_unico, "CPV_Calculado": cpv})
 
-        # Última movimentação = última data em que houve redução
-        ult_mov = None
-        for i in range(len(valores)-2, -1, -1):
-            if valores[i] > valores[i+1]:
-                ult_mov = datas[i+1]
-                break
+    df_cpv = pd.DataFrame(cpv_list)
 
-        cpv_list.append({"Produto": produto, "CPV 12m": cpv})
-        ult_mov_list.append({"Produto": produto, "Ult Mov": ult_mov})
+    # ── 5. Unindo tudo (Merge Histórico + Obsoleto) ────────────────────────────
+    df_dio = grp_atual.merge(grp_inicial, on="ID_UNICO", how="left")
+    df_dio = df_dio.merge(df_cpv, on="ID_UNICO", how="left")
+    
+    # Pegamos a verdadeira data de Última Movimentação do seu motor obsoleto!
+    df_obs_sub = df_obsoleto[["ID_UNICO", "Ult_Movimentacao"]].copy()
+    df_dio = df_dio.merge(df_obs_sub, on="ID_UNICO", how="left")
 
-    df_cpv    = pd.DataFrame(cpv_list)
-    df_ultmov = pd.DataFrame(ult_mov_list)
-
-    # ── Merge ──────────────────────────────────────────────────────────────────
-    df_dio = grp_atual.merge(grp_inicial, on="Produto", how="left")
-    df_dio = df_dio.merge(df_cpv, on="Produto", how="left")
-    df_dio = df_dio.merge(df_ultmov, on="Produto", how="left")
-    df_dio = df_dio.merge(desc, on="Produto", how="left")
-
-    # Se o produto não existia 12 meses atrás, o Saldo Inicial dele é 0
     df_dio["Saldo Inicial"] = df_dio["Saldo Inicial"].fillna(0)
-    df_dio["CPV 12m"]       = df_dio["CPV 12m"].fillna(0)
-
-    # ── Cálculo DIO ───────────────────────────────────────────────────────────
-    # Estoque Médio = (Saldo Inicial + Custo Total Atual) / 2
-    # DIO = (Estoque Médio / CPV 12m) × 365
     df_dio["Estoque Medio"] = (df_dio["Saldo Inicial"] + df_dio["Custo Total Atual"]) / 2
 
+    # ── 6. O Pulo do Gato: Trava do Sem Consumo ────────────────────────────────
+    def definir_cpv(row):
+        cpv = row["CPV_Calculado"] if pd.notna(row.get("CPV_Calculado")) else 0
+        
+        # Se a última movimentação real foi há mais de 365 dias,
+        # ou se não existe registro de movimento, forçamos o consumo pra ZERO.
+        if pd.notna(row.get("Ult_Movimentacao")):
+            dias_sem_mov = (data_selecionada - pd.to_datetime(row["Ult_Movimentacao"])).days
+            if dias_sem_mov >= 365:
+                cpv = 0
+        else:
+            cpv = 0 # Sem registro de movimentação = Sem Consumo puro
+            
+        return cpv
+
+    df_dio["CPV 12m"] = df_dio.apply(definir_cpv, axis=1)
+
+    # ── 7. Cálculo DIO e Classificação ─────────────────────────────────────────
     def calcular_dio(row):
         if row["CPV 12m"] > 0:
             return (row["Estoque Medio"] / row["CPV 12m"]) * 365
@@ -97,7 +104,6 @@ def render(df_hist, moeda_br, data_selecionada):
 
     df_dio["DIO"] = df_dio.apply(calcular_dio, axis=1)
 
-    # ── Classificação ─────────────────────────────────────────────────────────
     def classificar(dio):
         if dio is None:    return "Sem Consumo"
         elif dio <= 30:    return "Giro Alto (≤30d)"
@@ -107,7 +113,7 @@ def render(df_hist, moeda_br, data_selecionada):
 
     df_dio["Classificação"] = df_dio["DIO"].apply(classificar)
 
-    # ── Cards ──────────────────────────────────────────────────────────────────
+    # ── 8. Cards ───────────────────────────────────────────────────────────────
     total_estoque = df_dio["Custo Total Atual"].sum()
     dio_validos   = df_dio[df_dio["DIO"].notna() & (df_dio["DIO"] < 99999)]["DIO"]
     dio_mediano   = dio_validos.median() if not dio_validos.empty else None
@@ -122,7 +128,7 @@ def render(df_hist, moeda_br, data_selecionada):
 
     label_inicial = pd.Timestamp(data_inicial).strftime("%d/%m/%Y")
     label_atual   = data_selecionada.strftime("%d/%m/%Y")
-    n_meses       = len(datas_janela) - 1 # Mostra 12m nos cards (13 datas = 12 meses de intervalo)
+    n_meses       = len(datas_janela) - 1
 
     st.markdown("""
     <style>
@@ -165,7 +171,7 @@ def render(df_hist, moeda_br, data_selecionada):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Tabela resumo ──────────────────────────────────────────────────────────
+    # ── 9. Tabela resumo ───────────────────────────────────────────────────────
     ordem =["Giro Alto (≤30d)", "Giro Médio (31-90d)", "Giro Baixo (91-180d)", "Crítico (>180d)", "Sem Consumo"]
 
     resumo = df_dio.groupby("Classificação").agg(
@@ -209,7 +215,7 @@ def render(df_hist, moeda_br, data_selecionada):
         + "<th>Classificação</th><th>Produtos</th><th>Valor</th><th>% Estoque</th>"
         + "</tr></thead><tbody>" + linhas_resumo + "</tbody></table>")
 
-    # ── Filtro e tabela detalhada ──────────────────────────────────────────────
+    # ── 10. Filtro e tabela detalhada ──────────────────────────────────────────
     filtro = st.selectbox("Filtrar por classificação", ["Todos"] + ordem)
 
     df_tabela = df_dio.copy() if filtro == "Todos" else df_dio[df_dio["Classificação"] == filtro].copy()
@@ -228,9 +234,9 @@ def render(df_hist, moeda_br, data_selecionada):
     colunas_excel =[
         "Código", "Descrição", "Conta", "Empresa / Filial", "Classificação",
         "Saldo Inicial", "Estoque Final", "Estoque Médio", "CPV (12m)",
-        "DIO (dias)", "Ult Mov"
+        "DIO (dias)", "Ult_Movimentacao"
     ]
-    colunas_excel = [c for c in colunas_excel if c in df_export.columns]
+    colunas_excel =[c for c in colunas_excel if c in df_export.columns]
     df_export = df_export[colunas_excel]
 
     output = BytesIO()
@@ -250,7 +256,10 @@ def render(df_hist, moeda_br, data_selecionada):
     for _, row in df_tabela.iterrows():
         dio_val  = row["DIO"]
         dio_str  = f"{dio_val:.0f}" if dio_val is not None and not (isinstance(dio_val, float) and np.isnan(dio_val)) else "—"
-        ult_mov  = pd.Timestamp(row["Ult Mov"]).strftime("%d/%m/%Y") if pd.notna(row.get("Ult Mov")) else "—"
+        
+        # Agora a tela mostra a data REAL extraída pelo seu motor de obsoleto!
+        ult_mov  = pd.Timestamp(row["Ult_Movimentacao"]).strftime("%d/%m/%Y") if pd.notna(row.get("Ult_Movimentacao")) else "—"
+        
         linhas += (
             "<tr>"
             "<td>" + str(row["Produto"]) + "</td>"
