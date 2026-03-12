@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from io import BytesIO
 
 
 def render(df_hist, moeda_br, data_selecionada):
@@ -115,22 +116,6 @@ def render(df_hist, moeda_br, data_selecionada):
 
     df_dio["Classificacao"] = df_dio["DIO"].apply(classificar)
 
-    total_estoque = df_dio["Custo Total Atual"].sum()
-
-    dio_validos = df_dio[df_dio["DIO"].notna() & (df_dio["DIO"] < 99999)]["DIO"]
-    dio_mediano = dio_validos.median() if not dio_validos.empty else None
-
-    qtd_alto = len(df_dio[df_dio["Classificacao"] == "Giro Alto (<=30d)"])
-    qtd_medio = len(df_dio[df_dio["Classificacao"] == "Giro Medio (31-90d)"])
-    qtd_critico = len(df_dio[df_dio["Classificacao"] == "Critico (>180d)"])
-    qtd_sem = len(df_dio[df_dio["Classificacao"] == "Sem Consumo"])
-
-    val_critico = df_dio[
-        df_dio["Classificacao"].isin(["Critico (>180d)", "Sem Consumo"])
-    ]["Custo Total Atual"].sum()
-
-    perc_critico = (val_critico / total_estoque * 100) if total_estoque > 0 else 0
-
     st.markdown("<br>", unsafe_allow_html=True)
 
     filtro = st.selectbox(
@@ -146,6 +131,28 @@ def render(df_hist, moeda_br, data_selecionada):
     df_tabela = df_dio.copy() if filtro == "Todos" else df_dio[df_dio["Classificacao"] == filtro].copy()
 
     df_tabela = df_tabela.sort_values("DIO", ascending=False, na_position="first").reset_index(drop=True)
+
+    # -------------------------------------------------
+    # BOTAO EXPORTAR EXCEL
+    # -------------------------------------------------
+
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df_tabela.to_excel(writer, index=False, sheet_name="DIO")
+
+    excel_data = output.getvalue()
+
+    st.download_button(
+        label="📥 Exportar para Excel",
+        data=excel_data,
+        file_name=f"DIO_Estoque_{data_selecionada.strftime('%Y_%m_%d')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    # -------------------------------------------------
+    # TABELA HTML
+    # -------------------------------------------------
 
     linhas = ""
 
@@ -182,53 +189,7 @@ def render(df_hist, moeda_br, data_selecionada):
         )
 
     st.html(
-        """
-        <style>
-
-        .tb-container{
-            overflow-x:auto;
-            width:100%;
-        }
-
-        .tb-dio{
-            width:100%;
-            min-width:1500px;
-            border-collapse:collapse;
-            font-size:13px;
-            color:white;
-        }
-
-        .tb-dio th{
-            background-color:#0f5a60;
-            padding:9px 12px;
-            border-bottom:2px solid #EC6E21;
-            text-align:left;
-            white-space:nowrap;
-        }
-
-        .tb-dio td{
-            padding:7px 12px;
-            border-bottom:1px solid #1a6e75;
-            background-color:#005562;
-            white-space:nowrap;
-        }
-
-        .tb-dio th:nth-child(n+6),
-        .tb-dio td:nth-child(n+6){
-            text-align:right;
-        }
-
-        .tb-dio tr:hover td{
-            background-color:#0a6570;
-        }
-
-        </style>
-        """
-        +
-        f"<p style='color:#aaa;font-size:12px'>{len(df_tabela)} produtos</p>"
-        +
         "<div class='tb-container'>"
-        +
         "<table class='tb-dio'>"
         "<thead>"
         "<tr>"
