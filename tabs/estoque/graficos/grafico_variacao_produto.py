@@ -120,17 +120,13 @@ def render(df_hist, moeda_br, data_selecionada):
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Filtro por status ──────────────────────────────────────────────────────
+    # DEPOIS
     opcoes = ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"]
-    status_sel = st.multiselect(
-        "Filtrar por Status Mov",
-        opcoes[1:],
-        default=[],
-        placeholder="Todos os status"
-    )
+    status_sel = st.selectbox("Filtrar por Status Mov", opcoes)
 
     df_filtrado = df_var.copy()
-    if status_sel:
-        df_filtrado = df_filtrado[df_filtrado["Status Mov"].isin(status_sel)]
+    if status_sel != "Todos":
+    df_filtrado = df_filtrado[df_filtrado["Status Mov"] == status_sel]
 
     df_filtrado = df_filtrado.sort_values("Variacao", key=abs, ascending=False).reset_index(drop=True)
 
