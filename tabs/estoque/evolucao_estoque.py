@@ -8,7 +8,7 @@ from tabs.estoque.graficos.grafico_variacao_produto import render as grafico_var
 from tabs.estoque.graficos.grafico_dio import render as grafico_dio
 
 
-def render(df_hist, moeda_br, df_kpi=None, data_selecionada=None, valor_mom=None, valor_yoy=None):
+def render(df_hist, df_obsoleto, moeda_br, df_kpi=None, data_selecionada=None, valor_mom=None, valor_yoy=None):
 
     st.subheader("📦 Evolução de Estoque")
 
@@ -39,4 +39,4 @@ def render(df_hist, moeda_br, df_kpi=None, data_selecionada=None, valor_mom=None
         grafico_variacao_produto(df, moeda_br, data_selecionada)
 
     with tab6:
-        grafico_dio(df, moeda_br, data_selecionada)
+        grafico_dio(df, df_obsoleto, moeda_br, data_selecionada)
