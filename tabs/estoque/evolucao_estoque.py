@@ -5,7 +5,7 @@ from tabs.estoque.graficos.grafico_empresa import render as grafico_empresa
 from tabs.estoque.graficos.grafico_conta import render as grafico_conta
 from tabs.estoque.graficos.grafico_top_produtos import render as grafico_top_produtos
 from tabs.estoque.graficos.grafico_variacao_produto import render as grafico_variacao_produto
-from tabs.estoque.graficos.grafico_giro_estoque import render as grafico_giro_estoque
+from tabs.estoque.graficos.grafico_dio import render as grafico_giro_estoque
 
 
 def render(df_hist, moeda_br, df_kpi=None, data_selecionada=None, valor_mom=None, valor_yoy=None):
@@ -39,4 +39,4 @@ def render(df_hist, moeda_br, df_kpi=None, data_selecionada=None, valor_mom=None
         grafico_variacao_produto(df, moeda_br, data_selecionada)
 
     with tab6:
-        grafico_giro_estoque(df, moeda_br, data_selecionada)
+        grafico_dio(df, moeda_br, data_selecionada)
