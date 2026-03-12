@@ -49,7 +49,7 @@ def render(df):
         )
     )
 
-    area = base.mark_area(opacity=0.55, color="#c8a84b")
+    area = base.mark_area(opacity=0.35, color="#ff7f0e")
     line = base.mark_line(color="#ff7f0e", strokeWidth=3)
     points = base.mark_circle(size=70, color="#ff7f0e")
     labels = base.mark_text(dy=-12, color="white", fontSize=11).encode(text="Label")
