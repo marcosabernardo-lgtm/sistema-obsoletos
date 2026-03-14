@@ -2,4 +2,4 @@ data/*.parquet
 __pycache__/
 *.pyc
 .env
-dados_estoque/*.zip
+
