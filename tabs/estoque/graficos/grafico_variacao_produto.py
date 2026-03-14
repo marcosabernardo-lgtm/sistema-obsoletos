@@ -20,23 +20,22 @@ def render(df_hist, moeda_br, data_selecionada):
     data_mom = datas_sorted[idx - 1]
     df_mom = df_hist[df_hist["Data Fechamento"] == data_mom].copy()
 
-    # Agrupar por Produto
     grp_atual = df_atual.groupby("Produto")["Custo Total"].sum().reset_index().rename(columns={"Custo Total": "Valor Atual"})
     grp_mom   = df_mom.groupby("Produto")["Custo Total"].sum().reset_index().rename(columns={"Custo Total": "Valor MoM"})
 
-    # Descrição com fallback
     desc_atual = df_atual.groupby("Produto")[["Descricao", "Conta", "Empresa / Filial"]].first().reset_index()
     desc_mom   = df_mom.groupby("Produto")[["Descricao", "Conta", "Empresa / Filial"]].first().reset_index()
     desc = pd.concat([desc_mom, desc_atual]).drop_duplicates(subset="Produto", keep="last")
 
     df_var = grp_mom.merge(grp_atual, on="Produto", how="outer").fillna(0)
     df_var = df_var.merge(desc, on="Produto", how="left")
+
     df_var["Variacao"] = df_var["Valor Atual"] - df_var["Valor MoM"]
+
     df_var["Perc"] = df_var.apply(
         lambda r: (r["Variacao"] / r["Valor MoM"] * 100) if r["Valor MoM"] != 0 else 0, axis=1
     )
 
-    # Status Mov
     def status(row):
         if row["Valor MoM"] > 0 and row["Valor Atual"] == 0:
             return "Zerado"
@@ -49,22 +48,20 @@ def render(df_hist, moeda_br, data_selecionada):
 
     df_var["Status Mov"] = df_var.apply(status, axis=1)
 
-    # Totais para cards
-    total_mom    = df_var["Valor MoM"].sum()
-    total_atual  = df_var["Valor Atual"].sum()
+    total_mom = df_var["Valor MoM"].sum()
+    total_atual = df_var["Valor Atual"].sum()
+
     total_aument = df_var[df_var["Status Mov"] == "Aumentou"]["Variacao"].sum()
-    total_reduz  = df_var[df_var["Status Mov"] == "Reduziu"]["Variacao"].abs().sum()
+    total_reduz = df_var[df_var["Status Mov"] == "Reduziu"]["Variacao"].abs().sum()
     total_zerado = df_var[df_var["Status Mov"] == "Zerado"]["Valor MoM"].sum()
 
-    qtd_zerado  = len(df_var[df_var["Status Mov"] == "Zerado"])
-    qtd_reduz   = len(df_var[df_var["Status Mov"] == "Reduziu"])
-    qtd_aument  = len(df_var[df_var["Status Mov"] == "Aumentou"])
-    qtd_manteve = len(df_var[df_var["Status Mov"] == "Manteve"])
+    qtd_zerado = len(df_var[df_var["Status Mov"] == "Zerado"])
+    qtd_reduz = len(df_var[df_var["Status Mov"] == "Reduziu"])
+    qtd_aument = len(df_var[df_var["Status Mov"] == "Aumentou"])
 
-    label_mom   = pd.Timestamp(data_mom).strftime("%d/%m/%Y")
+    label_mom = pd.Timestamp(data_mom).strftime("%d/%m/%Y")
     label_atual = data_selecionada.strftime("%d/%m/%Y")
 
-    # ── Cards de resumo ────────────────────────────────────────────────────────
     st.markdown("""
     <style>
     .card-mov {
@@ -119,44 +116,45 @@ def render(df_hist, moeda_br, data_selecionada):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Filtro por status (mesmo layout dos filtros do dashboard) ──────────────
-    st.markdown("### Filtrar por Status Mov")
-
-    opcoes = ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"]
-
-    status_sel = st.selectbox(
-        "",
-        opcoes,
-        key="filtro_status_mov"
+    # ── NOVO FILTRO (botões horizontais estilo BI)
+    status_sel = st.radio(
+        "Filtrar por Status Mov",
+        ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"],
+        horizontal=True
     )
 
     df_filtrado = df_var.copy()
+
     if status_sel != "Todos":
         df_filtrado = df_filtrado[df_filtrado["Status Mov"] == status_sel]
 
     df_filtrado = df_filtrado.sort_values("Variacao", key=abs, ascending=False).reset_index(drop=True)
 
-    # ── Tabela HTML ────────────────────────────────────────────────────────────
     def cor_status(s):
         if s == "Aumentou": return "color:#ff6b6b;font-weight:700"
-        if s == "Reduziu":  return "color:#51cf66;font-weight:700"
-        if s == "Zerado":   return "color:#51cf66;font-weight:700"
+        if s == "Reduziu": return "color:#51cf66;font-weight:700"
+        if s == "Zerado": return "color:#51cf66;font-weight:700"
         return "color:#f0a500;font-weight:700"
 
     def icone_perc(perc, s):
-        if s == "Aumentou":           return f'<span style="color:#ff6b6b;font-weight:700">⬆ {abs(perc):.0f}%</span>'
-        if s in ("Reduziu", "Zerado"): return f'<span style="color:#51cf66;font-weight:700">⬇ {abs(perc):.0f}%</span>'
+        if s == "Aumentou":
+            return f'<span style="color:#ff6b6b;font-weight:700">⬆ {abs(perc):.0f}%</span>'
+        if s in ("Reduziu","Zerado"):
+            return f'<span style="color:#51cf66;font-weight:700">⬇ {abs(perc):.0f}%</span>'
         return '<span style="color:#f0a500;font-weight:700">● 0%</span>'
 
     linhas = ""
+
     for _, row in df_filtrado.iterrows():
+
         cs = cor_status(row["Status Mov"])
+
         linhas += (
             "<tr>"
             "<td>" + str(row["Produto"]) + "</td>"
-            "<td>" + str(row.get("Descricao", "")) + "</td>"
-            "<td>" + str(row.get("Conta", "")) + "</td>"
-            "<td>" + str(row.get("Empresa / Filial", "")) + "</td>"
+            "<td>" + str(row.get("Descricao","")) + "</td>"
+            "<td>" + str(row.get("Conta","")) + "</td>"
+            "<td>" + str(row.get("Empresa / Filial","")) + "</td>"
             "<td style='" + cs + "'>" + str(row["Status Mov"]) + "</td>"
             "<td>" + moeda_br(row["Valor MoM"]) + "</td>"
             "<td>" + moeda_br(row["Valor Atual"]) + "</td>"
@@ -168,8 +166,7 @@ def render(df_hist, moeda_br, data_selecionada):
     css = (
         "<style>"
         ".tb-mov{width:100%;border-collapse:collapse;font-size:13px;color:white;}"
-        ".tb-mov th{background-color:#0f5a60;color:white;padding:9px 12px;text-align:left;"
-        "border-bottom:2px solid #EC6E21;font-weight:700;white-space:nowrap;}"
+        ".tb-mov th{background-color:#0f5a60;color:white;padding:9px 12px;text-align:left;border-bottom:2px solid #EC6E21;font-weight:700;white-space:nowrap;}"
         ".tb-mov th:nth-child(n+6){text-align:right;}"
         ".tb-mov td{padding:7px 12px;border-bottom:1px solid #1a6e75;background-color:#005562;color:white;}"
         ".tb-mov td:nth-child(n+6){text-align:right;}"
