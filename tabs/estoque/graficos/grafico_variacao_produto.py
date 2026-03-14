@@ -119,9 +119,16 @@ def render(df_hist, moeda_br, data_selecionada):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Filtro por status ──────────────────────────────────────────────────────
+    # ── Filtro por status (mesmo layout dos filtros do dashboard) ──────────────
+    st.markdown("### Filtrar por Status Mov")
+
     opcoes = ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"]
-    status_sel = st.selectbox("Filtrar por Status Mov", opcoes)
+
+    status_sel = st.selectbox(
+        "",
+        opcoes,
+        key="filtro_status_mov"
+    )
 
     df_filtrado = df_var.copy()
     if status_sel != "Todos":
