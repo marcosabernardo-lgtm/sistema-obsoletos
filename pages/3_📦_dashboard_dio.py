@@ -58,17 +58,30 @@ div[data-testid="stDataFrame"] div[role="gridcell"]{
     padding:16px;
     border-radius:10px;
     text-align:center;
+    height:100px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
 }
 
 .kpi-title{
-    font-size:14px;
+    font-size:13px;
     color:white;
+    line-height:1.2;
+    white-space:nowrap;
 }
 
 .kpi-value{
-    font-size:26px;
+    font-size:22px;
     font-weight:700;
     color:white;
+    line-height:1.2;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    width:100%;
 }
 
 </style>
