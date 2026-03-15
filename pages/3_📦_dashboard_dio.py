@@ -723,7 +723,9 @@ with tab5:
         "DIO_calc", "DIO_fmt_calc", "Faixa_calc"
     ]
     colunas_presentes = [c for c in colunas_exib if c in df_base_hist.columns]
-    df_base_exib = df_base_hist[colunas_presentes].copy()
+    df_base_exib = df_base_hist[colunas_presentes].copy().sort_values(
+        "Custo Total", ascending=False
+    ).reset_index(drop=True)
 
     # Formata para exibição
     df_base_display = df_base_exib.copy()
