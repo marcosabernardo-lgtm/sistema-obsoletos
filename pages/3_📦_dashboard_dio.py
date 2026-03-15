@@ -310,11 +310,12 @@ st.markdown("---")
 # ABAS
 # -------------------------------------------------
 
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Distribuição por Faixa DIO",
     "🏆 Top 20 Maior DIO",
     "📋 Todos os Produtos",
-    "🔗 Cruzamento Obsoletos"
+    "🔗 Cruzamento Obsoletos",
+    "📚 Base Histórica DIO"
 ])
 
 # ── TAB 1 ─────────────────────────────────────────────────
@@ -681,3 +682,92 @@ with tab4:
             file_name=f"cruzamento_dio_obsoletos_{data_selecionada.strftime('%Y-%m-%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
+# ── TAB 5: Base Histórica DIO ─────────────────────────────
+
+with tab5:
+
+    st.subheader("📚 Base Histórica DIO")
+
+    # Toggle Geral / Sem Consumo
+    visao = st.radio(
+        "Visualizar",
+        ["Geral", "Sem Consumo"],
+        horizontal=True,
+        key="base_historica_dio_visao"
+    )
+
+    # Busca textual
+    busca_hist = st.text_input("🔍 Buscar por produto ou descrição", "", key="busca_base_hist_dio")
+
+    # Aplica filtro de visão
+    if visao == "Sem Consumo":
+        df_base_hist = df[df["Faixa_calc"] == "Sem consumo"].copy()
+    else:
+        df_base_hist = df.copy()
+
+    # Aplica busca
+    if busca_hist:
+        mask = (
+            df_base_hist["Produto"].astype(str).str.contains(busca_hist, case=False, na=False) |
+            df_base_hist["Descricao"].astype(str).str.contains(busca_hist, case=False, na=False)
+        )
+        df_base_hist = df_base_hist[mask]
+
+    # Monta tabela com todas as colunas de cálculo
+    colunas_exib = [
+        "Empresa / Filial", "Produto", "Descricao",
+        "Saldo Atual", "Custo Total", "Vlr Unit",
+        "Consumo_12m", "Consumo_Diario",
+        "DIO_calc", "DIO_fmt_calc", "Faixa_calc"
+    ]
+    colunas_presentes = [c for c in colunas_exib if c in df_base_hist.columns]
+    df_base_exib = df_base_hist[colunas_presentes].copy()
+
+    # Formata para exibição
+    df_base_display = df_base_exib.copy()
+    df_base_display["Custo Total"]    = df_base_display["Custo Total"].apply(moeda_br)
+    df_base_display["Vlr Unit"]       = df_base_display["Vlr Unit"].apply(moeda_br)
+    df_base_display["Consumo_Diario"] = df_base_display["Consumo_Diario"].apply(lambda x: f"{x:.6f}")
+    df_base_display["DIO_calc"]       = df_base_display["DIO_calc"].apply(
+        lambda x: f"{x:.1f}" if x != np.inf else "∞"
+    )
+    df_base_display = df_base_display.rename(columns={
+        "Consumo_12m":    f"Consumo 12m ({'R$' if modo == 'Por Valor' else 'un'})",
+        "Consumo_Diario": "Consumo/Dia",
+        "DIO_calc":       "DIO (dias)",
+        "DIO_fmt_calc":   "DIO Formatado",
+        "Faixa_calc":     "Faixa DIO"
+    })
+
+    st.caption(
+        f"{len(df_base_hist)} produtos · "
+        f"Fechamento: {data_selecionada.strftime('%d/%m/%Y')} · "
+        f"Visão: {visao}"
+    )
+
+    st.dataframe(df_base_display, use_container_width=True, hide_index=True)
+
+    # Exportar Excel — dados brutos (sem formatação de moeda para preservar números)
+    df_excel_hist = df_base_exib.copy()
+    df_excel_hist = df_excel_hist.rename(columns={
+        "Consumo_12m":    f"Consumo 12m ({'R$' if modo == 'Por Valor' else 'un'})",
+        "Consumo_Diario": "Consumo Diario",
+        "DIO_calc":       "DIO (dias)",
+        "DIO_fmt_calc":   "DIO Formatado",
+        "Faixa_calc":     "Faixa DIO"
+    })
+    df_excel_hist["DIO (dias)"] = df_excel_hist["DIO (dias)"].replace(np.inf, 999999)
+
+    buffer_hist = io.BytesIO()
+    df_excel_hist.to_excel(buffer_hist, index=False)
+    buffer_hist.seek(0)
+
+    label_visao_hist = "sem_consumo" if visao == "Sem Consumo" else "geral"
+
+    st.download_button(
+        label="📥 Exportar Excel",
+        data=buffer_hist.getvalue(),
+        file_name=f"base_historica_dio_{label_visao_hist}_{data_selecionada.strftime('%Y-%m-%d')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
