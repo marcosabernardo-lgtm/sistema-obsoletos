@@ -308,9 +308,11 @@ def executar_motor_dio(caminho_zip_estoque, pasta_zips_obsoletos):
 
         df_cons = (
             df_consumo
-            .groupby("ID_UNICO", as_index=False)["Qtd_Saida"]
-            .sum()
-            .rename(columns={"Qtd_Saida": "Consumo_12m"})
+            .groupby("ID_UNICO", as_index=False)
+            .agg(
+                Consumo_12m=("Qtd_Saida", "sum"),
+                Ult_Mov_DIO=("Data", "max")
+            )
         )
         df_cons["Consumo_Diario"] = df_cons["Consumo_12m"] / dias_janela
 
@@ -383,6 +385,7 @@ def executar_motor_dio(caminho_zip_estoque, pasta_zips_obsoletos):
         "Vlr Unit",
         "Consumo_12m",
         "Consumo_Diario",
+        "Ult_Mov_DIO",
         "DIO",
         "DIO_Formatado",
         "Faixa DIO",

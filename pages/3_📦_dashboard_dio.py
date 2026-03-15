@@ -706,40 +706,6 @@ with tab5:
     else:
         df_base_hist = df.copy()
 
-    # --------------------------------------------------
-    # JOIN com parquet de obsoletos — traz Ult_Movimentacao
-    # --------------------------------------------------
-
-    PASTA_OBS_HIST = "data/obsoletos"
-
-    if os.path.exists(PASTA_OBS_HIST):
-        try:
-            @st.cache_data
-            def carregar_ult_mov(pasta, data_fechamento):
-                arquivos = [os.path.join(pasta, f) for f in os.listdir(pasta) if f.endswith(".parquet")]
-                if not arquivos:
-                    return pd.DataFrame(columns=["Empresa / Filial", "Produto", "Ult_Movimentacao"])
-                df_obs = pd.concat([pd.read_parquet(a) for a in arquivos], ignore_index=True)
-                df_obs["Data Fechamento"] = pd.to_datetime(df_obs["Data Fechamento"])
-                df_obs = df_obs[df_obs["Data Fechamento"] == data_fechamento]
-                if "Ult_Movimentacao" not in df_obs.columns:
-                    return pd.DataFrame(columns=["Empresa / Filial", "Produto", "Ult_Movimentacao"])
-                return df_obs[["Empresa / Filial", "Produto", "Ult_Movimentacao"]].drop_duplicates()
-
-            df_ult_mov = carregar_ult_mov(PASTA_OBS_HIST, data_selecionada)
-
-            if not df_ult_mov.empty:
-                df_base_hist = df_base_hist.merge(
-                    df_ult_mov,
-                    on=["Empresa / Filial", "Produto"],
-                    how="left"
-                )
-                df_base_hist["Ult_Movimentacao"] = pd.to_datetime(
-                    df_base_hist["Ult_Movimentacao"], errors="coerce"
-                )
-        except Exception:
-            pass  # se falhar, continua sem a coluna
-
     # Aplica busca
     if busca_hist:
         mask = (
@@ -753,7 +719,7 @@ with tab5:
         "Empresa / Filial", "Produto", "Descricao",
         "Saldo Atual", "Custo Total", "Vlr Unit",
         "Consumo_12m", "Consumo_Diario",
-        "Ult_Movimentacao",
+        "Ult_Mov_DIO",
         "DIO_calc", "DIO_fmt_calc", "Faixa_calc"
     ]
     colunas_presentes = [c for c in colunas_exib if c in df_base_hist.columns]
@@ -767,18 +733,18 @@ with tab5:
     df_base_display["DIO_calc"]       = df_base_display["DIO_calc"].apply(
         lambda x: f"{x:.1f}" if x != np.inf else "∞"
     )
-    if "Ult_Movimentacao" in df_base_display.columns:
-        df_base_display["Ult_Movimentacao"] = df_base_display["Ult_Movimentacao"].apply(
-            lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "Sem mov."
-        )
+    if "Ult_Mov_DIO" in df_base_display.columns:
+        df_base_display["Ult_Mov_DIO"] = pd.to_datetime(
+            df_base_display["Ult_Mov_DIO"], errors="coerce"
+        ).apply(lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "Sem mov.")
 
     df_base_display = df_base_display.rename(columns={
-        "Consumo_12m":      f"Consumo 12m ({'R$' if modo == 'Por Valor' else 'un'})",
-        "Consumo_Diario":   "Consumo/Dia",
-        "Ult_Movimentacao": "Ult. Movimentação",
-        "DIO_calc":         "DIO (dias)",
-        "DIO_fmt_calc":     "DIO Formatado",
-        "Faixa_calc":       "Faixa DIO"
+        "Consumo_12m":    f"Consumo 12m ({'R$' if modo == 'Por Valor' else 'un'})",
+        "Consumo_Diario": "Consumo/Dia",
+        "Ult_Mov_DIO":    "Ult. Mov. (Saída/Mov)",
+        "DIO_calc":       "DIO (dias)",
+        "DIO_fmt_calc":   "DIO Formatado",
+        "Faixa_calc":     "Faixa DIO"
     })
 
     st.caption(
@@ -789,19 +755,19 @@ with tab5:
 
     st.dataframe(df_base_display, use_container_width=True, hide_index=True)
 
-    # Exportar Excel — dados brutos (sem formatação de moeda para preservar números)
+    # Exportar Excel
     df_excel_hist = df_base_exib.copy()
-    if "Ult_Movimentacao" in df_excel_hist.columns:
-        df_excel_hist["Ult_Movimentacao"] = df_excel_hist["Ult_Movimentacao"].apply(
-            lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "Sem mov."
-        )
+    if "Ult_Mov_DIO" in df_excel_hist.columns:
+        df_excel_hist["Ult_Mov_DIO"] = pd.to_datetime(
+            df_excel_hist["Ult_Mov_DIO"], errors="coerce"
+        ).apply(lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "Sem mov.")
     df_excel_hist = df_excel_hist.rename(columns={
-        "Consumo_12m":      f"Consumo 12m ({'R$' if modo == 'Por Valor' else 'un'})",
-        "Consumo_Diario":   "Consumo Diario",
-        "Ult_Movimentacao": "Ult. Movimentacao",
-        "DIO_calc":         "DIO (dias)",
-        "DIO_fmt_calc":     "DIO Formatado",
-        "Faixa_calc":       "Faixa DIO"
+        "Consumo_12m":    f"Consumo 12m ({'R$' if modo == 'Por Valor' else 'un'})",
+        "Consumo_Diario": "Consumo Diario",
+        "Ult_Mov_DIO":    "Ult. Mov. (Saida/Mov)",
+        "DIO_calc":       "DIO (dias)",
+        "DIO_fmt_calc":   "DIO Formatado",
+        "Faixa_calc":     "Faixa DIO"
     })
     df_excel_hist["DIO (dias)"] = df_excel_hist["DIO (dias)"].replace(np.inf, 999999)
 
