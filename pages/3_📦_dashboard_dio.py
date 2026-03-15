@@ -491,12 +491,14 @@ with tab3:
     st.caption(f"{len(df_tabela)} produtos encontrados")
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-    csv = df_tabela.to_csv(index=False, sep=";", decimal=",")
+    buffer_xlsx = io.BytesIO()
+    df_tabela.to_excel(buffer_xlsx, index=False)
+    buffer_xlsx.seek(0)
     st.download_button(
-        label="⬇️ Exportar CSV",
-        data=csv.encode("utf-8-sig"),
-        file_name=f"dio_{modo.lower().replace(' ','_')}_{data_selecionada.strftime('%Y-%m-%d')}.csv",
-        mime="text/csv"
+        label="📥 Exportar Excel",
+        data=buffer_xlsx.getvalue(),
+        file_name=f"dio_{modo.lower().replace(' ','_')}_{data_selecionada.strftime('%Y-%m-%d')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 # ── TAB 4: Cruzamento Obsoletos ───────────────────────────
