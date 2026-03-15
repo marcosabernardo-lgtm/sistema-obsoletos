@@ -195,16 +195,13 @@ if empresas_sel:
     df = df[df["Empresa / Filial"].isin(empresas_sel)]
 
 # -------------------------------------------------
-# FILTRO POR QTD / POR VALOR
+# MODO — session_state permite renderizar radio abaixo dos KPIs
 # -------------------------------------------------
 
-modo = st.radio("Filtrar por", ["Por Qtd", "Por Valor"], horizontal=True)
+if "modo_dio" not in st.session_state:
+    st.session_state["modo_dio"] = "Por Qtd"
 
-st.markdown("---")
-
-# -------------------------------------------------
-# RECALCULA DIO CONFORME MODO
-# -------------------------------------------------
+modo = st.session_state["modo_dio"]
 
 if modo == "Por Valor":
     # Consumo em R$/dia = consumo_diario (un/dia) × vlr_unit (R$/un)
@@ -273,6 +270,24 @@ col5.markdown(f"""<div class="kpi-card">
 <div class="kpi-title">Itens Sem Consumo</div>
 <div class="kpi-value">{fmt_numero(sem_consumo)}</div>
 </div>""", unsafe_allow_html=True)
+
+st.markdown("---")
+
+# -------------------------------------------------
+# FILTRO POR QTD / POR VALOR — abaixo dos KPIs
+# -------------------------------------------------
+
+novo_modo = st.radio(
+    "Calcular DIO por",
+    ["Por Qtd", "Por Valor"],
+    index=0 if st.session_state["modo_dio"] == "Por Qtd" else 1,
+    horizontal=True,
+    key="radio_modo_dio"
+)
+
+if novo_modo != st.session_state["modo_dio"]:
+    st.session_state["modo_dio"] = novo_modo
+    st.rerun()
 
 st.markdown("---")
 
