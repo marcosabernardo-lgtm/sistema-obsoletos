@@ -595,52 +595,6 @@ with tab4:
         st.markdown("")
 
         # --------------------------------------------------
-        # GRÁFICO — Zona de Risco por Empresa
-        # --------------------------------------------------
-
-        st.markdown("##### Valor por Zona de Risco e Empresa / Filial")
-
-        df_emp_zona = (
-            df_cross.groupby(["Empresa / Filial", "Zona de Risco"], as_index=False)
-            .agg(Custo=("Custo Total", "sum"), Itens=("Produto", "count"))
-        )
-        df_emp_zona["Zona de Risco"] = pd.Categorical(
-            df_emp_zona["Zona de Risco"], categories=ORDEM_ZONAS, ordered=True
-        )
-
-        chart_zona = (
-            alt.Chart(df_emp_zona)
-            .mark_bar()
-            .encode(
-                x=alt.X("Empresa / Filial:N", title=None,
-                        axis=alt.Axis(labelColor="white", labelAngle=-30)),
-                y=alt.Y("Custo:Q", title="Custo Total (R$)",
-                        axis=alt.Axis(labelColor="white", titleColor="white",
-                                      format=",.0f")),
-                color=alt.Color("Zona de Risco:N",
-                                sort=ORDEM_ZONAS,
-                                scale=alt.Scale(
-                                    domain=list(CORES_ZONAS.keys()),
-                                    range=list(CORES_ZONAS.values())
-                                ),
-                                legend=alt.Legend(
-                                    labelColor="white", titleColor="white",
-                                    title="Zona de Risco", orient="bottom"
-                                )),
-                order=alt.Order("Zona de Risco:N", sort="ascending"),
-                tooltip=[
-                    "Empresa / Filial", "Zona de Risco",
-                    alt.Tooltip("Custo:Q", format=",.2f", title="Custo R$"),
-                    "Itens"
-                ]
-            )
-            .properties(height=380, background="transparent")
-            .configure_view(strokeOpacity=0)
-            .configure_axis(gridColor="#1a6b72")
-        )
-        st.altair_chart(chart_zona, use_container_width=True)
-
-        # --------------------------------------------------
         # TABELA COMPLETA — todas as zonas com classificação
         # --------------------------------------------------
 
