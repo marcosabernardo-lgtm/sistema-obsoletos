@@ -150,7 +150,15 @@ def ler_saidas(caminho_zip_obsoletos):
             )
 
             df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
-            df["Qtd_Saida"] = pd.to_numeric(df[col_qtd], errors="coerce").fillna(0).abs() if col_qtd else 1
+            if col_qtd:
+                df["Qtd_Saida"] = (
+                    pd.to_numeric(
+                        df[col_qtd].astype(str).str.replace(",", ".", regex=False),
+                        errors="coerce"
+                    ).fillna(0).abs()
+                )
+            else:
+                df["Qtd_Saida"] = 1
 
             lista.append(df[["ID_UNICO", "Data", "Qtd_Saida"]])
 
@@ -228,7 +236,15 @@ def ler_movimentacoes(caminho_zip_obsoletos):
             )
 
             df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
-            df["Qtd_Saida"] = pd.to_numeric(df[col_qtd], errors="coerce").fillna(0).abs() if col_qtd else 1
+            if col_qtd:
+                df["Qtd_Saida"] = (
+                    pd.to_numeric(
+                        df[col_qtd].astype(str).str.replace(",", ".", regex=False),
+                        errors="coerce"
+                    ).fillna(0).abs()
+                )
+            else:
+                df["Qtd_Saida"] = 1
 
             lista.append(df[["ID_UNICO", "Data", "Qtd_Saida"]])
 
