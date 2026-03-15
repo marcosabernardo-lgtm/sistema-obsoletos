@@ -5,13 +5,29 @@ import io
 
 def render(df_filtrado, moeda_br):
 
-    base = df_filtrado.copy()
+    # df_filtrado já vem com apenas obsoletos — precisamos do df completo
+    # O dashboard passa df_kpi completo como segundo argumento opcional
+    # Para manter compatibilidade, usamos session_state para o toggle
 
-    base["Data Fechamento"] = pd.to_datetime(
-        base["Data Fechamento"]
-    ).dt.date
+    col_toggle, _ = st.columns([2, 8])
 
-    # Versão display (formatada)
+    with col_toggle:
+        visao = st.radio(
+            "Visualizar",
+            ["Obsoleto", "Geral"],
+            horizontal=True,
+            key="base_historica_visao"
+        )
+
+    if visao == "Obsoleto":
+        base = df_filtrado.copy()
+    else:
+        # df_filtrado pode ter vindo filtrado; pedimos o df completo via session_state
+        base = st.session_state.get("df_kpi_completo", df_filtrado).copy()
+
+    base["Data Fechamento"] = pd.to_datetime(base["Data Fechamento"]).dt.date
+
+    # Versão display formatada
     base_display = base.copy()
 
     if "Vlr Unit" in base_display.columns:
@@ -29,16 +45,17 @@ def render(df_filtrado, moeda_br):
         hide_index=True
     )
 
-    # Exportar Excel (dados sem formatação de moeda para preservar números)
+    # Exportar Excel
     buffer = io.BytesIO()
     base.to_excel(buffer, index=False)
     buffer.seek(0)
 
     data_ref = base["Data Fechamento"].max() if not base.empty else "sem_data"
+    label_visao = "obsoletos" if visao == "Obsoleto" else "geral"
 
     st.download_button(
         label="📥 Exportar Excel",
         data=buffer.getvalue(),
-        file_name=f"obsoletos_{data_ref}.xlsx",
+        file_name=f"base_historica_{label_visao}_{data_ref}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )

@@ -181,6 +181,9 @@ if empresas_sel:
 if contas_sel:
     df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
 
+# Disponibiliza o df completo para a aba Base Histórica (visão Geral)
+st.session_state["df_kpi_completo"] = df_kpi
+
 # -------------------------------------------------
 # BASE FILTRADA
 # -------------------------------------------------
