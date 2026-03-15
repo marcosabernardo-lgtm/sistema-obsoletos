@@ -309,10 +309,11 @@ st.markdown("---")
 # ABAS
 # -------------------------------------------------
 
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Distribuição por Faixa DIO",
     "🏆 Top 20 Maior DIO",
-    "📋 Todos os Produtos"
+    "📋 Todos os Produtos",
+    "🔗 Cruzamento Obsoletos"
 ])
 
 # ── TAB 1 ─────────────────────────────────────────────────
@@ -496,3 +497,182 @@ with tab3:
         file_name=f"dio_{modo.lower().replace(' ','_')}_{data_selecionada.strftime('%Y-%m-%d')}.csv",
         mime="text/csv"
     )
+
+# ── TAB 4: Cruzamento Obsoletos ───────────────────────────
+
+with tab4:
+
+    st.subheader("🔗 Cruzamento DIO × Obsolescência")
+
+    PASTA_OBS = "data/obsoletos"
+
+    if not os.path.exists(PASTA_OBS) or not [f for f in os.listdir(PASTA_OBS) if f.endswith(".parquet")]:
+        st.warning("⚠️ Base de obsoletos não encontrada em **data/obsoletos**. Processe os obsoletos primeiro.")
+    else:
+
+        @st.cache_data
+        def carregar_obsoletos(pasta):
+            arquivos = [os.path.join(pasta, f) for f in os.listdir(pasta) if f.endswith(".parquet")]
+            df_obs = pd.concat([pd.read_parquet(a) for a in arquivos], ignore_index=True)
+            df_obs["Data Fechamento"] = pd.to_datetime(df_obs["Data Fechamento"])
+            return df_obs
+
+        df_obs_full = carregar_obsoletos(PASTA_OBS)
+
+        # Filtra pelo mesmo fechamento selecionado
+        df_obs = df_obs_full[df_obs_full["Data Fechamento"] == data_selecionada].copy()
+
+        if empresas_sel:
+            df_obs = df_obs[df_obs["Empresa / Filial"].isin(empresas_sel)]
+
+        # --------------------------------------------------
+        # JOIN DIO × OBSOLETOS
+        # --------------------------------------------------
+
+        df_dio_base = df[["Empresa / Filial", "Produto", "Custo Total",
+                           "DIO_calc", "DIO_fmt_calc", "Faixa_calc"]].copy()
+
+        df_obs_base = df_obs[["Empresa / Filial", "Produto",
+                               "Status Estoque", "Meses Ult Mov"]].copy()
+
+        df_cross = df_dio_base.merge(
+            df_obs_base,
+            on=["Empresa / Filial", "Produto"],
+            how="left"
+        )
+
+        # Classifica cada produto nas 4 zonas de risco
+        def zona_risco(row):
+            obsoleto   = row.get("Status Estoque") == "Obsoleto"
+            sem_consumo = row["Faixa_calc"] == "Sem consumo"
+
+            if obsoleto and sem_consumo:
+                return "🔴 Obsoleto + Sem Consumo"
+            if obsoleto and not sem_consumo:
+                return "🟠 Obsoleto mas com DIO"
+            if not obsoleto and sem_consumo:
+                return "🟡 Sem Consumo (não obsoleto)"
+            return "🟢 Ativo"
+
+        df_cross["Zona de Risco"] = df_cross.apply(zona_risco, axis=1)
+
+        ORDEM_ZONAS = [
+            "🔴 Obsoleto + Sem Consumo",
+            "🟠 Obsoleto mas com DIO",
+            "🟡 Sem Consumo (não obsoleto)",
+            "🟢 Ativo"
+        ]
+        CORES_ZONAS = {
+            "🔴 Obsoleto + Sem Consumo":  "#e74c3c",
+            "🟠 Obsoleto mas com DIO":    "#e67e22",
+            "🟡 Sem Consumo (não obsoleto)": "#f1c40f",
+            "🟢 Ativo":                   "#2ecc71"
+        }
+
+        # --------------------------------------------------
+        # KPIs DO CRUZAMENTO
+        # --------------------------------------------------
+
+        resumo = df_cross.groupby("Zona de Risco").agg(
+            Itens=("Produto", "count"),
+            Custo=("Custo Total", "sum")
+        ).reindex(ORDEM_ZONAS).fillna(0).reset_index()
+
+        custo_total_cross = df_cross["Custo Total"].sum()
+
+        st.markdown("##### Distribuição por Zona de Risco")
+
+        cols = st.columns(4)
+        for i, row in resumo.iterrows():
+            perc = (row["Custo"] / custo_total_cross * 100) if custo_total_cross > 0 else 0
+            cols[i].markdown(f"""<div class="kpi-card">
+<div class="kpi-title">{row['Zona de Risco']}</div>
+<div class="kpi-value">{moeda_br(row['Custo'])}</div>
+<div class="kpi-title" style="color:#EC6E21;font-weight:700">{int(row['Itens'])} itens · {perc:.1f}%</div>
+</div>""", unsafe_allow_html=True)
+
+        st.markdown("")
+
+        # --------------------------------------------------
+        # GRÁFICO — Zona de Risco por Empresa
+        # --------------------------------------------------
+
+        st.markdown("##### Valor por Zona de Risco e Empresa / Filial")
+
+        df_emp_zona = (
+            df_cross.groupby(["Empresa / Filial", "Zona de Risco"], as_index=False)
+            .agg(Custo=("Custo Total", "sum"), Itens=("Produto", "count"))
+        )
+        df_emp_zona["Zona de Risco"] = pd.Categorical(
+            df_emp_zona["Zona de Risco"], categories=ORDEM_ZONAS, ordered=True
+        )
+
+        chart_zona = (
+            alt.Chart(df_emp_zona)
+            .mark_bar()
+            .encode(
+                x=alt.X("Empresa / Filial:N", title=None,
+                        axis=alt.Axis(labelColor="white", labelAngle=-30)),
+                y=alt.Y("Custo:Q", title="Custo Total (R$)",
+                        axis=alt.Axis(labelColor="white", titleColor="white",
+                                      format=",.0f")),
+                color=alt.Color("Zona de Risco:N",
+                                sort=ORDEM_ZONAS,
+                                scale=alt.Scale(
+                                    domain=list(CORES_ZONAS.keys()),
+                                    range=list(CORES_ZONAS.values())
+                                ),
+                                legend=alt.Legend(
+                                    labelColor="white", titleColor="white",
+                                    title="Zona de Risco", orient="bottom"
+                                )),
+                order=alt.Order("Zona de Risco:N", sort="ascending"),
+                tooltip=[
+                    "Empresa / Filial", "Zona de Risco",
+                    alt.Tooltip("Custo:Q", format=",.2f", title="Custo R$"),
+                    "Itens"
+                ]
+            )
+            .properties(height=380, background="transparent")
+            .configure_view(strokeOpacity=0)
+            .configure_axis(gridColor="#1a6b72")
+        )
+        st.altair_chart(chart_zona, use_container_width=True)
+
+        # --------------------------------------------------
+        # TABELA DETALHADA — foco na zona crítica
+        # --------------------------------------------------
+
+        st.markdown("##### Detalhamento — Obsoleto + Sem Consumo (zona crítica)")
+
+        df_critico = df_cross[
+            df_cross["Zona de Risco"] == "🔴 Obsoleto + Sem Consumo"
+        ][["Empresa / Filial", "Produto", "Custo Total",
+           "Meses Ult Mov", "DIO_fmt_calc", "Faixa_calc"]].copy()
+
+        df_critico = df_critico.sort_values("Custo Total", ascending=False)
+
+        df_critico_display = df_critico.copy()
+        df_critico_display["Custo Total"] = df_critico_display["Custo Total"].apply(moeda_br)
+        df_critico_display["Meses Ult Mov"] = df_critico_display["Meses Ult Mov"].apply(
+            lambda x: f"{int(x)} meses" if pd.notna(x) else "Sem mov."
+        )
+        df_critico_display = df_critico_display.rename(columns={
+            "DIO_fmt_calc": "DIO",
+            "Faixa_calc":   "Faixa DIO"
+        })
+
+        st.caption(f"{len(df_critico)} produtos na zona crítica · "
+                   f"Total: {moeda_br(df_critico['Custo Total'].sum())}")
+        st.dataframe(df_critico_display, use_container_width=True, hide_index=True)
+
+        # Download
+        csv_cross = df_cross.rename(columns={
+            "DIO_calc": "DIO", "DIO_fmt_calc": "DIO Formatado", "Faixa_calc": "Faixa DIO"
+        }).to_csv(index=False, sep=";", decimal=",")
+        st.download_button(
+            label="⬇️ Exportar Cruzamento CSV",
+            data=csv_cross.encode("utf-8-sig"),
+            file_name=f"cruzamento_dio_obsoletos_{data_selecionada.strftime('%Y-%m-%d')}.csv",
+            mime="text/csv"
+        )
