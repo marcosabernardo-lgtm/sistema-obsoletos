@@ -3,6 +3,7 @@ import pandas as pd
 import altair as alt
 import os
 import numpy as np
+import io
 
 st.set_page_config(page_title="Dashboard DIO", layout="wide")
 
@@ -640,39 +641,87 @@ with tab4:
         st.altair_chart(chart_zona, use_container_width=True)
 
         # --------------------------------------------------
-        # TABELA DETALHADA — foco na zona crítica
+        # TABELA COMPLETA — todas as zonas com classificação
         # --------------------------------------------------
 
-        st.markdown("##### Detalhamento — Obsoleto + Sem Consumo (zona crítica)")
+        st.markdown("##### Detalhamento completo por Zona de Risco")
 
-        df_critico = df_cross[
-            df_cross["Zona de Risco"] == "🔴 Obsoleto + Sem Consumo"
-        ][["Empresa / Filial", "Produto", "Custo Total",
-           "Meses Ult Mov", "DIO_fmt_calc", "Faixa_calc"]].copy()
+        # Filtro de zona na própria aba
+        zonas_filtro = st.multiselect(
+            "Filtrar por Zona de Risco",
+            options=ORDEM_ZONAS,
+            default=ORDEM_ZONAS,
+            key="filtro_zona"
+        )
 
-        df_critico = df_critico.sort_values("Custo Total", ascending=False)
+        df_tabela_cross = df_cross[
+            df_cross["Zona de Risco"].isin(zonas_filtro)
+        ][[
+            "Empresa / Filial", "Produto", "Custo Total",
+            "Meses Ult Mov", "Status Estoque",
+            "DIO_fmt_calc", "Faixa_calc", "Zona de Risco"
+        ]].copy().sort_values(["Zona de Risco", "Custo Total"], ascending=[True, False])
 
-        df_critico_display = df_critico.copy()
-        df_critico_display["Custo Total"] = df_critico_display["Custo Total"].apply(moeda_br)
-        df_critico_display["Meses Ult Mov"] = df_critico_display["Meses Ult Mov"].apply(
+        # Versão display (formatada)
+        df_cross_display = df_tabela_cross.copy()
+        df_cross_display["Custo Total"]    = df_cross_display["Custo Total"].apply(moeda_br)
+        df_cross_display["Meses Ult Mov"]  = df_cross_display["Meses Ult Mov"].apply(
             lambda x: f"{int(x)} meses" if pd.notna(x) else "Sem mov."
         )
-        df_critico_display = df_critico_display.rename(columns={
+        df_cross_display["Status Estoque"] = df_cross_display["Status Estoque"].fillna("—")
+        df_cross_display = df_cross_display.rename(columns={
             "DIO_fmt_calc": "DIO",
             "Faixa_calc":   "Faixa DIO"
         })
 
-        st.caption(f"{len(df_critico)} produtos na zona crítica · "
-                   f"Total: {moeda_br(df_critico['Custo Total'].sum())}")
-        st.dataframe(df_critico_display, use_container_width=True, hide_index=True)
+        st.caption(f"{len(df_tabela_cross)} produtos · "
+                   f"Total: {moeda_br(df_tabela_cross['Custo Total'].sum())}")
+        st.dataframe(df_cross_display, use_container_width=True, hide_index=True)
 
-        # Download
-        csv_cross = df_cross.rename(columns={
-            "DIO_calc": "DIO", "DIO_fmt_calc": "DIO Formatado", "Faixa_calc": "Faixa DIO"
-        }).to_csv(index=False, sep=";", decimal=",")
+        # --------------------------------------------------
+        # EXPORTAR EXCEL
+        # --------------------------------------------------
+
+        def gerar_excel_cruzamento(df_export):
+            output = io.BytesIO()
+            df_out = df_export.copy()
+            df_out = df_out.rename(columns={
+                "DIO_fmt_calc": "DIO Formatado",
+                "Faixa_calc":   "Faixa DIO"
+            })
+            df_out["Meses Ult Mov"] = df_out["Meses Ult Mov"].apply(
+                lambda x: f"{int(x)} meses" if pd.notna(x) else "Sem mov."
+            )
+            df_out["Status Estoque"] = df_out["Status Estoque"].fillna("—")
+
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
+
+                # Aba resumo
+                resumo_excel = df_out.groupby("Zona de Risco").agg(
+                    Itens=("Produto", "count"),
+                    Custo_Total=("Custo Total", "sum")
+                ).reindex(ORDEM_ZONAS).fillna(0).reset_index()
+                resumo_excel.columns = ["Zona de Risco", "Qtd Itens", "Custo Total (R$)"]
+                resumo_excel.to_excel(writer, sheet_name="Resumo", index=False)
+
+                # Aba por zona
+                for zona in ORDEM_ZONAS:
+                    df_zona = df_out[df_out["Zona de Risco"] == zona].drop(columns=["Zona de Risco"])
+                    nome_aba = zona.split(" ", 1)[1][:28]  # remove emoji, limita 28 chars
+                    if not df_zona.empty:
+                        df_zona.to_excel(writer, sheet_name=nome_aba, index=False)
+
+                # Aba completa
+                df_out.to_excel(writer, sheet_name="Todos", index=False)
+
+            output.seek(0)
+            return output.getvalue()
+
+        excel_bytes = gerar_excel_cruzamento(df_tabela_cross)
+
         st.download_button(
-            label="⬇️ Exportar Cruzamento CSV",
-            data=csv_cross.encode("utf-8-sig"),
-            file_name=f"cruzamento_dio_obsoletos_{data_selecionada.strftime('%Y-%m-%d')}.csv",
-            mime="text/csv"
+            label="📥 Exportar Excel (todas as zonas)",
+            data=excel_bytes,
+            file_name=f"cruzamento_dio_obsoletos_{data_selecionada.strftime('%Y-%m-%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
