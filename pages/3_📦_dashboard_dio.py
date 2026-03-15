@@ -58,12 +58,12 @@ div[data-testid="stDataFrame"] div[role="gridcell"]{
     padding:16px;
     border-radius:10px;
     text-align:center;
-    height:100px;
+    min-height:100px;
     display:flex;
     flex-direction:column;
     align-items:center;
     justify-content:center;
-    gap:6px;
+    gap:4px;
 }
 
 .kpi-title{
@@ -234,6 +234,8 @@ if faixas_sel:
 total_itens   = len(df)
 sem_consumo   = (df["Faixa_calc"] == "Sem consumo").sum()
 custo_total   = df["Custo Total"].sum()
+custo_sem_consumo = df[df["Faixa_calc"] == "Sem consumo"]["Custo Total"].sum()
+perc_sem_consumo  = (custo_sem_consumo / custo_total * 100) if custo_total > 0 else 0
 
 df_com_dio    = df[df["DIO_calc"] != np.inf].copy()
 dio_medio     = df_com_dio["DIO_calc"].mean() if not df_com_dio.empty else 0
@@ -244,7 +246,8 @@ dio_ponderado = (
     if df_com_dio["Custo Total"].sum() > 0 else 0
 )
 
-col1, col2, col3, col4, col5 = st.columns(5)
+# Linha 1 — visão geral
+col1, col2, col3 = st.columns(3)
 
 col1.markdown(f"""<div class="kpi-card">
 <div class="kpi-title">Total de Itens</div>
@@ -257,18 +260,29 @@ col2.markdown(f"""<div class="kpi-card">
 </div>""", unsafe_allow_html=True)
 
 col3.markdown(f"""<div class="kpi-card">
+<div class="kpi-title">Itens Sem Consumo</div>
+<div class="kpi-value">{fmt_numero(sem_consumo)}</div>
+</div>""", unsafe_allow_html=True)
+
+st.markdown("")
+
+# Linha 2 — DIO e capital parado
+col4, col5, col6 = st.columns(3)
+
+col4.markdown(f"""<div class="kpi-card">
 <div class="kpi-title">DIO Médio ({modo})</div>
 <div class="kpi-value">{int(round(dio_medio))} dias</div>
 </div>""", unsafe_allow_html=True)
 
-col4.markdown(f"""<div class="kpi-card">
+col5.markdown(f"""<div class="kpi-card">
 <div class="kpi-title">DIO Ponderado ({modo})</div>
 <div class="kpi-value">{int(round(dio_ponderado))} dias</div>
 </div>""", unsafe_allow_html=True)
 
-col5.markdown(f"""<div class="kpi-card">
-<div class="kpi-title">Itens Sem Consumo</div>
-<div class="kpi-value">{fmt_numero(sem_consumo)}</div>
+col6.markdown(f"""<div class="kpi-card">
+<div class="kpi-title">Capital Imobilizado Sem Consumo</div>
+<div class="kpi-value">{moeda_br(custo_sem_consumo)}</div>
+<div class="kpi-title" style="color:#EC6E21;font-weight:700">{perc_sem_consumo:.1f}% do estoque total</div>
 </div>""", unsafe_allow_html=True)
 
 st.markdown("---")
