@@ -100,7 +100,10 @@ for zip_path in zips:
                 print(f"\n    Coluna de quantidade detectada: {col_qtd}")
                 if col_qtd:
                     print(f"    Valores de qtd: {df_prod[col_qtd].tolist()}")
-                    qtds = pd.to_numeric(df_prod[col_qtd], errors="coerce")
+                    qtds = pd.to_numeric(
+                        df_prod[col_qtd].astype(str).str.replace(",", ".", regex=False),
+                        errors="coerce"
+                    )
                     print(f"    Qtds numéricas: {qtds.tolist()}")
                     print(f"    Soma: {qtds.sum()}")
 
