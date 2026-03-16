@@ -54,7 +54,7 @@ def processar_zip():
 
             df = df[df["Codigo"].notna()]
 
-            df["Codigo"] = df["Codigo"].astype(str).str.strip()
+            df["Codigo"] = df["Codigo"].astype(str).str.zfill(6)
 
             df["Empresa"] = empresa
             df["Data_Inventario"] = data_inventario
@@ -66,24 +66,34 @@ def processar_zip():
 
         inventario = pd.concat(inventarios, ignore_index=True)
 
+        # -----------------------------------------------------
+        # EMPRESAS
+        # -----------------------------------------------------
+
         empresas = pd.read_excel(z.open("02_Empresas/02_Empresas.xlsx"))
 
-        empresas = empresas.rename(columns={
-            "Empresa": "Empresa",
-            "Empresa / Filial": "Nome_Empresa"
+        empresas["Empresa"] = empresas["Empresa"].astype(str).str.zfill(4)
+        inventario["Empresa"] = inventario["Empresa"].astype(str).str.zfill(4)
+
+        inventario = inventario.merge(
+            empresas,
+            on="Empresa",
+            how="left"
+        )
+
+        inventario = inventario.rename(columns={
+            "Empresa / Filial": "Empresa_Filial"
         })
 
-        inventario["Empresa"] = inventario["Empresa"].astype(str)
-        empresas["Empresa"] = empresas["Empresa"].astype(str)
-
-        inventario = inventario.merge(empresas, on="Empresa", how="left")
+        # -----------------------------------------------------
+        # ESTOQUE
+        # -----------------------------------------------------
 
         estoque = pd.read_parquet(CAMINHO_ESTOQUE)
 
-        estoque["Produto"] = estoque["Produto"].astype(str).str.strip()
+        estoque["Produto"] = estoque["Produto"].astype(str).str.zfill(6)
 
         estoque["Valor_Unitario"] = estoque["Custo Total"] / estoque["Saldo Atual"]
-        estoque["Valor_Unitario"] = estoque["Valor_Unitario"].fillna(0)
 
         estoque = estoque[[
             "Data Fechamento",
@@ -98,6 +108,10 @@ def processar_zip():
             how="left"
         )
 
+        # -----------------------------------------------------
+        # CALCULOS
+        # -----------------------------------------------------
+
         inventario["Valor_Protheus"] = (
             inventario["Qtd_Protheus"] * inventario["Valor_Unitario"]
         )
@@ -106,10 +120,14 @@ def processar_zip():
             inventario["Qtd_Inventariada"] * inventario["Valor_Unitario"]
         )
 
+        # -----------------------------------------------------
+        # ORGANIZAÇÃO FINAL
+        # -----------------------------------------------------
+
         inventario = inventario[[
-            "Nome_Empresa",
-            "Empresa",
             "Data_Inventario",
+            "Empresa",
+            "Empresa_Filial",
             "Codigo",
             "Descricao",
             "Qtd_Inventariada",
@@ -127,7 +145,7 @@ def processar_zip():
 
         inventario.to_parquet(CAMINHO_SAIDA, index=False)
 
-        print("Inventario processado com sucesso")
+        print("Inventário processado com sucesso")
 
 
 if __name__ == "__main__":
