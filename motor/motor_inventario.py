@@ -47,14 +47,14 @@ def processar_zip():
                 "CODIGO": "Codigo",
                 "DESCRICAO": "Descricao",
                 "QUANTIDADE INVENTARIADA": "Qtd_Inventariada",
-                "QTD NA DATA DO INVENTARIO": "Qtd_Protheus",
+                "QTD NA DATA DO INVENTARIO": "Qtd_ProtheUS",
                 "DIFERENCA QUANTIDADE": "Qtd_Divergente",
                 "DIFERENCA VALOR": "Valor_Divergente"
             })
 
             df = df[df["Codigo"].notna()]
 
-            df["Codigo"] = df["Codigo"].astype(str).str.zfill(6)
+            df["Codigo"] = df["Codigo"].astype(int).astype(str).str.zfill(6)
 
             df["Empresa"] = empresa
             df["Data_Inventario"] = data_inventario
@@ -82,7 +82,7 @@ def processar_zip():
         )
 
         inventario = inventario.rename(columns={
-            "Empresa / Filial": "Empresa_Filial"
+            "Empresa / Filial": "Nome_Empresa"
         })
 
         # -----------------------------------------------------
@@ -91,7 +91,7 @@ def processar_zip():
 
         estoque = pd.read_parquet(CAMINHO_ESTOQUE)
 
-        estoque["Produto"] = estoque["Produto"].astype(str).str.zfill(6)
+        estoque["Produto"] = estoque["Produto"].astype(int).astype(str).str.zfill(6)
 
         estoque["Valor_Unitario"] = estoque["Custo Total"] / estoque["Saldo Atual"]
 
@@ -109,11 +109,11 @@ def processar_zip():
         )
 
         # -----------------------------------------------------
-        # CALCULOS
+        # VALORES
         # -----------------------------------------------------
 
         inventario["Valor_Protheus"] = (
-            inventario["Qtd_Protheus"] * inventario["Valor_Unitario"]
+            inventario["Qtd_ProtheUS"] * inventario["Valor_Unitario"]
         )
 
         inventario["Valor_Inventariado"] = (
@@ -127,11 +127,11 @@ def processar_zip():
         inventario = inventario[[
             "Data_Inventario",
             "Empresa",
-            "Empresa_Filial",
+            "Nome_Empresa",
             "Codigo",
             "Descricao",
             "Qtd_Inventariada",
-            "Qtd_Protheus",
+            "Qtd_ProtheUS",
             "Qtd_Divergente",
             "Valor_Unitario",
             "Valor_Protheus",
