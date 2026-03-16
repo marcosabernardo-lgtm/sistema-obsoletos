@@ -178,14 +178,84 @@ st.markdown("---")
 
 
 # ---------------------------------------------------------
-# DEFINIR PASTA DE DADOS
+# FLUXO: ATUALIZAR OBSOLESCÊNCIA (lote automático)
 # ---------------------------------------------------------
 
 if tipo_processo == "Atualizar Obsolescência":
-    PASTA_DADOS = "dados_obsoleto"
-elif tipo_processo == "Atualizar DIO":
-    PASTA_DADOS = "dados_estoque"          # ZIP do motor_estoque
-    PASTA_OBSOLETOS = "dados_obsoleto"     # ZIPs do motor_obsoletos (histórico)
+
+    PASTA_OBS = "dados_obsoleto"
+
+    if not os.path.exists(PASTA_OBS):
+        st.error(f"A pasta '{PASTA_OBS}' não existe.")
+        st.stop()
+
+    zip_files_obs = sorted([f for f in os.listdir(PASTA_OBS) if f.endswith(".zip")])
+
+    if not zip_files_obs:
+        st.warning("Nenhum arquivo ZIP encontrado em 'dados_obsoleto'.")
+        st.stop()
+
+    df_log = carregar_log()
+    ja_processados = set(df_log[df_log["Tipo"] == "Obsolescência"]["Arquivo"].values)
+    novos = [f for f in zip_files_obs if f not in ja_processados]
+
+    # Mostra status dos arquivos
+    st.markdown("**Arquivos em `dados_obsoleto/`:**")
+
+    for arq in zip_files_obs:
+        if arq in ja_processados:
+            st.markdown(f"✅ `{arq}` — já processado")
+        else:
+            st.markdown(f"🟡 `{arq}` — **pendente**")
+
+    st.markdown("")
+
+    if not novos:
+        st.success("Todos os arquivos já foram processados.")
+        st.stop()
+
+    st.info(f"**{len(novos)} arquivo(s) novo(s)** serão processados: {', '.join(novos)}")
+
+    if st.button("🚀 Processar Fechamentos"):
+
+        total_registros = 0
+        erros = []
+
+        for arquivo in novos:
+            caminho = os.path.join(PASTA_OBS, arquivo)
+            st.write(f"⏳ Processando `{arquivo}`...")
+
+            try:
+                with st.spinner(f"Processando {arquivo}..."):
+                    df_final, _ = executar_motor(caminho)
+                    salvar_fechamento_obsoletos(df_final)
+                    qtd = len(df_final)
+                    total_registros += qtd
+                    salvar_log(arquivo, qtd, "Obsolescência")
+                    st.write(f"✅ `{arquivo}` — {qtd} registros")
+
+            except Exception as e:
+                erros.append(arquivo)
+                st.error(f"❌ Erro em `{arquivo}`: {e}")
+
+        if erros:
+            st.warning(f"Concluído com erros em: {', '.join(erros)}")
+        else:
+            st.success(f"✅ Todos os fechamentos processados! Total: {total_registros} registros")
+
+        st.cache_data.clear()
+        st.rerun()
+
+    st.stop()
+
+
+# ---------------------------------------------------------
+# DEFINIR PASTA DE DADOS (Estoque e DIO)
+# ---------------------------------------------------------
+
+if tipo_processo == "Atualizar DIO":
+    PASTA_DADOS = "dados_estoque"
+    PASTA_OBSOLETOS = "dados_obsoleto"
 else:
     PASTA_DADOS = "dados_estoque"
 
@@ -225,7 +295,7 @@ if tipo_processo == "Atualizar DIO":
 # REGRAS DE VALIDAÇÃO
 # ---------------------------------------------------------
 
-if tipo_processo in ("Atualizar Evolução de Estoque", "Atualizar DIO") and len(zip_files) > 1:
+if len(zip_files) > 1:
     st.error("A pasta dados_estoque deve conter apenas um arquivo ZIP.")
     st.stop()
 
@@ -241,7 +311,7 @@ arquivo_selecionado = st.selectbox(
 
 
 # ---------------------------------------------------------
-# PROCESSAMENTO
+# PROCESSAMENTO (Estoque e DIO)
 # ---------------------------------------------------------
 
 if st.button("🚀 Processar Fechamento"):
@@ -265,37 +335,24 @@ if st.button("🚀 Processar Fechamento"):
                 bloquear = True
 
         elif tipo_processo == "Atualizar DIO":
-            # Bloqueia se já existe parquet de DIO para esse fechamento
-            # (identifica pelo nome do ZIP = data do fechamento)
             data_str = arquivo_selecionado.replace(".zip", "")
             if os.path.exists(f"data/dio/{data_str}.parquet"):
                 bloquear = True
-
-        else:
-            bloquear = True
 
     if bloquear:
         st.error("⚠ Este arquivo já foi processado anteriormente.")
         st.stop()
 
-
     with st.spinner("Processando arquivo..."):
 
         try:
 
-            if tipo_processo == "Atualizar Obsolescência":
-
-                df_final, df_export = executar_motor(caminho_upload)
-                caminho = salvar_fechamento_obsoletos(df_final)
-                tipo = "Obsolescência"
-
-            elif tipo_processo == "Atualizar DIO":
+            if tipo_processo == "Atualizar DIO":
 
                 df_final, df_export = executar_motor_dio(
                     caminho_zip_estoque=caminho_upload,
                     pasta_zips_obsoletos=PASTA_OBSOLETOS
                 )
-                # motor_dio já salva o parquet em data/dio automaticamente
                 caminho = f"data/dio/{arquivo_selecionado.replace('.zip', '')}.parquet"
                 tipo = "DIO"
 
