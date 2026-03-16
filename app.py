@@ -6,25 +6,26 @@ from datetime import datetime
 from motor.motor_obsoletos import executar_motor
 from motor.motor_estoque import executar_motor_estoque
 from motor.motor_dio import executar_motor_dio
+from motor.motor_inventario import processar_zip as executar_motor_inventario
 
 from storage.base_obsoletos_lake import salvar_fechamento_obsoletos
 from storage.base_estoque_lake import salvar_fechamento_estoque
 
-
 st.set_page_config(page_title="Processamento de Estoque", layout="wide")
 
-
 # ---------------------------------------------------------
+
 # GARANTIR ESTRUTURA DE PASTAS
+
 # ---------------------------------------------------------
 
 os.makedirs("data", exist_ok=True)
 os.makedirs("data/obsoletos", exist_ok=True)
 os.makedirs("data/estoque", exist_ok=True)
 os.makedirs("data/dio", exist_ok=True)
+os.makedirs("data/inventario", exist_ok=True)
 
 LOG_PATH = "data/log_uploads.parquet"
-
 
 st.title("📊 Dashboard de Estoque e Obsolescência")
 
@@ -34,355 +35,229 @@ Este painel apresenta análises consolidadas do estoque da empresa com base nos 
 
 As informações incluem:
 
-• Evolução do valor total em estoque  
-• Identificação de itens obsoletos  
-• Classificação por tempo sem movimentação  
-• Distribuição por empresa e filial  
+• Evolução do valor total em estoque
+• Identificação de itens obsoletos
+• Classificação por tempo sem movimentação
+• Distribuição por empresa e filial
 • DIO — Days Inventory Outstanding por produto
 """
 )
 
 st.markdown("---")
 
-
 # ---------------------------------------------------------
+
 # FUNÇÕES DE LOG
+
 # ---------------------------------------------------------
 
 def carregar_log():
 
-    if os.path.exists(LOG_PATH):
-        return pd.read_parquet(LOG_PATH)
+```
+if os.path.exists(LOG_PATH):
+    return pd.read_parquet(LOG_PATH)
 
-    return pd.DataFrame(columns=["Arquivo", "Data", "Registros", "Tipo"])
-
+return pd.DataFrame(columns=["Arquivo", "Data", "Registros", "Tipo"])
+```
 
 def salvar_log(nome_zip, registros, tipo):
 
-    df_log = carregar_log()
+```
+df_log = carregar_log()
 
-    from datetime import timezone, timedelta
+from datetime import timezone, timedelta
 
-    agora = datetime.now(timezone.utc).astimezone(
-        timezone(timedelta(hours=-3))
-    )
+agora = datetime.now(timezone.utc).astimezone(
+    timezone(timedelta(hours=-3))
+)
 
-    novo = pd.DataFrame([{
-        "Arquivo": nome_zip,
-        "Data": agora,
-        "Registros": registros,
-        "Tipo": tipo
-    }])
+novo = pd.DataFrame([{
+    "Arquivo": nome_zip,
+    "Data": agora,
+    "Registros": registros,
+    "Tipo": tipo
+}])
 
-    df_log = pd.concat([df_log, novo], ignore_index=True)
-    df_log.to_parquet(LOG_PATH, index=False)
+df_log = pd.concat([df_log, novo], ignore_index=True)
+df_log.to_parquet(LOG_PATH, index=False)
 
-    return df_log
-
-
-# ---------------------------------------------------------
-# RESET
-# ---------------------------------------------------------
-
-with st.expander("⚠️ Zona de Perigo — Resetar Base"):
-
-    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-
-    with col_r1:
-        if st.button("🗑 Resetar Estoque"):
-            import shutil
-            if os.path.exists("data/estoque"):
-                shutil.rmtree("data/estoque")
-                os.makedirs("data/estoque", exist_ok=True)
-            if os.path.exists(LOG_PATH):
-                df_log = carregar_log()
-                df_log = df_log[df_log["Tipo"] != "Evolução Estoque"]
-                df_log.to_parquet(LOG_PATH, index=False)
-            st.success("Base de estoque resetada.")
-            st.cache_data.clear()
-            st.rerun()
-
-    with col_r2:
-        if st.button("🗑 Resetar Obsoletos"):
-            import shutil
-            if os.path.exists("data/obsoletos"):
-                shutil.rmtree("data/obsoletos")
-                os.makedirs("data/obsoletos", exist_ok=True)
-            if os.path.exists(LOG_PATH):
-                df_log = carregar_log()
-                df_log = df_log[df_log["Tipo"] != "Obsolescência"]
-                df_log.to_parquet(LOG_PATH, index=False)
-            st.success("Base de obsoletos resetada.")
-            st.cache_data.clear()
-            st.rerun()
-
-    with col_r3:
-        if st.button("🗑 Resetar DIO"):
-            import shutil
-            if os.path.exists("data/dio"):
-                shutil.rmtree("data/dio")
-                os.makedirs("data/dio", exist_ok=True)
-            if os.path.exists(LOG_PATH):
-                df_log = carregar_log()
-                df_log = df_log[df_log["Tipo"] != "DIO"]
-                df_log.to_parquet(LOG_PATH, index=False)
-            st.success("Base de DIO resetada.")
-            st.cache_data.clear()
-            st.rerun()
-
-    with col_r4:
-        if st.button("🗑 Resetar Tudo"):
-            import shutil
-            if os.path.exists("data"):
-                shutil.rmtree("data")
-            st.success("Todas as bases removidas.")
-            st.cache_data.clear()
-            st.rerun()
-
-
-st.markdown("---")
-
+return df_log
+```
 
 # ---------------------------------------------------------
+
 # STATUS DO DATA LAKE
+
 # ---------------------------------------------------------
 
 with st.expander("📊 Status da Base de Dados"):
 
-    if os.path.exists("data/obsoletos"):
-        st.write("Arquivos em obsoletos:", os.listdir("data/obsoletos"))
+```
+if os.path.exists("data/obsoletos"):
+    st.write("Arquivos em obsoletos:", os.listdir("data/obsoletos"))
 
-    if os.path.exists("data/estoque"):
-        st.write("Arquivos em estoque:", os.listdir("data/estoque"))
+if os.path.exists("data/estoque"):
+    st.write("Arquivos em estoque:", os.listdir("data/estoque"))
 
-    if os.path.exists("data/dio"):
-        st.write("Arquivos em DIO:", os.listdir("data/dio"))
+if os.path.exists("data/dio"):
+    st.write("Arquivos em DIO:", os.listdir("data/dio"))
 
+if os.path.exists("data/inventario"):
+    st.write("Arquivos em inventário:", os.listdir("data/inventario"))
+```
 
 # ---------------------------------------------------------
+
 # TIPO PROCESSAMENTO
+
 # ---------------------------------------------------------
 
 st.subheader("Tipo de processamento")
 
 tipo_processo = st.radio(
-    "Escolha o tipo de processamento",
-    [
-        "Atualizar Evolução de Estoque",
-        "Atualizar Obsolescência",
-        "Atualizar DIO",
-    ]
+"Escolha o tipo de processamento",
+[
+"Atualizar Evolução de Estoque",
+"Atualizar Obsolescência",
+"Atualizar DIO",
+"Atualizar Inventário"
+]
 )
 
 st.markdown("---")
 
-
-# ---------------------------------------------------------
-# FLUXO: ATUALIZAR OBSOLESCÊNCIA (lote automático)
 # ---------------------------------------------------------
 
-if tipo_processo == "Atualizar Obsolescência":
+# FLUXO INVENTÁRIO
 
-    PASTA_OBS = "dados_obsoleto"
+# ---------------------------------------------------------
 
-    if not os.path.exists(PASTA_OBS):
-        st.error(f"A pasta '{PASTA_OBS}' não existe.")
-        st.stop()
+if tipo_processo == "Atualizar Inventário":
 
-    zip_files_obs = sorted([f for f in os.listdir(PASTA_OBS) if f.endswith(".zip")])
+```
+PASTA_INV = "analytics/dados_inventario"
 
-    if not zip_files_obs:
-        st.warning("Nenhum arquivo ZIP encontrado em 'dados_obsoleto'.")
-        st.stop()
+if not os.path.exists(PASTA_INV):
+    st.error("Pasta analytics/dados_inventario não encontrada")
+    st.stop()
 
-    df_log = carregar_log()
-    ja_processados = set(df_log[df_log["Tipo"] == "Obsolescência"]["Arquivo"].values)
-    novos = [f for f in zip_files_obs if f not in ja_processados]
+arquivos = [f for f in os.listdir(PASTA_INV) if f.endswith(".zip")]
 
-    # Mostra status dos arquivos
-    st.markdown("**Arquivos em `dados_obsoleto/`:**")
+if len(arquivos) == 0:
+    st.warning("Nenhum ZIP encontrado em analytics/dados_inventario")
+    st.stop()
 
-    for arq in zip_files_obs:
-        if arq in ja_processados:
-            st.markdown(f"✅ `{arq}` — já processado")
-        else:
-            st.markdown(f"🟡 `{arq}` — **pendente**")
+if len(arquivos) > 1:
+    st.error("A pasta deve conter apenas um ZIP")
+    st.stop()
 
-    st.markdown("")
+arquivo = arquivos[0]
 
-    if not novos:
-        st.success("Todos os arquivos já foram processados.")
-        st.stop()
+st.info(f"Arquivo encontrado: {arquivo}")
 
-    st.info(f"**{len(novos)} arquivo(s) novo(s)** serão processados: {', '.join(novos)}")
+if st.button("🚀 Processar Inventário"):
 
-    if st.button("🚀 Processar Fechamentos"):
+    try:
 
-        total_registros = 0
-        erros = []
+        executar_motor_inventario()
 
-        for arquivo in novos:
-            caminho = os.path.join(PASTA_OBS, arquivo)
-            st.write(f"⏳ Processando `{arquivo}`...")
-
-            try:
-                with st.spinner(f"Processando {arquivo}..."):
-                    df_final, _ = executar_motor(caminho)
-                    salvar_fechamento_obsoletos(df_final)
-                    qtd = len(df_final)
-                    total_registros += qtd
-                    salvar_log(arquivo, qtd, "Obsolescência")
-                    st.write(f"✅ `{arquivo}` — {qtd} registros")
-
-            except Exception as e:
-                erros.append(arquivo)
-                st.error(f"❌ Erro em `{arquivo}`: {e}")
-
-        if erros:
-            st.warning(f"Concluído com erros em: {', '.join(erros)}")
-        else:
-            st.success(f"✅ Todos os fechamentos processados! Total: {total_registros} registros")
+        st.success("Inventário processado com sucesso")
 
         st.cache_data.clear()
         st.rerun()
 
-    st.stop()
+    except Exception as e:
 
+        st.error("Erro ao processar inventário")
+        st.exception(e)
+
+st.stop()
+```
 
 # ---------------------------------------------------------
-# DEFINIR PASTA DE DADOS (Estoque e DIO)
+
+# DEFINIR PASTA DE DADOS
+
 # ---------------------------------------------------------
 
 if tipo_processo == "Atualizar DIO":
-    PASTA_DADOS = "dados_estoque"
-    PASTA_OBSOLETOS = "dados_obsoleto"
+PASTA_DADOS = "dados_estoque"
+PASTA_OBSOLETOS = "dados_obsoleto"
 else:
-    PASTA_DADOS = "dados_estoque"
-
-
-# ---------------------------------------------------------
-# LISTAR ARQUIVOS
-# ---------------------------------------------------------
+PASTA_DADOS = "dados_estoque"
 
 if not os.path.exists(PASTA_DADOS):
-    st.error(f"A pasta '{PASTA_DADOS}' não existe.")
-    st.stop()
+st.error(f"A pasta '{PASTA_DADOS}' não existe.")
+st.stop()
 
 zip_files = [f for f in os.listdir(PASTA_DADOS) if f.endswith(".zip")]
 
 if len(zip_files) == 0:
-    st.warning("Nenhum arquivo ZIP encontrado.")
-    st.stop()
-
-# Para DIO também valida a pasta de obsoletos
-if tipo_processo == "Atualizar DIO":
-    if not os.path.exists(PASTA_OBSOLETOS):
-        st.error(f"A pasta '{PASTA_OBSOLETOS}' não existe. O DIO precisa dos ZIPs de obsoletos para calcular o consumo.")
-        st.stop()
-
-    zips_obsoletos = [f for f in os.listdir(PASTA_OBSOLETOS) if f.endswith(".zip")]
-    if len(zips_obsoletos) == 0:
-        st.error("Nenhum arquivo ZIP encontrado em 'dados_obsoleto'. O DIO precisa do histórico de movimentações.")
-        st.stop()
-
-    st.info(
-        f"📂 Serão usados **{len(zips_obsoletos)} ZIP(s)** de obsoletos para calcular o consumo: "
-        + ", ".join(zips_obsoletos)
-    )
-
-
-# ---------------------------------------------------------
-# REGRAS DE VALIDAÇÃO
-# ---------------------------------------------------------
+st.warning("Nenhum arquivo ZIP encontrado.")
+st.stop()
 
 if len(zip_files) > 1:
-    st.error("A pasta dados_estoque deve conter apenas um arquivo ZIP.")
-    st.stop()
-
-
-# ---------------------------------------------------------
-# SELEÇÃO DO ZIP PRINCIPAL
-# ---------------------------------------------------------
+st.error("A pasta dados_estoque deve conter apenas um arquivo ZIP.")
+st.stop()
 
 arquivo_selecionado = st.selectbox(
-    "Selecione o fechamento para processar",
-    zip_files
+"Selecione o fechamento para processar",
+zip_files
 )
 
-
 # ---------------------------------------------------------
-# PROCESSAMENTO (Estoque e DIO)
+
+# PROCESSAMENTO
+
 # ---------------------------------------------------------
 
 if st.button("🚀 Processar Fechamento"):
 
-    caminho_upload = os.path.join(PASTA_DADOS, arquivo_selecionado)
+```
+caminho_upload = os.path.join(PASTA_DADOS, arquivo_selecionado)
 
-    st.write("Arquivo selecionado:", arquivo_selecionado)
+st.write("Arquivo selecionado:", arquivo_selecionado)
 
-    df_log = carregar_log()
+with st.spinner("Processando arquivo..."):
 
-    # -----------------------------------------------------
-    # VERIFICAÇÃO DE BLOQUEIO
-    # -----------------------------------------------------
+    try:
 
-    bloquear = False
+        if tipo_processo == "Atualizar DIO":
 
-    if arquivo_selecionado in df_log["Arquivo"].values:
-
-        if tipo_processo == "Atualizar Evolução de Estoque":
-            if os.path.exists("data/estoque/estoque_historico.parquet"):
-                bloquear = True
-
-        elif tipo_processo == "Atualizar DIO":
-            data_str = arquivo_selecionado.replace(".zip", "")
-            if os.path.exists(f"data/dio/{data_str}.parquet"):
-                bloquear = True
-
-    if bloquear:
-        st.error("⚠ Este arquivo já foi processado anteriormente.")
-        st.stop()
-
-    with st.spinner("Processando arquivo..."):
-
-        try:
-
-            if tipo_processo == "Atualizar DIO":
-
-                df_final, df_export = executar_motor_dio(
-                    caminho_zip_estoque=caminho_upload,
-                    pasta_zips_obsoletos=PASTA_OBSOLETOS
-                )
-                caminho = f"data/dio/{arquivo_selecionado.replace('.zip', '')}.parquet"
-                tipo = "DIO"
-
-            else:
-
-                df_final, df_export = executar_motor_estoque(caminho_upload)
-                caminho = salvar_fechamento_estoque(df_final)
-                tipo = "Evolução Estoque"
-
-            qtd_registros = len(df_final)
-
-            salvar_log(arquivo_selecionado, qtd_registros, tipo)
-
-            st.success("✅ Processamento concluído!")
-            st.write("Arquivo salvo em:", caminho)
-            st.write("Registros:", qtd_registros)
-
-            st.download_button(
-                label="📥 Baixar Excel Final",
-                data=df_export,
-                file_name=f"{arquivo_selecionado.replace('.zip','')}_dio.xlsx"
-                          if tipo_processo == "Atualizar DIO"
-                          else f"{arquivo_selecionado.replace('.zip','')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            df_final, df_export = executar_motor_dio(
+                caminho_zip_estoque=caminho_upload,
+                pasta_zips_obsoletos="dados_obsoleto"
             )
 
-            st.cache_data.clear()
-            st.rerun()
+            caminho = f"data/dio/{arquivo_selecionado.replace('.zip','')}.parquet"
 
-        except Exception as e:
+            tipo = "DIO"
 
-            st.error("Erro inesperado durante o processamento.")
-            st.exception(e)
+        else:
+
+            df_final, df_export = executar_motor_estoque(caminho_upload)
+
+            caminho = salvar_fechamento_estoque(df_final)
+
+            tipo = "Evolução Estoque"
+
+        qtd_registros = len(df_final)
+
+        salvar_log(arquivo_selecionado, qtd_registros, tipo)
+
+        st.success("Processamento concluído")
+
+        st.write("Arquivo salvo em:", caminho)
+
+        st.write("Registros:", qtd_registros)
+
+        st.cache_data.clear()
+
+        st.rerun()
+
+    except Exception as e:
+
+        st.error("Erro inesperado durante o processamento.")
+
+        st.exception(e)
+```
