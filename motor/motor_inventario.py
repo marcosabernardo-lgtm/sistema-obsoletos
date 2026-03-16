@@ -47,7 +47,7 @@ def processar_zip():
                 "CODIGO": "Codigo",
                 "DESCRICAO": "Descricao",
                 "QUANTIDADE INVENTARIADA": "Qtd_Inventariada",
-                "QTD NA DATA DO INVENTARIO": "Qtd_ProtheUS",
+                "QTD NA DATA DO INVENTARIO": "Qtd_Protheus",
                 "DIFERENCA QUANTIDADE": "Qtd_Divergente",
                 "DIFERENCA VALOR": "Valor_Divergente"
             })
@@ -72,8 +72,18 @@ def processar_zip():
 
         empresas = pd.read_excel(z.open("02_Empresas/02_Empresas.xlsx"))
 
-        empresas["Empresa"] = empresas["Empresa"].astype(str).str.zfill(4)
-        inventario["Empresa"] = inventario["Empresa"].astype(str).str.zfill(4)
+        empresas["Empresa"] = (
+            empresas["Empresa"]
+            .astype(int)
+            .astype(str)
+            .str.zfill(4)
+        )
+
+        inventario["Empresa"] = (
+            inventario["Empresa"]
+            .astype(str)
+            .str.zfill(4)
+        )
 
         inventario = inventario.merge(
             empresas,
@@ -91,15 +101,22 @@ def processar_zip():
 
         estoque = pd.read_parquet(CAMINHO_ESTOQUE)
 
-        estoque["Produto"] = estoque["Produto"].astype(int).astype(str).str.zfill(6)
+        estoque["Produto"] = (
+            estoque["Produto"]
+            .astype(int)
+            .astype(str)
+            .str.zfill(6)
+        )
 
         estoque["Valor_Unitario"] = estoque["Custo Total"] / estoque["Saldo Atual"]
 
-        estoque = estoque[[
-            "Data Fechamento",
-            "Produto",
-            "Valor_Unitario"
-        ]]
+        estoque = estoque[
+            [
+                "Data Fechamento",
+                "Produto",
+                "Valor_Unitario"
+            ]
+        ]
 
         inventario = inventario.merge(
             estoque,
@@ -109,11 +126,11 @@ def processar_zip():
         )
 
         # -----------------------------------------------------
-        # VALORES
+        # CALCULOS
         # -----------------------------------------------------
 
         inventario["Valor_Protheus"] = (
-            inventario["Qtd_ProtheUS"] * inventario["Valor_Unitario"]
+            inventario["Qtd_Protheus"] * inventario["Valor_Unitario"]
         )
 
         inventario["Valor_Inventariado"] = (
@@ -124,22 +141,24 @@ def processar_zip():
         # ORGANIZAÇÃO FINAL
         # -----------------------------------------------------
 
-        inventario = inventario[[
-            "Data_Inventario",
-            "Empresa",
-            "Nome_Empresa",
-            "Codigo",
-            "Descricao",
-            "Qtd_Inventariada",
-            "Qtd_ProtheUS",
-            "Qtd_Divergente",
-            "Valor_Unitario",
-            "Valor_Protheus",
-            "Valor_Inventariado",
-            "Valor_Divergente",
-            "Qtd_Itens_Inventariados",
-            "Qtd_Itens_Divergentes"
-        ]]
+        inventario = inventario[
+            [
+                "Data_Inventario",
+                "Empresa",
+                "Nome_Empresa",
+                "Codigo",
+                "Descricao",
+                "Qtd_Inventariada",
+                "Qtd_Protheus",
+                "Qtd_Divergente",
+                "Valor_Unitario",
+                "Valor_Protheus",
+                "Valor_Inventariado",
+                "Valor_Divergente",
+                "Qtd_Itens_Inventariados",
+                "Qtd_Itens_Divergentes"
+            ]
+        ]
 
         Path("data/inventario").mkdir(parents=True, exist_ok=True)
 
