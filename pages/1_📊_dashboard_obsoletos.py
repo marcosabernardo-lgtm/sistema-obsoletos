@@ -140,7 +140,7 @@ if not arquivos:
 df_hist = carregar_base(PASTA_OBSOLETOS)
 
 # -------------------------------------------------
-# FILTROS
+# FILTROS (DINÂMICOS)
 # -------------------------------------------------
 
 st.sidebar.header("Filtros")
@@ -159,29 +159,39 @@ data_sel = st.sidebar.selectbox(
 
 data_selecionada = pd.Timestamp(datas_fmt[data_sel])
 
+# BASE INICIAL
+df_base_filtros = df_hist[
+    df_hist["Data Fechamento"] == data_selecionada
+].copy()
+
+# EMPRESA
+empresas_opcoes = sorted(df_base_filtros["Empresa / Filial"].dropna().unique())
+
 empresas_sel = st.sidebar.multiselect(
     "Empresa / Filial",
-    sorted(df_hist["Empresa / Filial"].dropna().unique())
+    empresas_opcoes
 )
+
+df_temp = df_base_filtros.copy()
+
+if empresas_sel:
+    df_temp = df_temp[df_temp["Empresa / Filial"].isin(empresas_sel)]
+
+# CONTA (DINÂMICO)
+contas_opcoes = sorted(df_temp["Conta"].dropna().unique())
 
 contas_sel = st.sidebar.multiselect(
     "Conta",
-    sorted(df_hist["Conta"].dropna().unique())
+    contas_opcoes
 )
 
-# -------------------------------------------------
-# BASE KPI
-# -------------------------------------------------
-
-df_kpi = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
-
-if empresas_sel:
-    df_kpi = df_kpi[df_kpi["Empresa / Filial"].isin(empresas_sel)]
-
 if contas_sel:
-    df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
+    df_temp = df_temp[df_temp["Conta"].isin(contas_sel)]
 
-# Disponibiliza o df completo para a aba Base Histórica (visão Geral)
+# RESULTADO FINAL
+df_kpi = df_temp.copy()
+
+# Disponibiliza o df completo
 st.session_state["df_kpi_completo"] = df_kpi
 
 # -------------------------------------------------

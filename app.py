@@ -25,11 +25,11 @@ os.makedirs("data/inventario", exist_ok=True)
 
 LOG_PATH = "data/log_uploads.parquet"
 
-st.title("📊 Dashboard de Estoque e Obsolescência")
+st.title("📊 Análise Gerencial de Estoques - Grupo Alltech")
 
 st.markdown(
 """
-Este painel apresenta análises consolidadas do estoque da empresa com base nos fechamentos mensais do ERP.
+Este painel consolida informações estratégicas de estoque, permitindo análise da evolução, identificação de riscos de obsolescência e suporte à tomada de decisão.
 
 As informações incluem:
 
