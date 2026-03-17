@@ -1,293 +1,324 @@
 import streamlit as st
-import pandas as pd
 import os
-from datetime import datetime
 
-from motor.motor_obsoletos import executar_motor
-from motor.motor_estoque import executar_motor_estoque
-from motor.motor_dio import executar_motor_dio
-from motor.motor_inventario import processar_zip as executar_motor_inventario
-
-from storage.base_obsoletos_lake import salvar_fechamento_obsoletos
-from storage.base_estoque_lake import salvar_fechamento_estoque
-
-st.set_page_config(page_title="Processamento de Estoque", layout="wide")
-
-# ---------------------------------------------------------
-# GARANTIR ESTRUTURA DE PASTAS
-# ---------------------------------------------------------
-
-os.makedirs("data", exist_ok=True)
-os.makedirs("data/obsoletos", exist_ok=True)
-os.makedirs("data/estoque", exist_ok=True)
-os.makedirs("data/dio", exist_ok=True)
-os.makedirs("data/inventario", exist_ok=True)
-
-LOG_PATH = "data/log_uploads.parquet"
-
-st.title("📊 Análise Gerencial de Estoques - Grupo Alltech")
-
-st.markdown(
-"""
-Este painel consolida informações estratégicas de estoque, permitindo análise da evolução, identificação de riscos de obsolescência e suporte à tomada de decisão.
-
-As informações incluem:
-
-• Evolução do valor total em estoque  
-• Identificação de itens obsoletos  
-• Classificação por tempo sem movimentação  
-• Distribuição por empresa e filial  
-• DIO — Days Inventory Outstanding por produto
-"""
+st.set_page_config(
+    page_title="Grupo Alltech — Gestão de Estoques",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-st.markdown("---")
-
-# ---------------------------------------------------------
-# FUNÇÕES DE LOG
-# ---------------------------------------------------------
-
-def carregar_log():
-
-    if os.path.exists(LOG_PATH):
-        return pd.read_parquet(LOG_PATH)
-
-    return pd.DataFrame(columns=["Arquivo", "Data", "Registros", "Tipo"])
-
-
-def salvar_log(nome_zip, registros, tipo):
-
-    df_log = carregar_log()
-
-    from datetime import timezone, timedelta
-
-    agora = datetime.now(timezone.utc).astimezone(
-        timezone(timedelta(hours=-3))
-    )
-
-    novo = pd.DataFrame([{
-        "Arquivo": nome_zip,
-        "Data": agora,
-        "Registros": registros,
-        "Tipo": tipo
-    }])
-
-    df_log = pd.concat([df_log, novo], ignore_index=True)
-    df_log.to_parquet(LOG_PATH, index=False)
-
-    return df_log
-
-
-# ---------------------------------------------------------
-# RESET
-# ---------------------------------------------------------
-
-with st.expander("⚠️ Zona de Perigo — Resetar Base"):
-
-    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-
-    with col_r1:
-        if st.button("🗑 Resetar Estoque"):
-            import shutil
-            if os.path.exists("data/estoque"):
-                shutil.rmtree("data/estoque")
-                os.makedirs("data/estoque", exist_ok=True)
-            st.success("Base de estoque resetada.")
-            st.cache_data.clear()
-            st.rerun()
-
-    with col_r2:
-        if st.button("🗑 Resetar Obsoletos"):
-            import shutil
-            if os.path.exists("data/obsoletos"):
-                shutil.rmtree("data/obsoletos")
-                os.makedirs("data/obsoletos", exist_ok=True)
-            st.success("Base de obsoletos resetada.")
-            st.cache_data.clear()
-            st.rerun()
-
-    with col_r3:
-        if st.button("🗑 Resetar DIO"):
-            import shutil
-            if os.path.exists("data/dio"):
-                shutil.rmtree("data/dio")
-                os.makedirs("data/dio", exist_ok=True)
-            st.success("Base de DIO resetada.")
-            st.cache_data.clear()
-            st.rerun()
-
-    with col_r4:
-        if st.button("🗑 Resetar Inventário"):
-            import shutil
-            if os.path.exists("data/inventario"):
-                shutil.rmtree("data/inventario")
-                os.makedirs("data/inventario", exist_ok=True)
-            st.success("Base de inventário resetada.")
-            st.cache_data.clear()
-            st.rerun()
-
-st.markdown("---")
-
-
-# ---------------------------------------------------------
-# STATUS DO DATA LAKE
-# ---------------------------------------------------------
-
-with st.expander("📊 Status da Base de Dados"):
-
-    if os.path.exists("data/obsoletos"):
-        st.write("Arquivos em obsoletos:", os.listdir("data/obsoletos"))
-
-    if os.path.exists("data/estoque"):
-        st.write("Arquivos em estoque:", os.listdir("data/estoque"))
-
-    if os.path.exists("data/dio"):
-        st.write("Arquivos em DIO:", os.listdir("data/dio"))
-
-    if os.path.exists("data/inventario"):
-        st.write("Arquivos em inventário:", os.listdir("data/inventario"))
-
-
-# ---------------------------------------------------------
-# TIPO PROCESSAMENTO
-# ---------------------------------------------------------
-
-st.subheader("Tipo de processamento")
-
-tipo_processo = st.radio(
-    "Escolha o tipo de processamento",
-    [
-        "Atualizar Evolução de Estoque",
-        "Atualizar Obsolescência",
-        "Atualizar DIO",
-        "Atualizar Inventário"
-    ]
-)
-
-st.markdown("---")
-
-
-# ---------------------------------------------------------
-# FLUXO INVENTÁRIO
-# ---------------------------------------------------------
-
-if tipo_processo == "Atualizar Inventário":
-
-    PASTA_INV = "analytics/dados_inventario"
-
-    if not os.path.exists(PASTA_INV):
-        st.error("Pasta analytics/dados_inventario não encontrada")
-        st.stop()
-
-    arquivos = [f for f in os.listdir(PASTA_INV) if f.endswith(".zip")]
-
-    if len(arquivos) == 0:
-        st.warning("Nenhum ZIP encontrado em analytics/dados_inventario")
-        st.stop()
-
-    if len(arquivos) > 1:
-        st.error("A pasta deve conter apenas um ZIP")
-        st.stop()
-
-    arquivo = arquivos[0]
-
-    st.info(f"Arquivo encontrado: {arquivo}")
-
-    if st.button("🚀 Processar Inventário"):
-
-        try:
-
-            executar_motor_inventario()
-
-            st.success("Inventário processado com sucesso")
-
-            st.cache_data.clear()
-            st.rerun()
-
-        except Exception as e:
-
-            st.error("Erro ao processar inventário")
-            st.exception(e)
-
-    st.stop()
-
-
-# ---------------------------------------------------------
-# DEFINIR PASTA DE DADOS
-# ---------------------------------------------------------
-
-if tipo_processo == "Atualizar DIO":
-    PASTA_DADOS = "dados_estoque"
-    PASTA_OBSOLETOS = "dados_obsoleto"
-else:
-    PASTA_DADOS = "dados_estoque"
-
-if not os.path.exists(PASTA_DADOS):
-    st.error(f"A pasta '{PASTA_DADOS}' não existe.")
-    st.stop()
-
-zip_files = [f for f in os.listdir(PASTA_DADOS) if f.endswith(".zip")]
-
-if len(zip_files) == 0:
-    st.warning("Nenhum arquivo ZIP encontrado.")
-    st.stop()
-
-if len(zip_files) > 1:
-    st.error("A pasta dados_estoque deve conter apenas um arquivo ZIP.")
-    st.stop()
-
-arquivo_selecionado = st.selectbox(
-    "Selecione o fechamento para processar",
-    zip_files
-)
-
-
-# ---------------------------------------------------------
-# PROCESSAMENTO
-# ---------------------------------------------------------
-
-if st.button("🚀 Processar Fechamento"):
-
-    caminho_upload = os.path.join(PASTA_DADOS, arquivo_selecionado)
-
-    st.write("Arquivo selecionado:", arquivo_selecionado)
-
-    with st.spinner("Processando arquivo..."):
-
-        try:
-
-            if tipo_processo == "Atualizar DIO":
-
-                df_final, df_export = executar_motor_dio(
-                    caminho_zip_estoque=caminho_upload,
-                    pasta_zips_obsoletos="dados_obsoleto"
-                )
-
-                caminho = f"data/dio/{arquivo_selecionado.replace('.zip','')}.parquet"
-
-                os.makedirs("data/dio", exist_ok=True)
-                df_final.to_parquet(caminho, index=False)
-
-                tipo = "DIO"
-
-            else:
-
-                df_final, df_export = executar_motor_estoque(caminho_upload)
-                caminho = salvar_fechamento_estoque(df_final)
-                tipo = "Evolução Estoque"
-
-            qtd_registros = len(df_final)
-
-            salvar_log(arquivo_selecionado, qtd_registros, tipo)
-
-            st.success("Processamento concluído")
-            st.write("Arquivo salvo em:", caminho)
-            st.write("Registros:", qtd_registros)
-
-            st.cache_data.clear()
-            st.rerun()
-
-        except Exception as e:
-
-            st.error("Erro inesperado durante o processamento.")
-            st.exception(e)
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+html, body, [data-testid="stAppViewContainer"] {
+    background-color: #02404A !important;
+    font-family: 'Sora', sans-serif;
+}
+
+[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"] { display: none !important; }
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header { visibility: hidden; }
+
+.block-container {
+    padding: 0 !important;
+    max-width: 100% !important;
+}
+
+/* ── HEADER ── */
+.home-header {
+    background: linear-gradient(135deg, #013A42 0%, #024E58 50%, #015A66 100%);
+    border-bottom: 1px solid rgba(236, 110, 33, 0.25);
+    padding: 52px 64px 44px;
+    position: relative;
+    overflow: hidden;
+}
+
+.home-header::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 350px; height: 350px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(236,110,33,0.07) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.header-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #EC6E21;
+    margin-bottom: 14px;
+}
+
+.header-title {
+    font-size: 40px;
+    font-weight: 700;
+    color: #FFFFFF;
+    line-height: 1.1;
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+}
+
+.header-title span { color: #EC6E21; }
+
+.header-subtitle {
+    font-size: 15px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.5);
+    max-width: 500px;
+    line-height: 1.65;
+}
+
+/* ── SECTION ── */
+.cards-section {
+    padding: 48px 64px 32px;
+}
+
+.section-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.25);
+    margin-bottom: 20px;
+}
+
+/* ── CARD ── */
+.nav-card {
+    background: linear-gradient(145deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.02) 100%);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 18px;
+    padding: 30px 28px 26px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 100%;
+    min-height: 200px;
+}
+
+.nav-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.22s;
+    border-radius: 18px 18px 0 0;
+}
+
+.nav-card:hover {
+    background: linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.035) 100%);
+    border-color: rgba(255,255,255,0.13);
+    transform: translateY(-4px);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.35);
+}
+
+.nav-card:hover::after { opacity: 1; }
+
+.card-icon {
+    width: 50px; height: 50px;
+    border-radius: 12px;
+    background: var(--icon-bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    margin-bottom: 18px;
+}
+
+.card-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: #FFFFFF;
+    margin-bottom: 8px;
+}
+
+.card-desc {
+    font-size: 13px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.42);
+    line-height: 1.55;
+    margin-bottom: 22px;
+}
+
+.card-cta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    opacity: 0.8;
+}
+
+/* Cores por card */
+.c-obs  { --accent: #EC6E21; --icon-bg: rgba(236,110,33,0.13); }
+.c-est  { --accent: #00C9E0; --icon-bg: rgba(0,201,224,0.12); }
+.c-dio  { --accent: #9B7BFF; --icon-bg: rgba(155,123,255,0.12); }
+.c-inv  { --accent: #2ECC71; --icon-bg: rgba(46,204,113,0.12); }
+.c-cfg  { --accent: rgba(255,255,255,0.4); --icon-bg: rgba(255,255,255,0.07); }
+
+/* Sobrepõe botão invisível sobre o card */
+div[data-testid="column"] {
+    position: relative;
+}
+
+.stButton { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.stButton > button {
+    width: 100% !important;
+    height: 100% !important;
+    opacity: 0 !important;
+    position: absolute !important;
+    top: 0 !important; left: 0 !important;
+    cursor: pointer !important;
+    z-index: 5 !important;
+}
+
+/* ── FOOTER ── */
+.home-footer {
+    padding: 20px 64px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 16px;
+}
+
+.footer-mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: rgba(255,255,255,0.2);
+    letter-spacing: 1.5px;
+}
+
+.status-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #2ECC71;
+    box-shadow: 0 0 8px #2ECC71;
+    margin-right: 7px;
+    vertical-align: middle;
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+# ── HEADER ────────────────────────────────────────────────
+
+st.markdown("""
+<div class="home-header">
+    <div class="header-eyebrow">Grupo Alltech · Inteligência de Estoques</div>
+    <div class="header-title">Análise Gerencial<br>de <span>Estoques</span></div>
+    <div class="header-subtitle">
+        Consolidação estratégica com análise de obsolescência,
+        evolução histórica, DIO por produto e controle de inventário.
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ── CARDS ─────────────────────────────────────────────────
+
+st.markdown('<div class="cards-section">', unsafe_allow_html=True)
+st.markdown('<div class="section-label">Módulos do sistema</div>', unsafe_allow_html=True)
+
+# Linha 1 — 3 cards
+col1, col2, col3 = st.columns(3, gap="medium")
+
+with col1:
+    st.markdown("""
+    <div class="nav-card c-obs">
+        <div class="card-icon">📊</div>
+        <div class="card-title">Estoque Obsoleto</div>
+        <div class="card-desc">Identificação de itens sem movimentação, ranking de produtos críticos e evolução histórica da obsolescência.</div>
+        <div class="card-cta">Acessar →</div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button(" ", key="btn_obs"):
+        st.switch_page("pages/1_📊_dashboard_obsoletos.py")
+
+with col2:
+    st.markdown("""
+    <div class="nav-card c-est">
+        <div class="card-icon">📦</div>
+        <div class="card-title">Evolução de Estoque</div>
+        <div class="card-desc">Acompanhamento do valor total em estoque ao longo do tempo, segmentado por empresa e filial.</div>
+        <div class="card-cta">Acessar →</div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button(" ", key="btn_est"):
+        st.switch_page("pages/2_📦_dashboard_estoque.py")
+
+with col3:
+    st.markdown("""
+    <div class="nav-card c-dio">
+        <div class="card-icon">⏱️</div>
+        <div class="card-title">DIO — Dias de Estoque</div>
+        <div class="card-desc">Days Inventory Outstanding por produto. Mede quantos dias de consumo o estoque atual representa.</div>
+        <div class="card-cta">Acessar →</div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button(" ", key="btn_dio"):
+        st.switch_page("pages/3_📦_dashboard_dio.py")
+
+st.markdown("<div style='height: 20px'></div>", unsafe_allow_html=True)
+
+# Linha 2 — 2 cards + espaço
+col4, col5, col6 = st.columns(3, gap="medium")
+
+with col4:
+    st.markdown("""
+    <div class="nav-card c-inv">
+        <div class="card-icon">🗂️</div>
+        <div class="card-title">Inventário</div>
+        <div class="card-desc">Controle e acompanhamento de inventários físicos realizados por empresa e período.</div>
+        <div class="card-cta">Acessar →</div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button(" ", key="btn_inv"):
+        st.switch_page("pages/4_🗂️_dashboard_inventario.py")
+
+with col5:
+    st.markdown("""
+    <div class="nav-card c-cfg">
+        <div class="card-icon">⚙️</div>
+        <div class="card-title">Configurador</div>
+        <div class="card-desc">Processamento de fechamentos mensais, atualização das bases de dados e administração do sistema.</div>
+        <div class="card-cta">Acessar →</div>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button(" ", key="btn_cfg"):
+        st.switch_page("pages/0_⚙️_configurador.py")
+
+with col6:
+    st.markdown("<div></div>", unsafe_allow_html=True)
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ── FOOTER ────────────────────────────────────────────────
+
+obs_ok = os.path.exists("data/obsoletos") and bool([f for f in os.listdir("data/obsoletos") if f.endswith(".parquet")]) if os.path.exists("data/obsoletos") else False
+est_ok = os.path.exists("data/estoque")   and bool([f for f in os.listdir("data/estoque")   if f.endswith(".parquet")]) if os.path.exists("data/estoque")   else False
+dio_ok = os.path.exists("data/dio")       and bool([f for f in os.listdir("data/dio")       if f.endswith(".parquet")]) if os.path.exists("data/dio")       else False
+
+bases = []
+if obs_ok: bases.append("Obsoletos ✓")
+if est_ok: bases.append("Estoque ✓")
+if dio_ok: bases.append("DIO ✓")
+bases_str = " · ".join(bases) if bases else "Nenhuma base carregada"
+
+st.markdown(f"""
+<div class="home-footer">
+    <div class="footer-mono"><span class="status-dot"></span>SISTEMA ONLINE</div>
+    <div class="footer-mono">{bases_str}</div>
+    <div class="footer-mono">GRUPO ALLTECH © 2026</div>
+</div>
+""", unsafe_allow_html=True)
