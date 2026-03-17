@@ -264,6 +264,10 @@ if st.button("🚀 Processar Fechamento"):
                 )
 
                 caminho = f"data/dio/{arquivo_selecionado.replace('.zip','')}.parquet"
+
+                os.makedirs("data/dio", exist_ok=True)
+                df_final.to_parquet(caminho, index=False)
+
                 tipo = "DIO"
 
             else:
