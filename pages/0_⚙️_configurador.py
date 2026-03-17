@@ -6,6 +6,7 @@ from datetime import datetime
 from motor.motor_obsoletos import executar_motor
 from motor.motor_estoque import executar_motor_estoque
 from motor.motor_dio import executar_motor_dio
+from motor.motor_inventario import processar_zip as executar_motor_inventario
 
 from storage.base_obsoletos_lake import salvar_fechamento_obsoletos
 from storage.base_estoque_lake import salvar_fechamento_estoque
@@ -93,7 +94,7 @@ def salvar_log(nome_zip, registros, tipo):
 
 with st.expander("⚠️ Zona de Perigo — Resetar Base"):
 
-    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+    col_r1, col_r2, col_r3, col_r4, col_r5 = st.columns(5)
 
     with col_r1:
         if st.button("🗑 Resetar Estoque"):
@@ -138,6 +139,20 @@ with st.expander("⚠️ Zona de Perigo — Resetar Base"):
             st.rerun()
 
     with col_r4:
+        if st.button("🗑 Resetar Inventário"):
+            import shutil
+            if os.path.exists("data/inventario"):
+                shutil.rmtree("data/inventario")
+                os.makedirs("data/inventario", exist_ok=True)
+            if os.path.exists(LOG_PATH):
+                df_log = carregar_log()
+                df_log = df_log[df_log["Tipo"] != "Inventário"]
+                df_log.to_parquet(LOG_PATH, index=False)
+            st.success("Base de inventário resetada.")
+            st.cache_data.clear()
+            st.rerun()
+
+    with col_r5:
         if st.button("🗑 Resetar Tudo"):
             import shutil
             if os.path.exists("data"):
@@ -159,6 +174,8 @@ with st.expander("📊 Status da Base de Dados"):
         st.write("Estoque:", os.listdir("data/estoque"))
     if os.path.exists("data/dio"):
         st.write("DIO:", os.listdir("data/dio"))
+    if os.path.exists("data/inventario"):
+        st.write("Inventário:", os.listdir("data/inventario"))
 
 st.markdown("---")
 
@@ -174,6 +191,7 @@ tipo_processo = st.radio(
         "Atualizar Evolução de Estoque",
         "Atualizar Obsolescência",
         "Atualizar DIO",
+        "Atualizar Inventário",
     ]
 )
 
@@ -241,6 +259,65 @@ if tipo_processo == "Atualizar Obsolescência":
         else:
             st.success(f"✅ Todos os fechamentos processados! Total: {total_registros} registros")
 
+        st.cache_data.clear()
+        st.rerun()
+
+    st.stop()
+
+
+# -------------------------------------------------
+# FLUXO: INVENTÁRIO
+# -------------------------------------------------
+
+if tipo_processo == "Atualizar Inventário":
+
+    PASTA_INV = "analytics/dados_inventario"
+
+    if not os.path.exists(PASTA_INV):
+        st.error(f"A pasta '{PASTA_INV}' não existe.")
+        st.stop()
+
+    zip_files_inv = sorted([f for f in os.listdir(PASTA_INV) if f.endswith(".zip")])
+
+    if not zip_files_inv:
+        st.warning("Nenhum arquivo ZIP encontrado em 'analytics/dados_inventario'.")
+        st.stop()
+
+    df_log = carregar_log()
+    ja_proc_inv = set(df_log[df_log["Tipo"] == "Inventário"]["Arquivo"].values)
+    novos_inv = [f for f in zip_files_inv if f not in ja_proc_inv]
+
+    st.markdown("**Arquivos em `analytics/dados_inventario/`:**")
+    for arq in zip_files_inv:
+        if arq in ja_proc_inv:
+            st.markdown(f"✅ `{arq}` — já processado")
+        else:
+            st.markdown(f"🟡 `{arq}` — **pendente**")
+
+    st.markdown("")
+
+    if not novos_inv:
+        st.success("Todos os arquivos já foram processados.")
+        st.stop()
+
+    st.info(f"**{len(novos_inv)} arquivo(s)** serão processados: {', '.join(novos_inv)}")
+
+    if st.button("🚀 Processar Inventário"):
+        for arquivo in novos_inv:
+            caminho = os.path.join(PASTA_INV, arquivo)
+            st.write(f"⏳ Processando `{arquivo}`...")
+            try:
+                with st.spinner(f"Processando {arquivo}..."):
+                    import motor.motor_inventario as mi
+                    mi.CAMINHO_ZIP = caminho
+                    mi.processar_zip()
+                    qtd = len(pd.read_parquet("data/inventario/inventario_historico.parquet"))
+                    salvar_log(arquivo, qtd, "Inventário")
+                    st.write(f"✅ `{arquivo}` — {qtd} registros")
+            except Exception as e:
+                st.error(f"❌ Erro em `{arquivo}`: {e}")
+
+        st.success("✅ Inventário processado!")
         st.cache_data.clear()
         st.rerun()
 
