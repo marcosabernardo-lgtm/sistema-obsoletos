@@ -192,35 +192,57 @@ else:
     perc_yoy = None
 
 # -------------------------------------------------
-# CARDS KPI
+# CARDS KPI — tabela única
 # -------------------------------------------------
 def seta(v):
     return "⬆" if v >= 0 else "⬇"
 
-def cor_perc(v):
-    return "#ff6b6b" if v >= 0 else "#51cf66"
+def cor_var(v):
+    return "#EC6E21" if v >= 0 else "#51cf66"
 
-col1, col2 = st.columns(2)
+label_atual = data_selecionada.strftime("%y-%b").lower()
+label_mom   = pd.Timestamp(data_mom).strftime("%y-%b").lower() if valor_mom is not None else "—"
+label_yoy   = pd.Timestamp(data_yoy).strftime("%y-%b").lower() if valor_yoy is not None else "—"
 
-# Card 1 — Valor atual + variações MoM e YoY
-mom_linha = f'<div class="kpi-sub" style="color:{cor_perc(perc_mom)};font-size:13px">{seta(perc_mom)} {abs(perc_mom):.1f}% vs mês anterior ({pd.Timestamp(data_mom).strftime("%y-%b").lower()})</div>' if valor_mom is not None else ""
-yoy_linha = f'<div class="kpi-sub" style="color:{cor_perc(perc_yoy)};font-size:13px">{seta(perc_yoy)} {abs(perc_yoy):.1f}% vs ano anterior ({pd.Timestamp(data_yoy).strftime("%y-%b").lower()})</div>' if valor_yoy is not None else ""
+var_mom_val = valor_atual - valor_mom if valor_mom is not None else None
+var_yoy_val = valor_atual - valor_yoy if valor_yoy is not None else None
 
-col1.markdown(f'<div class="kpi-card"><div class="kpi-title">Valor Estoque {data_selecionada.strftime("%y-%b").lower()}</div><div class="kpi-value">{moeda_br(valor_atual)}</div>{mom_linha}{yoy_linha}</div>', unsafe_allow_html=True)
+def linha_tabela(label, valor, var_val, var_perc, is_header=False):
+    peso = "700" if is_header else "400"
+    tam  = "16px" if is_header else "14px"
+    if var_val is None:
+        return (
+            f'<tr><td style="padding:10px 16px;font-weight:{peso};font-size:{tam};color:white">{label}</td>'
+            f'<td style="padding:10px 16px;font-weight:{peso};font-size:{tam};color:white;text-align:right">{moeda_br(valor)}</td>'
+            f'<td style="padding:10px 16px;text-align:right;color:rgba(255,255,255,0.3)">—</td>'
+            f'<td style="padding:10px 16px;text-align:right;color:rgba(255,255,255,0.3)">—</td></tr>'
+        )
+    cor = cor_var(var_val)
+    sinal = "+" if var_val >= 0 else "-"
+    return (
+        f'<tr><td style="padding:10px 16px;font-weight:{peso};font-size:{tam};color:white">{label}</td>'
+        f'<td style="padding:10px 16px;font-weight:{peso};font-size:{tam};color:white;text-align:right">{moeda_br(valor)}</td>'
+        f'<td style="padding:10px 16px;text-align:right;color:{cor};font-weight:600">{sinal}{moeda_br(abs(var_val))}</td>'
+        f'<td style="padding:10px 16px;text-align:right;color:{cor};font-weight:600">{seta(var_val)} {abs(var_perc):.1f}%</td></tr>'
+    )
 
-# Card 2 — MoM e YoY juntos
-mom_label = pd.Timestamp(data_mom).strftime('%y-%b').lower() if valor_mom is not None else ""
-yoy_label = pd.Timestamp(data_yoy).strftime('%y-%b').lower() if valor_yoy is not None else ""
-mom_val = moeda_br(valor_mom) if valor_mom is not None else "—"
-yoy_val = moeda_br(valor_yoy) if valor_yoy is not None else "—"
+linhas = (
+    linha_tabela(label_atual, valor_atual, None, None, is_header=True) +
+    linha_tabela(f"MoM {label_mom}", valor_mom if valor_mom else 0, var_mom_val, perc_mom if perc_mom else 0) +
+    linha_tabela(f"YoY {label_yoy}", valor_yoy if valor_yoy else 0, var_yoy_val, perc_yoy if perc_yoy else 0)
+)
 
-col2.markdown(
-    f'<div class="kpi-card" style="display:flex;flex-direction:row;gap:0;padding:0;min-height:110px;">'
-    f'<div style="flex:1;padding:16px;border-right:1px solid rgba(255,255,255,0.1);text-align:center;display:flex;flex-direction:column;justify-content:center;">'
-    f'<div class="kpi-title">MoM {mom_label}</div><div class="kpi-value">{mom_val}</div></div>'
-    f'<div style="flex:1;padding:16px;text-align:center;display:flex;flex-direction:column;justify-content:center;">'
-    f'<div class="kpi-title">YoY {yoy_label}</div><div class="kpi-value">{yoy_val}</div></div>'
-    f'</div>',
+st.markdown(
+    "<style>.tb-kpi{width:100%;border-collapse:collapse}"
+    ".tb-kpi th{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;"
+    "color:rgba(255,255,255,0.35);padding:6px 16px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08)}"
+    ".tb-kpi th:not(:first-child){text-align:right}"
+    ".tb-kpi tr{border-bottom:1px solid rgba(255,255,255,0.06)}"
+    ".tb-kpi tr:last-child{border-bottom:none}</style>"
+    '<div class="kpi-card" style="padding:0;text-align:left;max-width:600px">' +
+    '<table class="tb-kpi"><thead><tr>' +
+    '<th>Período</th><th>Valor Estoque</th><th>Variação (R$)</th><th>Variação (%)</th>' +
+    '</tr></thead><tbody>' + linhas + '</tbody></table></div>',
     unsafe_allow_html=True
 )
 
