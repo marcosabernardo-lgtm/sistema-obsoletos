@@ -4,7 +4,7 @@ import altair as alt
 import os
 
 from analytics.analises import evolucao_estoque
-from utils.navbar import render_navbar
+from utils.navbar import render_navbar, render_filtros_topo
 
 from tabs.obsoletos.base_historica import render as render_base_historica
 from tabs.obsoletos.top20_produtos import render as render_top20
@@ -23,34 +23,11 @@ render_navbar("Dashboard de Estoque Obsoleto")
 st.markdown("""
 <style>
 
-/* SIDEBAR */
-
-section[data-testid="stSidebar"]{
-    width:260px !important;
-}
-
-/* FILTROS */
-
-section[data-testid="stSidebar"] div[data-baseweb="select"] > div,
-section[data-testid="stSidebar"] div[data-baseweb="select"] > div:focus-within {
-    border: 2px solid #EC6E21 !important;
-    border-radius: 8px !important;
-    background-color: #005562 !important;
-    color: white !important;
-}
-
-section[data-testid="stSidebar"] div[data-baseweb="select"] span,
-section[data-testid="stSidebar"] div[data-baseweb="select"] div {
-    color: white !important;
-}
-
-section[data-testid="stSidebar"] label {
-    color: white !important;
-    font-weight: 600 !important;
-}
+/* Esconde sidebar */
+section[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"]  { display: none !important; }
 
 /* HEADER TABLE */
-
 div[data-testid="stDataFrame"] [role="columnheader"],
 div[data-testid="stDataFrame"] thead th {
     background-color:#0f5a60 !important;
@@ -60,13 +37,11 @@ div[data-testid="stDataFrame"] thead th {
 }
 
 /* ROW COLOR */
-
 div[data-testid="stDataFrame"] div[role="gridcell"]{
     background-color:#0f5a60 !important;
 }
 
 /* KPI */
-
 .kpi-card{
     background-color:#005562;
     border:2px solid #EC6E21;
@@ -74,17 +49,8 @@ div[data-testid="stDataFrame"] div[role="gridcell"]{
     border-radius:10px;
     text-align:center;
 }
-
-.kpi-title{
-    font-size:14px;
-    color:white;
-}
-
-.kpi-value{
-    font-size:26px;
-    font-weight:700;
-    color:white;
-}
+.kpi-title{ font-size:14px; color:white; }
+.kpi-value{ font-size:26px; font-weight:700; color:white; }
 
 </style>
 """, unsafe_allow_html=True)
@@ -102,25 +68,11 @@ def moeda_br(valor):
 
 @st.cache_data
 def carregar_base(pasta):
-
-    arquivos = [
-        os.path.join(pasta, f)
-        for f in os.listdir(pasta)
-        if f.endswith(".parquet")
-    ]
-
-    lista = []
-
-    for arq in arquivos:
-        df = pd.read_parquet(arq)
-        lista.append(df)
-
+    arquivos = [os.path.join(pasta, f) for f in os.listdir(pasta) if f.endswith(".parquet")]
+    lista = [pd.read_parquet(arq) for arq in arquivos]
     df_hist = pd.concat(lista, ignore_index=True)
-
     df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"])
-    df_hist = df_hist.sort_values("Data Fechamento")
-
-    return df_hist
+    return df_hist.sort_values("Data Fechamento")
 
 
 # -------------------------------------------------
@@ -142,58 +94,48 @@ if not arquivos:
 df_hist = carregar_base(PASTA_OBSOLETOS)
 
 # -------------------------------------------------
-# FILTROS (DINÂMICOS)
+# FILTROS NO TOPO
 # -------------------------------------------------
 
-st.sidebar.header("Filtros")
-
 datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=True)
+datas_fmt_list = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
+datas_map = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
-datas_fmt = {
-    d.strftime("%d/%m/%Y"): d for d in datas_disponiveis
-}
+# Pré-carrega opções para o fechamento mais recente
+data_preview = pd.Timestamp(datas_disponiveis[0])
+df_preview = df_hist[df_hist["Data Fechamento"] == data_preview]
+empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique())
 
-data_sel = st.sidebar.selectbox(
-    "Data de Fechamento",
-    options=list(datas_fmt.keys()),
-    index=0
+# Contas dinâmicas conforme empresas já selecionadas
+empresas_ja_sel = st.session_state.get("obsoletos_empresas", [])
+df_temp_conta = df_preview.copy()
+if empresas_ja_sel:
+    df_temp_conta = df_temp_conta[df_temp_conta["Empresa / Filial"].isin(empresas_ja_sel)]
+contas_disponiveis = sorted(df_temp_conta["Conta"].dropna().unique())
+
+filtros = render_filtros_topo(
+    datas=datas_fmt_list,
+    empresas=empresas_disponiveis,
+    extras={"Conta": contas_disponiveis} if contas_disponiveis else None,
+    key_prefix="obsoletos"
 )
 
-data_selecionada = pd.Timestamp(datas_fmt[data_sel])
+data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
+empresas_sel     = filtros["empresas"]
+contas_sel       = filtros.get("conta", [])
 
-# BASE INICIAL
-df_base_filtros = df_hist[
-    df_hist["Data Fechamento"] == data_selecionada
-].copy()
+# -------------------------------------------------
+# APLICA FILTROS
+# -------------------------------------------------
 
-# EMPRESA
-empresas_opcoes = sorted(df_base_filtros["Empresa / Filial"].dropna().unique())
-
-empresas_sel = st.sidebar.multiselect(
-    "Empresa / Filial",
-    empresas_opcoes
-)
-
-df_temp = df_base_filtros.copy()
+df_kpi = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
 
 if empresas_sel:
-    df_temp = df_temp[df_temp["Empresa / Filial"].isin(empresas_sel)]
-
-# CONTA (DINÂMICO)
-contas_opcoes = sorted(df_temp["Conta"].dropna().unique())
-
-contas_sel = st.sidebar.multiselect(
-    "Conta",
-    contas_opcoes
-)
-
+    df_kpi = df_kpi[df_kpi["Empresa / Filial"].isin(empresas_sel)]
 if contas_sel:
-    df_temp = df_temp[df_temp["Conta"].isin(contas_sel)]
+    df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
 
-# RESULTADO FINAL
-df_kpi = df_temp.copy()
-
-# Disponibiliza o df completo
+# Disponibiliza o df completo para a aba Base Histórica
 st.session_state["df_kpi_completo"] = df_kpi
 
 # -------------------------------------------------
@@ -206,19 +148,10 @@ df_filtrado = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"].copy()
 # KPIs
 # -------------------------------------------------
 
-estoque_total = df_kpi["Custo Total"].sum()
-
-estoque_obsoleto = df_kpi[
-    df_kpi["Status Estoque"] == "Obsoleto"
-]["Custo Total"].sum()
-
-perc_obsoleto = (
-    estoque_obsoleto / estoque_total if estoque_total > 0 else 0
-)
-
-itens_obsoletos = df_kpi[
-    df_kpi["Status Estoque"] == "Obsoleto"
-]["Produto"].nunique()
+estoque_total    = df_kpi["Custo Total"].sum()
+estoque_obsoleto = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"]["Custo Total"].sum()
+perc_obsoleto    = estoque_obsoleto / estoque_total if estoque_total > 0 else 0
+itens_obsoletos  = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"]["Produto"].nunique()
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -257,16 +190,10 @@ st.markdown("---")
 # -------------------------------------------------
 
 df_hist_filtrado = df_hist.copy()
-
 if empresas_sel:
-    df_hist_filtrado = df_hist_filtrado[
-        df_hist_filtrado["Empresa / Filial"].isin(empresas_sel)
-    ]
-
+    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Empresa / Filial"].isin(empresas_sel)]
 if contas_sel:
-    df_hist_filtrado = df_hist_filtrado[
-        df_hist_filtrado["Conta"].isin(contas_sel)
-    ]
+    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Conta"].isin(contas_sel)]
 
 # -------------------------------------------------
 # ABAS

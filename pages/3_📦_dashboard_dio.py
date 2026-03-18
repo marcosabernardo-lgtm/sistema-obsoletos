@@ -5,7 +5,7 @@ import os
 import numpy as np
 import io
 
-from utils.navbar import render_navbar
+from utils.navbar import render_navbar, render_filtros_topo
 
 st.set_page_config(page_title="Dashboard DIO", layout="wide")
 render_navbar("Dashboard DIO")
@@ -17,29 +17,9 @@ render_navbar("Dashboard DIO")
 st.markdown("""
 <style>
 
-/* SIDEBAR */
-section[data-testid="stSidebar"]{
-    width:260px !important;
-}
-
-/* FILTROS */
-section[data-testid="stSidebar"] div[data-baseweb="select"] > div,
-section[data-testid="stSidebar"] div[data-baseweb="select"] > div:focus-within {
-    border: 2px solid #EC6E21 !important;
-    border-radius: 8px !important;
-    background-color: #005562 !important;
-    color: white !important;
-}
-
-section[data-testid="stSidebar"] div[data-baseweb="select"] span,
-section[data-testid="stSidebar"] div[data-baseweb="select"] div {
-    color: white !important;
-}
-
-section[data-testid="stSidebar"] label {
-    color: white !important;
-    font-weight: 600 !important;
-}
+/* Esconde sidebar */
+section[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"]  { display: none !important; }
 
 /* HEADER TABLE */
 div[data-testid="stDataFrame"] [role="columnheader"],
@@ -174,20 +154,24 @@ df_all = carregar_base(PASTA_DIO)
 # FILTROS SIDEBAR
 # -------------------------------------------------
 
-st.sidebar.header("Filtros")
-
 datas_disponiveis = sorted(df_all["Data Fechamento"].dt.date.unique(), reverse=True)
-datas_fmt = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
+datas_fmt_list = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
+datas_map = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
-data_sel = st.sidebar.selectbox("Data de Fechamento", options=list(datas_fmt.keys()), index=0)
-data_selecionada = pd.Timestamp(datas_fmt[data_sel])
+data_preview = pd.Timestamp(datas_disponiveis[0])
+df_preview = df_all[df_all["Data Fechamento"] == data_preview]
+empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique())
 
-empresas_sel = st.sidebar.multiselect(
-    "Empresa / Filial",
-    sorted(df_all["Empresa / Filial"].dropna().unique())
+filtros = render_filtros_topo(
+    datas=datas_fmt_list,
+    empresas=empresas_disponiveis,
+    extras={"Faixa DIO": ORDEM_FAIXAS},
+    key_prefix="dio"
 )
 
-faixas_sel = st.sidebar.multiselect("Faixa DIO", options=ORDEM_FAIXAS, default=[])
+data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
+empresas_sel     = filtros["empresas"]
+faixas_sel       = filtros.get("faixa_dio", [])
 
 # -------------------------------------------------
 # BASE FILTRADA
