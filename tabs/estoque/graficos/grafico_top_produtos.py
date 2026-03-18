@@ -96,6 +96,7 @@ def render(df_hist, moeda_br, data_selecionada):
         ).reset_index()
 
         df_var = grp_atual.merge(grp_mom, on="Produto", how="outer").fillna(0)
+        df_var["Descricao"] = df_var["Descricao"].fillna("").astype(str)
         df_var["Variacao"] = df_var["Valor_Atual"] - df_var["Valor_MoM"]
         df_var["% Var"] = df_var.apply(
             lambda r: f"{(r['Variacao'] / r['Valor_MoM'] * 100):.1f}%" if r["Valor_MoM"] != 0 else "Novo",
@@ -123,7 +124,7 @@ def render(df_hist, moeda_br, data_selecionada):
             st.markdown("**⬆ Maiores Altas**")
             df_alta = df_var.sort_values("Variacao", ascending=False).head(top_n)
             linhas_alta = "".join(
-                f"<tr><td>{r['Produto']}</td><td>{r['Descricao'][:35]}</td>"
+                f"<tr><td>{r['Produto']}</td><td>{str(r['Descricao'])[:35]}</td>"
                 f"<td style='text-align:right'>{moeda_br(r['Valor_Atual'])}</td>"
                 f"<td style='text-align:right'>{icone(r['Variacao'])}</td>"
                 f"<td style='text-align:right;color:#EC6E21'>{r['% Var']}</td></tr>"
@@ -138,7 +139,7 @@ def render(df_hist, moeda_br, data_selecionada):
             st.markdown("**⬇ Maiores Quedas**")
             df_queda = df_var.sort_values("Variacao", ascending=True).head(top_n)
             linhas_queda = "".join(
-                f"<tr><td>{r['Produto']}</td><td>{r['Descricao'][:35]}</td>"
+                f"<tr><td>{r['Produto']}</td><td>{str(r['Descricao'])[:35]}</td>"
                 f"<td style='text-align:right'>{moeda_br(r['Valor_Atual'])}</td>"
                 f"<td style='text-align:right'>{icone(r['Variacao'])}</td>"
                 f"<td style='text-align:right;color:#EC6E21'>{r['% Var']}</td></tr>"
