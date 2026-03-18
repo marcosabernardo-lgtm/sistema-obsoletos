@@ -187,7 +187,7 @@ def seta(v):
 def cor_perc(v):
     return "#ff6b6b" if v >= 0 else "#51cf66"
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 # Card 1 — Valor atual + variações MoM e YoY
 mom_linha = ""
@@ -207,27 +207,27 @@ col1.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Card 2 — Só valor MoM
-if valor_mom is not None:
-    col2.markdown(f"""
-<div class="kpi-card">
-    <div class="kpi-title">Valor Estoque MoM {pd.Timestamp(data_mom).strftime('%y-%b').lower()}</div>
-    <div class="kpi-value">{moeda_br(valor_mom)}</div>
-</div>
-""", unsafe_allow_html=True)
-else:
-    col2.markdown('<div class="kpi-card"><div class="kpi-title">MoM</div><div class="kpi-value">—</div></div>', unsafe_allow_html=True)
+# Card 2 — MoM e YoY juntos
+mom_bloco = f"""
+    <div style="flex:1;border-right:1px solid rgba(255,255,255,0.1);padding-right:16px">
+        <div class="kpi-title">MoM {pd.Timestamp(data_mom).strftime('%y-%b').lower() if valor_mom is not None else ''}</div>
+        <div class="kpi-value">{moeda_br(valor_mom) if valor_mom is not None else '—'}</div>
+    </div>
+""" if valor_mom is not None else '<div style="flex:1"><div class="kpi-title">MoM</div><div class="kpi-value">—</div></div>'
 
-# Card 3 — Só valor YoY
-if valor_yoy is not None:
-    col3.markdown(f"""
-<div class="kpi-card">
-    <div class="kpi-title">Valor Estoque YoY {pd.Timestamp(data_yoy).strftime('%y-%b').lower()}</div>
-    <div class="kpi-value">{moeda_br(valor_yoy)}</div>
+yoy_bloco = f"""
+    <div style="flex:1;padding-left:16px">
+        <div class="kpi-title">YoY {pd.Timestamp(data_yoy).strftime('%y-%b').lower() if valor_yoy is not None else ''}</div>
+        <div class="kpi-value">{moeda_br(valor_yoy) if valor_yoy is not None else '—'}</div>
+    </div>
+""" if valor_yoy is not None else '<div style="flex:1"><div class="kpi-title">YoY</div><div class="kpi-value">—</div></div>'
+
+col2.markdown(f"""
+<div class="kpi-card" style="display:flex;flex-direction:row;align-items:center;text-align:center">
+    {mom_bloco}
+    {yoy_bloco}
 </div>
 """, unsafe_allow_html=True)
-else:
-    col3.markdown('<div class="kpi-card"><div class="kpi-title">YoY</div><div class="kpi-value">—</div></div>', unsafe_allow_html=True)
 
 st.markdown("---")
 
