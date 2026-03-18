@@ -205,6 +205,8 @@ def render(df_hist, moeda_br, data_selecionada=None):
     qtd_saiu      = len(saiu)
     valor_reduziu = (reduziu["Vlr Ant"] - reduziu["Vlr Atual"]).sum()
     qtd_reduziu   = len(reduziu)
+    valor_risco   = risco["Vlr Atual"].sum() if not risco.empty else 0
+    qtd_risco     = len(risco)
     var_custo_val = variacao["Vlr Atual"].sum() - variacao["Vlr Ant"].sum()
     obs_ant       = df_ant["Custo Total"].sum()
     obs_atual     = df_atual["Custo Total"].sum()
@@ -216,11 +218,12 @@ def render(df_hist, moeda_br, data_selecionada=None):
     variacao_acum   = obs_acum_atual - obs_acum_inicio
 
     st.subheader("📅 Mês Atual vs Mês Anterior")
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1: card("🔴 Entrou", moeda_br(valor_entrou), cor_valor="#ff6b6b", subtitulo=f"{qtd_entrou:,} itens")
     with c2: card("🟢 Saiu", moeda_br(valor_saiu), cor_valor="#51cf66", subtitulo=f"{qtd_saiu:,} itens")
     with c3: card("🔽 Reduziu", moeda_br(valor_reduziu), cor_valor="#74c0fc", subtitulo=f"{qtd_reduziu:,} itens")
-    with c4:
+    with c4: card("🟡 Risco Iminente", moeda_br(valor_risco), cor_borda="#f1c40f", cor_valor="#f1c40f", subtitulo=f"{qtd_risco:,} itens (4-6 meses)")
+    with c5:
         cor = "#ff6b6b" if variacao_real > 0 else "#51cf66"
         card("Δ Variação Real", moeda_br(variacao_real), cor_borda="#fff", cor_valor=cor)
 
@@ -269,7 +272,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
                       "Qtd Ant", "Vlr Ant", "Qtd Atual", "Vlr Atual"]
 
     frames = []
-    for df_tab in [entrou, saiu, reduziu, variacao]:
+    for df_tab in [entrou, saiu, reduziu, variacao, risco]:
         if len(df_tab) > 0:
             cols = [c for c in colunas_tabela if c in df_tab.columns]
             frames.append(df_tab[cols].copy())
@@ -281,7 +284,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
         # Filtro de Status Mov — radio button
         status_radio = st.radio(
             "Visualizar",
-            options=["Todos", "🔴 Entrou", "🟢 Saiu", "🔽 Reduziu"],
+            options=["Todos", "🔴 Entrou", "🟢 Saiu", "🔽 Reduziu", "🟡 Risco Iminente"],
             horizontal=True,
             key="filtro_status_mov"
         )
