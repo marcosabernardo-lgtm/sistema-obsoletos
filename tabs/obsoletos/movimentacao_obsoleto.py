@@ -199,6 +199,18 @@ def render(df_hist, moeda_br, data_selecionada=None):
     ].copy()
     variacao["Status Mov"] = "📊 Variação"
 
+    # RISCO IMINENTE: não obsoleto, entre 4 e 6 meses sem movimentação
+    df_atual_geral = df[(df["Data Fechamento"] == data_atual)].copy()
+    risco_raw = df_atual_geral[
+        (df_atual_geral["Status Estoque"] != "Obsoleto") &
+        (df_atual_geral["Meses Ult Mov"] >= 4) &
+        (df_atual_geral["Meses Ult Mov"] <= 6)
+    ][["Empresa / Filial", "Produto", "Descricao", "Conta", "Saldo Atual", "Custo Total"]].copy()
+    risco = risco_raw.rename(columns={"Custo Total": "Vlr Atual", "Saldo Atual": "Qtd Atual"})
+    risco["Vlr Ant"]    = 0.0
+    risco["Qtd Ant"]    = 0.0
+    risco["Status Mov"] = "🟡 Risco Iminente"
+
     valor_entrou  = entrou["Vlr Atual"].sum()
     qtd_entrou    = len(entrou)
     valor_saiu    = saiu["Vlr Ant"].sum()
