@@ -46,151 +46,120 @@ def render_navbar(titulo: str = ""):
 
 def render_filtros_topo(datas: list, empresas: list, extras: dict = None, key_prefix: str = "filtro"):
     """
-    Renderiza filtros como chips/pills no topo da página.
+    Renderiza filtros como barra horizontal no topo da página.
+    Usa multiselect estilizado — sem sidebar.
 
     Parâmetros:
-        datas       : lista de strings formatadas de datas disponíveis
+        datas       : lista de strings de datas disponíveis
         empresas    : lista de empresas disponíveis
         extras      : dict com filtros adicionais {label: [opcoes]}
-                      ex: {"Conta": ["Produto Acabado", "Matéria Prima"]}
-        key_prefix  : prefixo para as chaves de session_state
+        key_prefix  : prefixo para as chaves
 
-    Retorna:
-        dict com os valores selecionados:
-        {
-            "data": "28/02/2026",
-            "empresas": ["Robotica / Matriz"],
-            "conta": ["Produto Acabado"],   # se extras tiver "Conta"
-            ...
-        }
+    Retorna dict com valores selecionados.
     """
 
     st.markdown("""
     <style>
-    /* Container de filtros */
-    .filtros-topo {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 12px;
-        padding: 14px 20px;
-        margin-bottom: 20px;
-        display: flex;
-        align-items: center;
-        gap: 24px;
-        flex-wrap: wrap;
-    }
-    .filtro-label {
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 2px;
-        text-transform: uppercase;
-        color: rgba(255,255,255,0.35);
-        margin-bottom: 6px;
-    }
-
-    /* Chips — botões de seleção */
-    div[data-testid="stButton"].chip-btn > button {
-        background: rgba(255,255,255,0.06) !important;
+    /* Estiliza multiselect no topo como pills */
+    div[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
+        background-color: rgba(255,255,255,0.05) !important;
         border: 1px solid rgba(255,255,255,0.12) !important;
-        border-radius: 20px !important;
-        color: rgba(255,255,255,0.6) !important;
-        font-size: 12px !important;
-        padding: 4px 14px !important;
-        height: auto !important;
-        min-height: 0 !important;
-        margin: 2px !important;
-        transition: all 0.15s ease !important;
-        white-space: nowrap !important;
+        border-radius: 10px !important;
     }
-    div[data-testid="stButton"].chip-btn > button:hover {
-        background: rgba(236,110,33,0.15) !important;
-        border-color: rgba(236,110,33,0.5) !important;
-        color: #EC6E21 !important;
+    div[data-testid="stMultiSelect"] [data-baseweb="select"] > div:focus-within {
+        border-color: #EC6E21 !important;
     }
-    div[data-testid="stButton"].chip-ativo > button {
-        background: rgba(236,110,33,0.2) !important;
+    div[data-testid="stMultiSelect"] span[data-baseweb="tag"] {
+        background-color: rgba(236,110,33,0.2) !important;
         border: 1px solid #EC6E21 !important;
         border-radius: 20px !important;
         color: #EC6E21 !important;
-        font-size: 12px !important;
+        font-size: 11px !important;
         font-weight: 600 !important;
-        padding: 4px 14px !important;
-        height: auto !important;
-        min-height: 0 !important;
-        margin: 2px !important;
+    }
+    div[data-testid="stMultiSelect"] span[data-baseweb="tag"] span {
+        color: #EC6E21 !important;
+    }
+    div[data-testid="stMultiSelect"] [data-baseweb="select"] span,
+    div[data-testid="stMultiSelect"] [data-baseweb="select"] div {
+        color: rgba(255,255,255,0.5) !important;
+    }
+
+    /* Selectbox data */
+    div[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+        background-color: rgba(255,255,255,0.05) !important;
+        border: 1px solid rgba(255,255,255,0.12) !important;
+        border-radius: 10px !important;
+    }
+    div[data-testid="stSelectbox"] [data-baseweb="select"] span {
+        color: white !important;
+        font-weight: 600 !important;
+    }
+
+    /* Labels dos filtros */
+    div[data-testid="stMultiSelect"] label,
+    div[data-testid="stSelectbox"] label {
+        font-size: 10px !important;
+        font-weight: 600 !important;
+        letter-spacing: 2px !important;
+        text-transform: uppercase !important;
+        color: rgba(255,255,255,0.35) !important;
+    }
+
+    /* Container fundo */
+    .filtros-container {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 12px;
+        padding: 12px 20px 4px;
+        margin-bottom: 20px;
     }
     </style>
     """, unsafe_allow_html=True)
 
+    st.markdown('<div class="filtros-container">', unsafe_allow_html=True)
+
+    # Monta colunas dinamicamente
+    n_extras = len(extras) if extras else 0
+    col_sizes = [1] + [2] + ([1.5] * n_extras)
+    cols = st.columns(col_sizes)
+
     resultado = {}
 
-    # ── DATA (selectbox compacto) ──────────────────────────
-    col_data, col_emp, *col_extras = st.columns(
-        [1.5, 2] + ([1.5] * len(extras)) if extras else [1.5, 2]
-    )
-
-    with col_data:
-        st.markdown('<div class="filtro-label">Fechamento</div>', unsafe_allow_html=True)
+    # Data
+    with cols[0]:
         data_sel = st.selectbox(
-            "Data",
+            "Fechamento",
             options=datas,
             index=0,
-            key=f"{key_prefix}_data",
-            label_visibility="collapsed"
+            key=f"{key_prefix}_data"
         )
         resultado["data"] = data_sel
 
-    # ── EMPRESA (chips) ────────────────────────────────────
-    with col_emp:
-        st.markdown('<div class="filtro-label">Empresa / Filial</div>', unsafe_allow_html=True)
+    # Empresa
+    with cols[1]:
+        empresas_sel = st.multiselect(
+            "Empresa / Filial",
+            options=empresas,
+            default=[],
+            key=f"{key_prefix}_empresas",
+            placeholder="Todas as empresas"
+        )
+        resultado["empresas"] = empresas_sel
 
-        key_emp = f"{key_prefix}_empresas"
-        if key_emp not in st.session_state:
-            st.session_state[key_emp] = []
-
-        cols_emp = st.columns(len(empresas)) if empresas else []
-        for i, emp in enumerate(empresas):
-            ativo = emp in st.session_state[key_emp]
-            css_class = "chip-ativo" if ativo else "chip-btn"
-            with cols_emp[i]:
-                st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
-                if st.button(emp, key=f"{key_prefix}_emp_{i}"):
-                    if ativo:
-                        st.session_state[key_emp].remove(emp)
-                    else:
-                        st.session_state[key_emp].append(emp)
-                    st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-
-        resultado["empresas"] = st.session_state[key_emp]
-
-    # ── EXTRAS (chips) ─────────────────────────────────────
+    # Extras (Conta, Faixa DIO, etc.)
     if extras:
         for idx, (label, opcoes) in enumerate(extras.items()):
             label_key = label.lower().replace(" ", "_").replace("/", "")
-            key_extra = f"{key_prefix}_{label_key}"
+            with cols[2 + idx]:
+                sel = st.multiselect(
+                    label,
+                    options=opcoes,
+                    default=[],
+                    key=f"{key_prefix}_{label_key}",
+                    placeholder=f"Todas"
+                )
+                resultado[label_key] = sel
 
-            if key_extra not in st.session_state:
-                st.session_state[key_extra] = []
-
-            # Filtra opções conforme empresas selecionadas (passado de fora)
-            with col_extras[idx]:
-                st.markdown(f'<div class="filtro-label">{label}</div>', unsafe_allow_html=True)
-                cols_ex = st.columns(len(opcoes)) if opcoes else []
-                for i, opc in enumerate(opcoes):
-                    ativo = opc in st.session_state[key_extra]
-                    css_class = "chip-ativo" if ativo else "chip-btn"
-                    with cols_ex[i]:
-                        st.markdown(f'<div class="{css_class}">', unsafe_allow_html=True)
-                        if st.button(opc, key=f"{key_prefix}_{label_key}_{i}"):
-                            if ativo:
-                                st.session_state[key_extra].remove(opc)
-                            else:
-                                st.session_state[key_extra].append(opc)
-                            st.rerun()
-                        st.markdown('</div>', unsafe_allow_html=True)
-
-            resultado[label_key] = st.session_state[key_extra]
-
-    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     return resultado
