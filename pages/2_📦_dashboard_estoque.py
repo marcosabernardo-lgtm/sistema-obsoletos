@@ -217,13 +217,13 @@ def linha_tabela(label, valor, var_val, var_perc, is_header=False):
             f'<td style="padding:10px 16px;text-align:right;color:rgba(255,255,255,0.3)">—</td>'
             f'<td style="padding:10px 16px;text-align:right;color:rgba(255,255,255,0.3)">—</td></tr>'
         )
-    cor = cor_var(var_val)
+    bolinha = "🟢" if var_val < 0 else "🔴"
     sinal = "+" if var_val >= 0 else "-"
     return (
         f'<tr><td style="padding:10px 16px;font-weight:{peso};font-size:{tam};color:white">{label}</td>'
         f'<td style="padding:10px 16px;font-weight:{peso};font-size:{tam};color:white;text-align:right">{moeda_br(valor)}</td>'
-        f'<td style="padding:10px 16px;text-align:right;color:{cor};font-weight:600">{sinal}{moeda_br(abs(var_val))}</td>'
-        f'<td style="padding:10px 16px;text-align:right;color:{cor};font-weight:600">{seta(var_val)} {abs(var_perc):.1f}%</td></tr>'
+        f'<td style="padding:10px 16px;text-align:right;color:white;font-weight:600">{bolinha} {seta(var_val)} {sinal}{moeda_br(abs(var_val))}</td>'
+        f'<td style="padding:10px 16px;text-align:right;color:white;font-weight:600">{bolinha} {seta(var_val)} {abs(var_perc):.1f}%</td></tr>'
     )
 
 linhas = (
