@@ -9,6 +9,11 @@ def render_navbar(titulo: str = ""):
 
     st.markdown("""
     <style>
+    /* Esconde o nome "app" e links de navegação da sidebar */
+    section[data-testid="stSidebarNav"] {
+        display: none !important;
+    }
+
     /* Botão Home */
     div[data-testid="stButton"].home-btn > button {
         background: rgba(255,255,255,0.06) !important;
