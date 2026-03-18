@@ -215,10 +215,10 @@ mom_val = moeda_br(valor_mom) if valor_mom is not None else "—"
 yoy_val = moeda_br(valor_yoy) if valor_yoy is not None else "—"
 
 col2.markdown(
-    f'<div class="kpi-card" style="display:flex;flex-direction:row;gap:0;padding:0;">'
-    f'<div style="flex:1;padding:16px;border-right:1px solid rgba(255,255,255,0.1);text-align:center;">'
+    f'<div class="kpi-card" style="display:flex;flex-direction:row;gap:0;padding:0;min-height:110px;">'
+    f'<div style="flex:1;padding:16px;border-right:1px solid rgba(255,255,255,0.1);text-align:center;display:flex;flex-direction:column;justify-content:center;">'
     f'<div class="kpi-title">MoM {mom_label}</div><div class="kpi-value">{mom_val}</div></div>'
-    f'<div style="flex:1;padding:16px;text-align:center;">'
+    f'<div style="flex:1;padding:16px;text-align:center;display:flex;flex-direction:column;justify-content:center;">'
     f'<div class="kpi-title">YoY {yoy_label}</div><div class="kpi-value">{yoy_val}</div></div>'
     f'</div>',
     unsafe_allow_html=True
