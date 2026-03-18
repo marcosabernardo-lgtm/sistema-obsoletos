@@ -407,17 +407,12 @@ with tab2:
 
         st.altair_chart(
             alt.Chart(df_top_chart)
-            .mark_bar(cornerRadiusTopRight=4, cornerRadiusBottomRight=4)
+            .mark_bar(cornerRadiusTopRight=4, cornerRadiusBottomRight=4, color="#EC6E21")
             .encode(
                 y=alt.Y("Label:N", sort="-x", title=None,
                         axis=alt.Axis(labelColor="white", labelLimit=300)),
                 x=alt.X("DIO:Q", title=label_eixo,
                         axis=alt.Axis(labelColor="white", titleColor="white")),
-                color=alt.Color("Faixa DIO:N",
-                                scale=alt.Scale(domain=list(CORES_FAIXAS.keys()),
-                                                range=list(CORES_FAIXAS.values())),
-                                legend=alt.Legend(labelColor="white", titleColor="white",
-                                                  title="Faixa DIO")),
                 tooltip=["Empresa / Filial", "Produto", "Descricao",
                          alt.Tooltip("DIO:Q", format=".0f", title=label_eixo),
                          "Tempo DIO", "Faixa DIO"]
