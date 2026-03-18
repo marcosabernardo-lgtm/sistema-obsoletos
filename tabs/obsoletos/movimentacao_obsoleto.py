@@ -278,16 +278,18 @@ def render(df_hist, moeda_br, data_selecionada=None):
         mov = pd.concat(frames, ignore_index=True)
         mov = mov.sort_values("Vlr Atual", ascending=False)
 
-        # Filtro de Status Mov
-        status_disponiveis = mov["Status Mov"].unique().tolist()
-        status_sel = st.multiselect(
-            "Filtrar por Status Mov",
-            options=status_disponiveis,
-            default=status_disponiveis,
+        # Filtro de Status Mov — radio button
+        status_radio = st.radio(
+            "Visualizar",
+            options=["Todos", "🔴 Entrou", "🟢 Saiu", "🔽 Reduziu"],
+            horizontal=True,
             key="filtro_status_mov"
         )
 
-        mov_filtrado = mov[mov["Status Mov"].isin(status_sel)] if status_sel else mov
+        if status_radio == "Todos":
+            mov_filtrado = mov
+        else:
+            mov_filtrado = mov[mov["Status Mov"] == status_radio]
 
         buffer = io.BytesIO()
         mov_filtrado.to_excel(buffer, index=False)
