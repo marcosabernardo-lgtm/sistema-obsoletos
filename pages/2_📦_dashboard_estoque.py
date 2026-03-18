@@ -33,10 +33,14 @@ div[data-testid="stDataFrame"] div[role="gridcell"]{
     padding:16px;
     border-radius:10px;
     text-align:center;
+    min-height:110px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
 }
 .kpi-title{ font-size:13px; color:#ccc; }
 .kpi-value{ font-size:24px; font-weight:700; color:white; }
-.kpi-sub{ font-size:16px; color:#aaa; margin-top:6px; }
+.kpi-sub{ font-size:13px; color:#aaa; margin-top:4px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -101,23 +105,32 @@ else:
     df_obsoleto = pd.DataFrame()
 
 # -------------------------------------------------
-# FILTROS NO TOPO — chips
+# FILTROS NO TOPO — bidirecional
 # -------------------------------------------------
 datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=True)
 datas_fmt_list = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
 datas_map = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
-# Pré-carrega empresas e contas para o primeiro fechamento
-data_preview = pd.Timestamp(datas_disponiveis[0])
+# Base do fechamento selecionado (usa session_state para saber data atual)
+data_preview_str = st.session_state.get("estoque_data", datas_fmt_list[0])
+data_preview = pd.Timestamp(datas_map.get(data_preview_str, datas_disponiveis[0]))
 df_preview = df_hist[df_hist["Data Fechamento"] == data_preview]
-empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique()) if "Empresa / Filial" in df_preview.columns else []
 
-# Contas dinâmicas conforme empresas já selecionadas
+# Filtros bidirecionais — cada um filtra o outro
 empresas_ja_sel = st.session_state.get("estoque_empresas", [])
-df_temp_conta = df_preview.copy()
+contas_ja_sel   = st.session_state.get("estoque_conta", [])
+
+# Empresa: filtrada pelas contas já selecionadas
+df_emp_filtro = df_preview.copy()
+if contas_ja_sel:
+    df_emp_filtro = df_emp_filtro[df_emp_filtro["Conta"].isin(contas_ja_sel)]
+empresas_disponiveis = sorted(df_emp_filtro["Empresa / Filial"].dropna().unique()) if "Empresa / Filial" in df_emp_filtro.columns else []
+
+# Conta: filtrada pelas empresas já selecionadas
+df_conta_filtro = df_preview.copy()
 if empresas_ja_sel:
-    df_temp_conta = df_temp_conta[df_temp_conta["Empresa / Filial"].isin(empresas_ja_sel)]
-contas_disponiveis = sorted(df_temp_conta["Conta"].dropna().unique()) if "Conta" in df_temp_conta.columns else []
+    df_conta_filtro = df_conta_filtro[df_conta_filtro["Empresa / Filial"].isin(empresas_ja_sel)]
+contas_disponiveis = sorted(df_conta_filtro["Conta"].dropna().unique()) if "Conta" in df_conta_filtro.columns else []
 
 filtros = render_filtros_topo(
     datas=datas_fmt_list,
