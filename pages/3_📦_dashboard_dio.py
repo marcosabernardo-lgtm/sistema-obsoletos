@@ -5,7 +5,10 @@ import os
 import numpy as np
 import io
 
+from utils.navbar import render_navbar
+
 st.set_page_config(page_title="Dashboard DIO", layout="wide")
+render_navbar("Dashboard DIO")
 
 # -------------------------------------------------
 # CSS
@@ -179,15 +182,22 @@ datas_fmt = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 data_sel = st.sidebar.selectbox("Data de Fechamento", options=list(datas_fmt.keys()), index=0)
 data_selecionada = pd.Timestamp(datas_fmt[data_sel])
 
-empresas_sel = st.sidebar.multiselect(
-    "Empresa / Filial",
-    sorted(df_all["Empresa / Filial"].dropna().unique())
-)
+# BASE INICIAL para filtros dinâmicos
+df_base_filtros = df_all[df_all["Data Fechamento"] == data_selecionada].copy()
+
+# EMPRESA
+empresas_opcoes = sorted(df_base_filtros["Empresa / Filial"].dropna().unique())
+empresas_sel = st.sidebar.multiselect("Empresa / Filial", empresas_opcoes)
+
+# FAIXA DIO — dinâmica conforme empresa selecionada
+df_temp = df_base_filtros.copy()
+if empresas_sel:
+    df_temp = df_temp[df_temp["Empresa / Filial"].isin(empresas_sel)]
 
 faixas_sel = st.sidebar.multiselect("Faixa DIO", options=ORDEM_FAIXAS, default=[])
 
 # -------------------------------------------------
-# BASE FILTRADA (sem faixa ainda — faixa depende do modo)
+# BASE FILTRADA
 # -------------------------------------------------
 
 df = df_all[df_all["Data Fechamento"] == data_selecionada].copy()
@@ -196,7 +206,7 @@ if empresas_sel:
     df = df[df["Empresa / Filial"].isin(empresas_sel)]
 
 # -------------------------------------------------
-# MODO — session_state permite renderizar radio abaixo dos KPIs
+# MODO
 # -------------------------------------------------
 
 if "modo_dio" not in st.session_state:
@@ -205,7 +215,6 @@ if "modo_dio" not in st.session_state:
 modo = st.session_state["modo_dio"]
 
 if modo == "Por Valor":
-    # Consumo em R$/dia = consumo_diario (un/dia) × vlr_unit (R$/un)
     df["Consumo_Diario_Valor"] = df["Consumo_Diario"] * df["Vlr Unit"]
     df["DIO_calc"] = np.where(
         df["Consumo_Diario_Valor"] > 0,
@@ -224,7 +233,6 @@ else:
 df["Faixa_calc"]   = df["DIO_calc"].apply(categorizar_dio)
 df["DIO_fmt_calc"] = df["DIO_calc"].apply(formatar_dio)
 
-# Aplica filtro de faixa (agora calculado com o modo correto)
 if faixas_sel:
     df = df[df["Faixa_calc"].isin(faixas_sel)]
 
@@ -247,7 +255,6 @@ dio_ponderado = (
     if df_com_dio["Custo Total"].sum() > 0 else 0
 )
 
-# Linha 1 — visão geral
 col1, col2, col3 = st.columns(3)
 
 col1.markdown(f"""<div class="kpi-card">
@@ -267,7 +274,6 @@ col3.markdown(f"""<div class="kpi-card">
 
 st.markdown("")
 
-# Linha 2 — DIO e capital parado
 col4, col5, col6 = st.columns(3)
 
 col4.markdown(f"""<div class="kpi-card">
@@ -289,7 +295,7 @@ col6.markdown(f"""<div class="kpi-card">
 st.markdown("---")
 
 # -------------------------------------------------
-# FILTRO POR QTD / POR VALOR — abaixo dos KPIs
+# FILTRO POR QTD / POR VALOR
 # -------------------------------------------------
 
 novo_modo = st.radio(
@@ -522,40 +528,24 @@ with tab4:
             return df_obs
 
         df_obs_full = carregar_obsoletos(PASTA_OBS)
-
-        # Filtra pelo mesmo fechamento selecionado
         df_obs = df_obs_full[df_obs_full["Data Fechamento"] == data_selecionada].copy()
 
         if empresas_sel:
             df_obs = df_obs[df_obs["Empresa / Filial"].isin(empresas_sel)]
 
-        # --------------------------------------------------
-        # JOIN DIO × OBSOLETOS
-        # --------------------------------------------------
-
         df_dio_base = df[["Empresa / Filial", "Produto", "Custo Total",
                            "DIO_calc", "DIO_fmt_calc", "Faixa_calc"]].copy()
-
         df_obs_base = df_obs[["Empresa / Filial", "Produto",
                                "Status Estoque", "Meses Ult Mov"]].copy()
 
-        df_cross = df_dio_base.merge(
-            df_obs_base,
-            on=["Empresa / Filial", "Produto"],
-            how="left"
-        )
+        df_cross = df_dio_base.merge(df_obs_base, on=["Empresa / Filial", "Produto"], how="left")
 
-        # Classifica cada produto nas 4 zonas de risco
         def zona_risco(row):
-            obsoleto   = row.get("Status Estoque") == "Obsoleto"
+            obsoleto    = row.get("Status Estoque") == "Obsoleto"
             sem_consumo = row["Faixa_calc"] == "Sem consumo"
-
-            if obsoleto and sem_consumo:
-                return "🔴 Obsoleto + Sem Consumo"
-            if obsoleto and not sem_consumo:
-                return "🟠 Obsoleto mas com DIO"
-            if not obsoleto and sem_consumo:
-                return "🟡 Sem Consumo (não obsoleto)"
+            if obsoleto and sem_consumo:     return "🔴 Obsoleto + Sem Consumo"
+            if obsoleto and not sem_consumo: return "🟠 Obsoleto mas com DIO"
+            if not obsoleto and sem_consumo: return "🟡 Sem Consumo (não obsoleto)"
             return "🟢 Ativo"
 
         df_cross["Zona de Risco"] = df_cross.apply(zona_risco, axis=1)
@@ -567,19 +557,14 @@ with tab4:
             "🟢 Ativo"
         ]
         CORES_ZONAS = {
-            "🔴 Obsoleto + Sem Consumo":  "#e74c3c",
-            "🟠 Obsoleto mas com DIO":    "#e67e22",
+            "🔴 Obsoleto + Sem Consumo":     "#e74c3c",
+            "🟠 Obsoleto mas com DIO":       "#e67e22",
             "🟡 Sem Consumo (não obsoleto)": "#f1c40f",
-            "🟢 Ativo":                   "#2ecc71"
+            "🟢 Ativo":                      "#2ecc71"
         }
 
-        # --------------------------------------------------
-        # KPIs DO CRUZAMENTO
-        # --------------------------------------------------
-
         resumo = df_cross.groupby("Zona de Risco").agg(
-            Itens=("Produto", "count"),
-            Custo=("Custo Total", "sum")
+            Itens=("Produto", "count"), Custo=("Custo Total", "sum")
         ).reindex(ORDEM_ZONAS).fillna(0).reset_index()
 
         custo_total_cross = df_cross["Custo Total"].sum()
@@ -596,14 +581,8 @@ with tab4:
 </div>""", unsafe_allow_html=True)
 
         st.markdown("")
-
-        # --------------------------------------------------
-        # TABELA COMPLETA — todas as zonas com classificação
-        # --------------------------------------------------
-
         st.markdown("##### Detalhamento completo por Zona de Risco")
 
-        # Filtro de zona na própria aba
         zonas_filtro = st.multiselect(
             "Filtrar por Zona de Risco",
             options=ORDEM_ZONAS,
@@ -619,66 +598,47 @@ with tab4:
             "DIO_fmt_calc", "Faixa_calc", "Zona de Risco"
         ]].copy().sort_values(["Zona de Risco", "Custo Total"], ascending=[True, False])
 
-        # Versão display (formatada)
         df_cross_display = df_tabela_cross.copy()
-        df_cross_display["Custo Total"]    = df_cross_display["Custo Total"].apply(moeda_br)
-        df_cross_display["Meses Ult Mov"]  = df_cross_display["Meses Ult Mov"].apply(
+        df_cross_display["Custo Total"]   = df_cross_display["Custo Total"].apply(moeda_br)
+        df_cross_display["Meses Ult Mov"] = df_cross_display["Meses Ult Mov"].apply(
             lambda x: f"{int(x)} meses" if pd.notna(x) else "Sem mov."
         )
         df_cross_display["Status Estoque"] = df_cross_display["Status Estoque"].fillna("—")
-        df_cross_display = df_cross_display.rename(columns={
-            "DIO_fmt_calc": "DIO",
-            "Faixa_calc":   "Faixa DIO"
-        })
+        df_cross_display = df_cross_display.rename(columns={"DIO_fmt_calc": "DIO", "Faixa_calc": "Faixa DIO"})
 
-        st.caption(f"{len(df_tabela_cross)} produtos · "
-                   f"Total: {moeda_br(df_tabela_cross['Custo Total'].sum())}")
+        st.caption(f"{len(df_tabela_cross)} produtos · Total: {moeda_br(df_tabela_cross['Custo Total'].sum())}")
         st.dataframe(df_cross_display, use_container_width=True, hide_index=True)
-
-        # --------------------------------------------------
-        # EXPORTAR EXCEL
-        # --------------------------------------------------
 
         def gerar_excel_cruzamento(df_export):
             output = io.BytesIO()
             df_out = df_export.copy()
-            df_out = df_out.rename(columns={
-                "DIO_fmt_calc": "DIO Formatado",
-                "Faixa_calc":   "Faixa DIO"
-            })
+            df_out = df_out.rename(columns={"DIO_fmt_calc": "DIO Formatado", "Faixa_calc": "Faixa DIO"})
             df_out["Meses Ult Mov"] = df_out["Meses Ult Mov"].apply(
                 lambda x: f"{int(x)} meses" if pd.notna(x) else "Sem mov."
             )
             df_out["Status Estoque"] = df_out["Status Estoque"].fillna("—")
 
             with pd.ExcelWriter(output, engine="openpyxl") as writer:
-
-                # Aba resumo
                 resumo_excel = df_out.groupby("Zona de Risco").agg(
-                    Itens=("Produto", "count"),
-                    Custo_Total=("Custo Total", "sum")
+                    Itens=("Produto", "count"), Custo_Total=("Custo Total", "sum")
                 ).reindex(ORDEM_ZONAS).fillna(0).reset_index()
                 resumo_excel.columns = ["Zona de Risco", "Qtd Itens", "Custo Total (R$)"]
                 resumo_excel.to_excel(writer, sheet_name="Resumo", index=False)
 
-                # Aba por zona
                 for zona in ORDEM_ZONAS:
                     df_zona = df_out[df_out["Zona de Risco"] == zona].drop(columns=["Zona de Risco"])
-                    nome_aba = zona.split(" ", 1)[1][:28]  # remove emoji, limita 28 chars
+                    nome_aba = zona.split(" ", 1)[1][:28]
                     if not df_zona.empty:
                         df_zona.to_excel(writer, sheet_name=nome_aba, index=False)
 
-                # Aba completa
                 df_out.to_excel(writer, sheet_name="Todos", index=False)
 
             output.seek(0)
             return output.getvalue()
 
-        excel_bytes = gerar_excel_cruzamento(df_tabela_cross)
-
         st.download_button(
             label="📥 Exportar Excel (todas as zonas)",
-            data=excel_bytes,
+            data=gerar_excel_cruzamento(df_tabela_cross),
             file_name=f"cruzamento_dio_obsoletos_{data_selecionada.strftime('%Y-%m-%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
@@ -689,24 +649,11 @@ with tab5:
 
     st.subheader("📚 Base Histórica DIO")
 
-    # Toggle Geral / Sem Consumo
-    visao = st.radio(
-        "Visualizar",
-        ["Geral", "Sem Consumo"],
-        horizontal=True,
-        key="base_historica_dio_visao"
-    )
-
-    # Busca textual
+    visao = st.radio("Visualizar", ["Geral", "Sem Consumo"], horizontal=True, key="base_historica_dio_visao")
     busca_hist = st.text_input("🔍 Buscar por produto ou descrição", "", key="busca_base_hist_dio")
 
-    # Aplica filtro de visão
-    if visao == "Sem Consumo":
-        df_base_hist = df[df["Faixa_calc"] == "Sem consumo"].copy()
-    else:
-        df_base_hist = df.copy()
+    df_base_hist = df[df["Faixa_calc"] == "Sem consumo"].copy() if visao == "Sem Consumo" else df.copy()
 
-    # Aplica busca
     if busca_hist:
         mask = (
             df_base_hist["Produto"].astype(str).str.contains(busca_hist, case=False, na=False) |
@@ -714,12 +661,10 @@ with tab5:
         )
         df_base_hist = df_base_hist[mask]
 
-    # Monta tabela com todas as colunas de cálculo
     colunas_exib = [
         "Empresa / Filial", "Produto", "Descricao",
         "Saldo Atual", "Custo Total", "Vlr Unit",
-        "Consumo_12m", "Consumo_Diario",
-        "Ult_Mov_DIO",
+        "Consumo_12m", "Consumo_Diario", "Ult_Mov_DIO",
         "DIO_calc", "DIO_fmt_calc", "Faixa_calc"
     ]
     colunas_presentes = [c for c in colunas_exib if c in df_base_hist.columns]
@@ -727,14 +672,11 @@ with tab5:
         "Custo Total", ascending=False
     ).reset_index(drop=True)
 
-    # Formata para exibição
     df_base_display = df_base_exib.copy()
     df_base_display["Custo Total"]    = df_base_display["Custo Total"].apply(moeda_br)
     df_base_display["Vlr Unit"]       = df_base_display["Vlr Unit"].apply(moeda_br)
     df_base_display["Consumo_Diario"] = df_base_display["Consumo_Diario"].apply(lambda x: f"{x:.6f}")
-    df_base_display["DIO_calc"]       = df_base_display["DIO_calc"].apply(
-        lambda x: f"{x:.1f}" if x != np.inf else "∞"
-    )
+    df_base_display["DIO_calc"]       = df_base_display["DIO_calc"].apply(lambda x: f"{x:.1f}" if x != np.inf else "∞")
     if "Ult_Mov_DIO" in df_base_display.columns:
         df_base_display["Ult_Mov_DIO"] = pd.to_datetime(
             df_base_display["Ult_Mov_DIO"], errors="coerce"
@@ -749,15 +691,9 @@ with tab5:
         "Faixa_calc":     "Faixa DIO"
     })
 
-    st.caption(
-        f"{len(df_base_hist)} produtos · "
-        f"Fechamento: {data_selecionada.strftime('%d/%m/%Y')} · "
-        f"Visão: {visao}"
-    )
-
+    st.caption(f"{len(df_base_hist)} produtos · Fechamento: {data_selecionada.strftime('%d/%m/%Y')} · Visão: {visao}")
     st.dataframe(df_base_display, use_container_width=True, hide_index=True)
 
-    # Exportar Excel
     df_excel_hist = df_base_exib.copy()
     if "Ult_Mov_DIO" in df_excel_hist.columns:
         df_excel_hist["Ult_Mov_DIO"] = pd.to_datetime(
@@ -777,11 +713,9 @@ with tab5:
     df_excel_hist.to_excel(buffer_hist, index=False)
     buffer_hist.seek(0)
 
-    label_visao_hist = "sem_consumo" if visao == "Sem Consumo" else "geral"
-
     st.download_button(
         label="📥 Exportar Excel",
         data=buffer_hist.getvalue(),
-        file_name=f"base_historica_dio_{label_visao_hist}_{data_selecionada.strftime('%Y-%m-%d')}.xlsx",
+        file_name=f"base_historica_dio_{'sem_consumo' if visao == 'Sem Consumo' else 'geral'}_{data_selecionada.strftime('%Y-%m-%d')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )

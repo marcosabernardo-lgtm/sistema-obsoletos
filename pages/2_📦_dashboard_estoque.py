@@ -3,8 +3,10 @@ import pandas as pd
 import os
 
 from tabs.estoque.evolucao_estoque import render as render_evolucao_estoque
+from utils.navbar import render_navbar
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
+render_navbar("Dashboard Evolução de Estoque")
 
 # -------------------------------------------------
 # CSS
@@ -131,15 +133,20 @@ data_sel = st.sidebar.selectbox(
 )
 data_selecionada = pd.Timestamp(datas_fmt[data_sel])
 
-empresas_sel = st.sidebar.multiselect(
-    "Empresa / Filial",
-    sorted(df_hist["Empresa / Filial"].dropna().unique()) if "Empresa / Filial" in df_hist.columns else []
-)
+# BASE INICIAL para filtros dinâmicos
+df_base_filtros = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
 
-contas_sel = st.sidebar.multiselect(
-    "Conta",
-    sorted(df_hist["Conta"].dropna().unique()) if "Conta" in df_hist.columns else []
-)
+# EMPRESA
+empresas_opcoes = sorted(df_base_filtros["Empresa / Filial"].dropna().unique()) if "Empresa / Filial" in df_base_filtros.columns else []
+empresas_sel = st.sidebar.multiselect("Empresa / Filial", empresas_opcoes)
+
+# CONTA — dinâmica conforme empresa selecionada
+df_temp = df_base_filtros.copy()
+if empresas_sel:
+    df_temp = df_temp[df_temp["Empresa / Filial"].isin(empresas_sel)]
+
+contas_opcoes = sorted(df_temp["Conta"].dropna().unique()) if "Conta" in df_temp.columns else []
+contas_sel = st.sidebar.multiselect("Conta", contas_opcoes)
 
 # -------------------------------------------------
 # FILTRAR BASE KPI
@@ -250,4 +257,4 @@ try:
     render_evolucao_estoque(df_hist_filtrado, df_obsoleto, moeda_br, df_kpi, data_selecionada, valor_mom, valor_yoy)
 except Exception as e:
     st.error("Erro ao renderizar o dashboard.")
-    st.exception(e)# redeploy
+    st.exception(e)
