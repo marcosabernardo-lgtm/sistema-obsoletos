@@ -8,75 +8,93 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
         st.warning("Selecione uma data de fechamento.")
         return
 
-    # Período atual
     df_atual = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
 
-    # Período anterior (MoM)
     datas_sorted = sorted(df_hist["Data Fechamento"].unique())
     idx = list(datas_sorted).index(data_selecionada) if data_selecionada in datas_sorted else -1
 
+    # MoM
     if idx > 0:
         data_mom = datas_sorted[idx - 1]
         df_mom = df_hist[df_hist["Data Fechamento"] == data_mom].copy()
     else:
         df_mom = pd.DataFrame(columns=df_hist.columns)
+        data_mom = None
 
-    # Agrupar por Conta
+    # YoY
+    data_yoy_alvo = data_selecionada - pd.DateOffset(years=1)
+    datas_yoy = [d for d in datas_sorted if abs((pd.Timestamp(d) - data_yoy_alvo).days) <= 31]
+    if datas_yoy:
+        data_yoy = min(datas_yoy, key=lambda d: abs((pd.Timestamp(d) - data_yoy_alvo).days))
+        df_yoy = df_hist[df_hist["Data Fechamento"] == data_yoy].copy()
+    else:
+        df_yoy = pd.DataFrame(columns=df_hist.columns)
+        data_yoy = None
+
+    # Agrupamentos
     grp_atual = (
         df_atual.groupby("Conta")["Custo Total"]
-        .sum().reset_index()
-        .rename(columns={"Custo Total": "Valor Estoque"})
+        .sum().reset_index().rename(columns={"Custo Total": "Valor Estoque"})
     )
-
     grp_mom = (
         df_mom.groupby("Conta")["Custo Total"]
-        .sum().reset_index()
-        .rename(columns={"Custo Total": "Valor MoM"})
+        .sum().reset_index().rename(columns={"Custo Total": "Valor MoM"})
     ) if not df_mom.empty else pd.DataFrame(columns=["Conta", "Valor MoM"])
 
-    df_tabela = grp_atual.merge(grp_mom, on="Conta", how="left")
-    df_tabela["Valor MoM"] = df_tabela["Valor MoM"].fillna(0)
+    grp_yoy = (
+        df_yoy.groupby("Conta")["Custo Total"]
+        .sum().reset_index().rename(columns={"Custo Total": "Valor YoY"})
+    ) if not df_yoy.empty else pd.DataFrame(columns=["Conta", "Valor YoY"])
 
-    # % MoM = (atual - anterior) / anterior * 100
+    df_tabela = grp_atual.merge(grp_mom, on="Conta", how="left")
+    df_tabela = df_tabela.merge(grp_yoy, on="Conta", how="left")
+    df_tabela["Valor MoM"] = df_tabela["Valor MoM"].fillna(0)
+    df_tabela["Valor YoY"] = df_tabela["Valor YoY"].fillna(0)
+
     df_tabela["Perc MoM"] = df_tabela.apply(
-        lambda r: ((r["Valor Estoque"] - r["Valor MoM"]) / r["Valor MoM"] * 100) if r["Valor MoM"] != 0 else 0,
-        axis=1
+        lambda r: ((r["Valor Estoque"] - r["Valor MoM"]) / r["Valor MoM"] * 100) if r["Valor MoM"] != 0 else 0, axis=1
     )
+    df_tabela["Perc YoY"] = df_tabela.apply(
+        lambda r: ((r["Valor Estoque"] - r["Valor YoY"]) / r["Valor YoY"] * 100) if r["Valor YoY"] != 0 else 0, axis=1
+    )
+
     df_tabela = df_tabela.sort_values("Conta").reset_index(drop=True)
 
-    # Totais
-    total_atual = df_tabela["Valor Estoque"].sum()
-    total_mom   = df_tabela["Valor MoM"].sum()
-    total_perc  = ((total_atual - total_mom) / total_mom * 100) if total_mom != 0 else 0
+    total_atual    = df_tabela["Valor Estoque"].sum()
+    total_mom      = df_tabela["Valor MoM"].sum()
+    total_yoy      = df_tabela["Valor YoY"].sum()
+    total_perc_mom = ((total_atual - total_mom) / total_mom * 100) if total_mom != 0 else 0
+    total_perc_yoy = ((total_atual - total_yoy) / total_yoy * 100) if total_yoy != 0 else 0
 
-    # Helpers
-    # Estoque alto = ruim → subiu = vermelho, caiu = verde
     def icone_perc(perc):
-        if perc > 1:
-            return '<span style="color:#ff6b6b;font-weight:700">&#11014; ' + f'{abs(perc):.0f}%</span>'
-        elif perc < -1:
-            return '<span style="color:#51cf66;font-weight:700">&#11015; ' + f'{abs(perc):.0f}%</span>'
-        else:
-            return '<span style="color:#f0a500;font-weight:700">&#9679; ' + f'{abs(perc):.0f}%</span>'
+        if perc > 1:    return f'<span style="color:#ff6b6b;font-weight:700">&#11014; {abs(perc):.0f}%</span>'
+        elif perc < -1: return f'<span style="color:#51cf66;font-weight:700">&#11015; {abs(perc):.0f}%</span>'
+        else:           return f'<span style="color:#f0a500;font-weight:700">&#9679; {abs(perc):.0f}%</span>'
 
-    # Montar linhas HTML
+    mom_label = f"Vir Est MoM ({pd.Timestamp(data_mom).strftime('%y-%b').lower()})" if data_mom else "Vir Est MoM"
+    yoy_label = f"Vir Est YoY ({pd.Timestamp(data_yoy).strftime('%y-%b').lower()})" if data_yoy else "Vir Est YoY"
+
     linhas_html = ""
     for _, row in df_tabela.iterrows():
         linhas_html += (
             "<tr>"
-            "<td>" + str(row['Conta']) + "</td>"
-            "<td>" + moeda_br(row['Valor Estoque']) + "</td>"
-            "<td>" + moeda_br(row['Valor MoM']) + "</td>"
-            "<td>" + icone_perc(row['Perc MoM']) + "</td>"
+            f"<td>{row['Conta']}</td>"
+            f"<td>{moeda_br(row['Valor Estoque'])}</td>"
+            f"<td>{moeda_br(row['Valor MoM'])}</td>"
+            f"<td>{icone_perc(row['Perc MoM'])}</td>"
+            f"<td>{moeda_br(row['Valor YoY']) if row['Valor YoY'] != 0 else '—'}</td>"
+            f"<td>{icone_perc(row['Perc YoY']) if row['Valor YoY'] != 0 else '—'}</td>"
             "</tr>"
         )
 
     total_html = (
         "<tr style='font-weight:700;border-top:2px solid #EC6E21'>"
-        "<td>Total</td>"
-        "<td>" + moeda_br(total_atual) + "</td>"
-        "<td>" + moeda_br(total_mom) + "</td>"
-        "<td>" + icone_perc(total_perc) + "</td>"
+        f"<td>Total</td>"
+        f"<td>{moeda_br(total_atual)}</td>"
+        f"<td>{moeda_br(total_mom)}</td>"
+        f"<td>{icone_perc(total_perc_mom)}</td>"
+        f"<td>{moeda_br(total_yoy) if total_yoy != 0 else '—'}</td>"
+        f"<td>{icone_perc(total_perc_yoy) if total_yoy != 0 else '—'}</td>"
         "</tr>"
     )
 
@@ -97,14 +115,9 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
 
     tabela = (
         css
-        + "<table class='tb-conta'>"
-        + "<thead><tr>"
-        + "<th>Conta</th>"
-        + "<th>Valor Estoque (Total)</th>"
-        + "<th>Vir Est MoM</th>"
-        + "<th>% MoM</th>"
-        + "</tr></thead>"
-        + "<tbody>"
+        + "<table class='tb-conta'><thead><tr>"
+        + f"<th>Conta</th><th>Valor Estoque (Total)</th><th>{mom_label}</th><th>% MoM</th><th>{yoy_label}</th><th>% YoY</th>"
+        + "</tr></thead><tbody>"
         + linhas_html
         + total_html
         + "</tbody></table>"
