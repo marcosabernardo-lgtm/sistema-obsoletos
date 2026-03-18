@@ -190,44 +190,26 @@ def cor_perc(v):
 col1, col2 = st.columns(2)
 
 # Card 1 — Valor atual + variações MoM e YoY
-mom_linha = ""
-if valor_mom is not None:
-    mom_linha = f'<div class="kpi-sub" style="color:{cor_perc(perc_mom)};font-size:13px">{seta(perc_mom)} {abs(perc_mom):.1f}% vs mês anterior ({pd.Timestamp(data_mom).strftime("%y-%b").lower()})</div>'
+mom_linha = f'<div class="kpi-sub" style="color:{cor_perc(perc_mom)};font-size:13px">{seta(perc_mom)} {abs(perc_mom):.1f}% vs mês anterior ({pd.Timestamp(data_mom).strftime("%y-%b").lower()})</div>' if valor_mom is not None else ""
+yoy_linha = f'<div class="kpi-sub" style="color:{cor_perc(perc_yoy)};font-size:13px">{seta(perc_yoy)} {abs(perc_yoy):.1f}% vs ano anterior ({pd.Timestamp(data_yoy).strftime("%y-%b").lower()})</div>' if valor_yoy is not None else ""
 
-yoy_linha = ""
-if valor_yoy is not None:
-    yoy_linha = f'<div class="kpi-sub" style="color:{cor_perc(perc_yoy)};font-size:13px">{seta(perc_yoy)} {abs(perc_yoy):.1f}% vs ano anterior ({pd.Timestamp(data_yoy).strftime("%y-%b").lower()})</div>'
-
-col1.markdown(f"""
-<div class="kpi-card">
-    <div class="kpi-title">Valor Estoque {data_selecionada.strftime('%y-%b').lower()}</div>
-    <div class="kpi-value">{moeda_br(valor_atual)}</div>
-    {mom_linha}
-    {yoy_linha}
-</div>
-""", unsafe_allow_html=True)
+col1.markdown(f'<div class="kpi-card"><div class="kpi-title">Valor Estoque {data_selecionada.strftime("%y-%b").lower()}</div><div class="kpi-value">{moeda_br(valor_atual)}</div>{mom_linha}{yoy_linha}</div>', unsafe_allow_html=True)
 
 # Card 2 — MoM e YoY juntos
-mom_bloco = f"""
-    <div style="flex:1;border-right:1px solid rgba(255,255,255,0.1);padding-right:16px">
-        <div class="kpi-title">MoM {pd.Timestamp(data_mom).strftime('%y-%b').lower() if valor_mom is not None else ''}</div>
-        <div class="kpi-value">{moeda_br(valor_mom) if valor_mom is not None else '—'}</div>
-    </div>
-""" if valor_mom is not None else '<div style="flex:1"><div class="kpi-title">MoM</div><div class="kpi-value">—</div></div>'
+mom_label = pd.Timestamp(data_mom).strftime('%y-%b').lower() if valor_mom is not None else ""
+yoy_label = pd.Timestamp(data_yoy).strftime('%y-%b').lower() if valor_yoy is not None else ""
+mom_val = moeda_br(valor_mom) if valor_mom is not None else "—"
+yoy_val = moeda_br(valor_yoy) if valor_yoy is not None else "—"
 
-yoy_bloco = f"""
-    <div style="flex:1;padding-left:16px">
-        <div class="kpi-title">YoY {pd.Timestamp(data_yoy).strftime('%y-%b').lower() if valor_yoy is not None else ''}</div>
-        <div class="kpi-value">{moeda_br(valor_yoy) if valor_yoy is not None else '—'}</div>
-    </div>
-""" if valor_yoy is not None else '<div style="flex:1"><div class="kpi-title">YoY</div><div class="kpi-value">—</div></div>'
-
-col2.markdown(f"""
-<div class="kpi-card" style="display:flex;flex-direction:row;align-items:center;text-align:center">
-    {mom_bloco}
-    {yoy_bloco}
-</div>
-""", unsafe_allow_html=True)
+col2.markdown(
+    f'<div class="kpi-card" style="display:flex;flex-direction:row;gap:0;padding:0;">'
+    f'<div style="flex:1;padding:16px;border-right:1px solid rgba(255,255,255,0.1);text-align:center;">'
+    f'<div class="kpi-title">MoM {mom_label}</div><div class="kpi-value">{mom_val}</div></div>'
+    f'<div style="flex:1;padding:16px;text-align:center;">'
+    f'<div class="kpi-title">YoY {yoy_label}</div><div class="kpi-value">{yoy_val}</div></div>'
+    f'</div>',
+    unsafe_allow_html=True
+)
 
 st.markdown("---")
 
