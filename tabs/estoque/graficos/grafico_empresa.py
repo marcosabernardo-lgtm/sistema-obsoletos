@@ -9,10 +9,8 @@ def render(df, moeda_br, data_selecionada=None):
 
     ultima_data = df["Data Fechamento"].max()
     data_ref = pd.Timestamp(data_selecionada) if data_selecionada is not None else ultima_data
-    # Normalizar para meia-noite sem timezone
     data_ref = pd.Timestamp(data_ref.date())
 
-    # Normalizar datas do df também
     df["Data Fechamento"] = df["Data Fechamento"].dt.normalize()
 
     base = df[df["Data Fechamento"] == data_ref]
@@ -37,23 +35,13 @@ def render(df, moeda_br, data_selecionada=None):
             "Empresa / Filial:N",
             sort=alt.SortField(field="Custo Total", order="descending"),
             axis=alt.Axis(
-                title=None,
-                labelAngle=0,
-                labelColor="white",
-                labelFontSize=11,
-                tickColor="white",
-                domainColor="white"
+                title=None, labelAngle=0, labelColor="white",
+                labelFontSize=11, tickColor="white", domainColor="white"
             )
         ),
         y=alt.Y(
             "Custo Total:Q",
-            axis=alt.Axis(
-                title=None,
-                labels=False,
-                ticks=False,
-                grid=False,
-                domain=False
-            )
+            axis=alt.Axis(title=None, labels=False, ticks=False, grid=False, domain=False)
         ),
         tooltip=[
             alt.Tooltip("Empresa / Filial:N", title="Empresa"),
@@ -61,53 +49,43 @@ def render(df, moeda_br, data_selecionada=None):
         ]
     )
 
-    labels = alt.Chart(empresa).mark_text(
-        dy=-10,
-        color="white",
-        fontSize=11
-    ).encode(
-        x=alt.X(
-            "Empresa / Filial:N",
-            sort=alt.SortField(field="Custo Total", order="descending")
-        ),
+    labels = alt.Chart(empresa).mark_text(dy=-10, color="white", fontSize=11).encode(
+        x=alt.X("Empresa / Filial:N", sort=alt.SortField(field="Custo Total", order="descending")),
         y=alt.Y("Custo Total:Q"),
         text="Label"
     )
 
-    chart = (bars + labels).properties(
-        height=420
-    ).configure_view(
-        strokeWidth=0
-    ).configure_axisX(
-        grid=False,
-        labelColor="white",
-        labelAngle=0,
-        tickColor="white",
-        domainColor="white"
-    ).configure_axisY(
-        grid=False,
-        labels=False,
-        ticks=False,
-        domain=False,
-        title=None
-    )
+    chart = (bars + labels).properties(height=420).configure_view(strokeWidth=0).configure_axisX(
+        grid=False, labelColor="white", labelAngle=0, tickColor="white", domainColor="white"
+    ).configure_axisY(grid=False, labels=False, ticks=False, domain=False, title=None)
 
     st.altair_chart(chart, use_container_width=True)
 
-    # ── Tabela Por Empresa ─────────────────────────────────────────────────────
+    # ── Tabela Por Empresa ─────────────────────────────────
+
     st.markdown("---")
 
     df_atual = df[df["Data Fechamento"] == data_ref].copy()
-
     datas_sorted = sorted(df["Data Fechamento"].unique())
     idx = list(datas_sorted).index(data_ref) if data_ref in datas_sorted else -1
 
+    # MoM — mês anterior
     if idx > 0:
         data_mom = datas_sorted[idx - 1]
         df_mom = df[df["Data Fechamento"] == data_mom].copy()
     else:
         df_mom = pd.DataFrame(columns=df.columns)
 
+    # YoY — mesmo mês ano anterior
+    data_yoy_alvo = data_ref - pd.DateOffset(years=1)
+    datas_yoy = [d for d in datas_sorted if abs((pd.Timestamp(d) - data_yoy_alvo).days) <= 31]
+    if datas_yoy:
+        data_yoy = min(datas_yoy, key=lambda d: abs((pd.Timestamp(d) - data_yoy_alvo).days))
+        df_yoy = df[df["Data Fechamento"] == data_yoy].copy()
+    else:
+        df_yoy = pd.DataFrame(columns=df.columns)
+
+    # Agrupamentos
     grp_atual = (
         df_atual.groupby("Empresa / Filial")["Custo Total"]
         .sum().reset_index().rename(columns={"Custo Total": "Valor Estoque"})
@@ -117,39 +95,61 @@ def render(df, moeda_br, data_selecionada=None):
         .sum().reset_index().rename(columns={"Custo Total": "Valor MoM"})
     ) if not df_mom.empty else pd.DataFrame(columns=["Empresa / Filial", "Valor MoM"])
 
+    grp_yoy = (
+        df_yoy.groupby("Empresa / Filial")["Custo Total"]
+        .sum().reset_index().rename(columns={"Custo Total": "Valor YoY"})
+    ) if not df_yoy.empty else pd.DataFrame(columns=["Empresa / Filial", "Valor YoY"])
+
     df_tabela = grp_atual.merge(grp_mom, on="Empresa / Filial", how="left")
+    df_tabela = df_tabela.merge(grp_yoy, on="Empresa / Filial", how="left")
     df_tabela["Valor MoM"] = df_tabela["Valor MoM"].fillna(0)
-    df_tabela["Perc MoM"]  = df_tabela.apply(
+    df_tabela["Valor YoY"] = df_tabela["Valor YoY"].fillna(0)
+
+    df_tabela["Perc MoM"] = df_tabela.apply(
         lambda r: ((r["Valor Estoque"] - r["Valor MoM"]) / r["Valor MoM"] * 100) if r["Valor MoM"] != 0 else 0, axis=1
     )
+    df_tabela["Perc YoY"] = df_tabela.apply(
+        lambda r: ((r["Valor Estoque"] - r["Valor YoY"]) / r["Valor YoY"] * 100) if r["Valor YoY"] != 0 else 0, axis=1
+    )
+
     df_tabela = df_tabela.sort_values("Valor Estoque", ascending=False).reset_index(drop=True)
 
     total_atual = df_tabela["Valor Estoque"].sum()
     total_mom   = df_tabela["Valor MoM"].sum()
-    total_perc  = ((total_atual - total_mom) / total_mom * 100) if total_mom != 0 else 0
+    total_yoy   = df_tabela["Valor YoY"].sum()
+    total_perc_mom = ((total_atual - total_mom) / total_mom * 100) if total_mom != 0 else 0
+    total_perc_yoy = ((total_atual - total_yoy) / total_yoy * 100) if total_yoy != 0 else 0
 
     def icone_perc(perc):
-        if perc > 1:    return '<span style="color:#ff6b6b;font-weight:700">&#11014; ' + f'{abs(perc):.0f}%</span>'
-        elif perc < -1: return '<span style="color:#51cf66;font-weight:700">&#11015; ' + f'{abs(perc):.0f}%</span>'
-        else:           return '<span style="color:#f0a500;font-weight:700">&#9679; ' + f'{abs(perc):.0f}%</span>'
+        if perc > 1:    return f'<span style="color:#ff6b6b;font-weight:700">&#11014; {abs(perc):.0f}%</span>'
+        elif perc < -1: return f'<span style="color:#51cf66;font-weight:700">&#11015; {abs(perc):.0f}%</span>'
+        else:           return f'<span style="color:#f0a500;font-weight:700">&#9679; {abs(perc):.0f}%</span>'
+
+    # Label da coluna YoY com o ano de referência
+    yoy_label = f"Vir Est YoY ({data_yoy.strftime('%y-%b').lower() if not df_yoy.empty else 'n/d'})"
+    mom_label = f"Vir Est MoM ({data_mom.strftime('%y-%b').lower() if not df_mom.empty else 'n/d'})"
 
     linhas = ""
     for _, row in df_tabela.iterrows():
         linhas += (
             "<tr>"
-            "<td>" + str(row["Empresa / Filial"]) + "</td>"
-            "<td>" + moeda_br(row["Valor Estoque"]) + "</td>"
-            "<td>" + moeda_br(row["Valor MoM"]) + "</td>"
-            "<td>" + icone_perc(row["Perc MoM"]) + "</td>"
+            f"<td>{row['Empresa / Filial']}</td>"
+            f"<td>{moeda_br(row['Valor Estoque'])}</td>"
+            f"<td>{moeda_br(row['Valor MoM'])}</td>"
+            f"<td>{icone_perc(row['Perc MoM'])}</td>"
+            f"<td>{moeda_br(row['Valor YoY']) if row['Valor YoY'] != 0 else '—'}</td>"
+            f"<td>{icone_perc(row['Perc YoY']) if row['Valor YoY'] != 0 else '—'}</td>"
             "</tr>"
         )
 
     total_html = (
         "<tr style='font-weight:700;border-top:2px solid #EC6E21'>"
-        "<td>Total</td>"
-        "<td>" + moeda_br(total_atual) + "</td>"
-        "<td>" + moeda_br(total_mom) + "</td>"
-        "<td>" + icone_perc(total_perc) + "</td>"
+        f"<td>Total</td>"
+        f"<td>{moeda_br(total_atual)}</td>"
+        f"<td>{moeda_br(total_mom)}</td>"
+        f"<td>{icone_perc(total_perc_mom)}</td>"
+        f"<td>{moeda_br(total_yoy) if total_yoy != 0 else '—'}</td>"
+        f"<td>{icone_perc(total_perc_yoy) if total_yoy != 0 else '—'}</td>"
         "</tr>"
     )
 
@@ -168,7 +168,7 @@ def render(df, moeda_br, data_selecionada=None):
     tabela = (
         css
         + "<table class='tb-emp'><thead><tr>"
-        + "<th>Empresa / Filial</th><th>Valor Estoque (Total)</th><th>Vir Est MoM</th><th>% MoM</th>"
+        + f"<th>Empresa / Filial</th><th>Valor Estoque (Total)</th><th>{mom_label}</th><th>% MoM</th><th>{yoy_label}</th><th>% YoY</th>"
         + "</tr></thead><tbody>"
         + linhas
         + total_html
