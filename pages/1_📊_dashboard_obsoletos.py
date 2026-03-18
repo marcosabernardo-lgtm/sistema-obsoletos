@@ -4,6 +4,7 @@ import altair as alt
 import os
 
 from analytics.analises import evolucao_estoque
+from utils.navbar import render_navbar
 
 from tabs.obsoletos.base_historica import render as render_base_historica
 from tabs.obsoletos.top20_produtos import render as render_top20
@@ -13,6 +14,7 @@ from tabs.obsoletos.evolucao_estoque import render as render_evolucao
 
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
+render_navbar("Dashboard de Estoque Obsoleto")
 
 # -------------------------------------------------
 # CSS

@@ -182,17 +182,10 @@ datas_fmt = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 data_sel = st.sidebar.selectbox("Data de Fechamento", options=list(datas_fmt.keys()), index=0)
 data_selecionada = pd.Timestamp(datas_fmt[data_sel])
 
-# BASE INICIAL para filtros dinâmicos
-df_base_filtros = df_all[df_all["Data Fechamento"] == data_selecionada].copy()
-
-# EMPRESA
-empresas_opcoes = sorted(df_base_filtros["Empresa / Filial"].dropna().unique())
-empresas_sel = st.sidebar.multiselect("Empresa / Filial", empresas_opcoes)
-
-# FAIXA DIO — dinâmica conforme empresa selecionada
-df_temp = df_base_filtros.copy()
-if empresas_sel:
-    df_temp = df_temp[df_temp["Empresa / Filial"].isin(empresas_sel)]
+empresas_sel = st.sidebar.multiselect(
+    "Empresa / Filial",
+    sorted(df_all["Empresa / Filial"].dropna().unique())
+)
 
 faixas_sel = st.sidebar.multiselect("Faixa DIO", options=ORDEM_FAIXAS, default=[])
 
