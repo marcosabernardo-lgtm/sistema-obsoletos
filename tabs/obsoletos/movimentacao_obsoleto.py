@@ -117,9 +117,6 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     df = df_hist.copy()
 
-    # -------------------------------------------------------
-    # CONSOLIDAÇÃO
-    # -------------------------------------------------------
     df = (
         df.groupby(
             ["Data Fechamento", "Empresa / Filial", "Produto", "Descricao", "Conta", "Status Estoque"],
@@ -132,14 +129,9 @@ def render(df_hist, moeda_br, data_selecionada=None):
         .drop_duplicates(subset=["Data Fechamento", "Empresa / Filial", "Produto"], keep="first")
     )
 
-    # Critério único: Status Estoque == "Obsoleto"
     df["obsoleto"] = df["Status Estoque"] == "Obsoleto"
-
     datas = sorted(df["Data Fechamento"].unique())
 
-    # -------------------------------------------------------
-    # DEFINIR DATA ATUAL E ANTERIOR
-    # -------------------------------------------------------
     if data_selecionada is not None:
         data_sel_ts = pd.Timestamp(data_selecionada)
         datas_anteriores = [d for d in datas if pd.Timestamp(d) < data_sel_ts]
@@ -161,7 +153,6 @@ def render(df_hist, moeda_br, data_selecionada=None):
         data_atual    = pd.Timestamp(datas[-1])
         data_anterior = pd.Timestamp(datas[-2])
 
-    # Filtrar apenas obsoletos de cada período
     df_atual = df[(df["Data Fechamento"] == data_atual) & (df["obsoleto"] == True)].copy()
     df_ant   = df[(df["Data Fechamento"] == data_anterior) & (df["obsoleto"] == True)].copy()
 
@@ -169,55 +160,38 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     chave = ["Empresa / Filial", "Produto"]
 
-    # -------------------------------------------------------
-    # MERGE — apenas obsoletos dos dois períodos
-    # -------------------------------------------------------
     df_ant_sel = df_ant[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta"]].copy()
     df_ant_sel = df_ant_sel.rename(columns={
-        "Custo Total": "Vlr Ant",
-        "Saldo Atual": "Qtd Ant",
-        "Descricao": "Descricao_ant",
-        "Conta": "Conta_ant",
+        "Custo Total": "Vlr Ant", "Saldo Atual": "Qtd Ant",
+        "Descricao": "Descricao_ant", "Conta": "Conta_ant",
     })
 
     df_atual_sel = df_atual[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta"]].copy()
     df_atual_sel = df_atual_sel.rename(columns={
-        "Custo Total": "Vlr Atual",
-        "Saldo Atual": "Qtd Atual",
-        "Descricao": "Descricao_atual",
-        "Conta": "Conta_atual",
+        "Custo Total": "Vlr Atual", "Saldo Atual": "Qtd Atual",
+        "Descricao": "Descricao_atual", "Conta": "Conta_atual",
     })
 
     base = df_atual_sel.merge(df_ant_sel, on=chave, how="outer")
-
     base["Vlr Ant"]   = base["Vlr Ant"].fillna(0)
     base["Qtd Ant"]   = base["Qtd Ant"].fillna(0)
     base["Vlr Atual"] = base["Vlr Atual"].fillna(0)
     base["Qtd Atual"] = base["Qtd Atual"].fillna(0)
-
     base["Descricao"] = base["Descricao_atual"].fillna(base["Descricao_ant"])
     base["Conta"]     = base["Conta_atual"].fillna(base["Conta_ant"])
 
-    # -------------------------------------------------------
-    # CATEGORIAS
-    # -------------------------------------------------------
-
-    # ENTROU: não existia como obsoleto no anterior, existe agora
-    entrou = base[(base["Vlr Ant"] == 0) & (base["Vlr Atual"] > 0)].copy()
+    entrou  = base[(base["Vlr Ant"] == 0) & (base["Vlr Atual"] > 0)].copy()
     entrou["Status Mov"] = "🔴 Entrou"
 
-    # SAIU: existia como obsoleto, zerou tudo no atual
     saiu = base[(base["Vlr Ant"] > 0) & (base["Vlr Atual"] == 0)].copy()
     saiu["Status Mov"] = "🟢 Saiu"
 
-    # REDUZIU: existia, continua existindo, quantidade diminuiu
     reduziu = base[
         (base["Vlr Ant"] > 0) & (base["Vlr Atual"] > 0) &
         (base["Qtd Atual"] < base["Qtd Ant"])
     ].copy()
     reduziu["Status Mov"] = "🔽 Reduziu"
 
-    # VARIAÇÃO: existia, continua, mesma quantidade mas valor mudou
     variacao = base[
         (base["Vlr Ant"] > 0) & (base["Vlr Atual"] > 0) &
         (base["Qtd Atual"] == base["Qtd Ant"]) &
@@ -225,39 +199,24 @@ def render(df_hist, moeda_br, data_selecionada=None):
     ].copy()
     variacao["Status Mov"] = "📊 Variação"
 
-    # -------------------------------------------------------
-    # VALORES PARA CARDS
-    # -------------------------------------------------------
     valor_entrou  = entrou["Vlr Atual"].sum()
     qtd_entrou    = len(entrou)
-
     valor_saiu    = saiu["Vlr Ant"].sum()
     qtd_saiu      = len(saiu)
-
     valor_reduziu = (reduziu["Vlr Ant"] - reduziu["Vlr Atual"]).sum()
     qtd_reduziu   = len(reduziu)
-
     var_custo_val = variacao["Vlr Atual"].sum() - variacao["Vlr Ant"].sum()
-
     obs_ant       = df_ant["Custo Total"].sum()
     obs_atual     = df_atual["Custo Total"].sum()
     variacao_real = obs_atual - obs_ant
 
-    # -------------------------------------------------------
-    # ACUMULADO
-    # -------------------------------------------------------
     df_primeiro     = df[(df["Data Fechamento"] == pd.Timestamp(datas[0])) & (df["obsoleto"] == True)]
     obs_acum_inicio = df_primeiro["Custo Total"].sum()
     obs_acum_atual  = obs_atual
     variacao_acum   = obs_acum_atual - obs_acum_inicio
 
-    # -------------------------------------------------------
-    # CARDS — MÊS ATUAL
-    # -------------------------------------------------------
     st.subheader("📅 Mês Atual vs Mês Anterior")
-
     c1, c2, c3, c4 = st.columns(4)
-
     with c1: card("🔴 Entrou", moeda_br(valor_entrou), cor_valor="#ff6b6b", subtitulo=f"{qtd_entrou:,} itens")
     with c2: card("🟢 Saiu", moeda_br(valor_saiu), cor_valor="#51cf66", subtitulo=f"{qtd_saiu:,} itens")
     with c3: card("🔽 Reduziu", moeda_br(valor_reduziu), cor_valor="#74c0fc", subtitulo=f"{qtd_reduziu:,} itens")
@@ -267,13 +226,8 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     st.markdown("---")
 
-    # -------------------------------------------------------
-    # CARDS — ACUMULADO
-    # -------------------------------------------------------
     st.subheader("📈 Acumulado (desde o primeiro fechamento)")
-
     a1, a2, a3 = st.columns(3)
-
     with a1: card("Obsoleto no Início", moeda_br(obs_acum_inicio))
     with a2: card("Obsoleto Atual", moeda_br(obs_acum_atual))
     with a3:
@@ -282,35 +236,18 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     st.markdown("---")
 
-    # -------------------------------------------------------
-    # BOTÃO ANALISAR
-    # -------------------------------------------------------
     col_btn, col_vazia = st.columns([1, 4])
-
     if not st.session_state["analise_visivel"]:
         with col_btn:
-            st.button(
-                "🤖 Analisar Cenário",
-                type="primary",
-                on_click=toggle_analise,
-                use_container_width=True
-            )
+            st.button("🤖 Analisar Cenário", type="primary", on_click=toggle_analise, use_container_width=True)
 
     if st.session_state["analise_visivel"]:
-
         titulo, cor_titulo, texto_resultado, texto_fluxo, cor_fluxo, texto_baixas, cor_baixas, texto_custo, cor_custo = gerar_texto_analise(
             variacao_real, valor_entrou, valor_saiu, valor_reduziu, var_custo_val,
             qtd_entrou, qtd_saiu, qtd_reduziu, moeda_br
         )
-
         st.markdown(f"""
-        <div style="
-            background-color:#1E1E1E;
-            padding:20px;
-            border-radius:10px;
-            border:1px solid #444;
-            margin-bottom:15px;
-        ">
+        <div style="background-color:#1E1E1E;padding:20px;border-radius:10px;border:1px solid #444;margin-bottom:15px;">
         <h3 style="color:{cor_titulo}; margin-top:0;">{titulo}</h3>
         <p style="color:#ccc;">{texto_resultado}</p>
         <hr style="border-color:#333">
@@ -319,7 +256,6 @@ def render(df_hist, moeda_br, data_selecionada=None):
         <p style="color:{cor_custo};">{texto_custo}</p>
         </div>
         """, unsafe_allow_html=True)
-
         col_fechar, _ = st.columns([1, 4])
         with col_fechar:
             st.button("❌ Fechar Análise", on_click=toggle_analise)
@@ -327,7 +263,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
     st.markdown("---")
 
     # -------------------------------------------------------
-    # TABELA
+    # TABELA COM FILTRO DE STATUS MOV
     # -------------------------------------------------------
     colunas_tabela = ["Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao",
                       "Qtd Ant", "Vlr Ant", "Qtd Atual", "Vlr Atual"]
@@ -342,8 +278,19 @@ def render(df_hist, moeda_br, data_selecionada=None):
         mov = pd.concat(frames, ignore_index=True)
         mov = mov.sort_values("Vlr Atual", ascending=False)
 
+        # Filtro de Status Mov
+        status_disponiveis = mov["Status Mov"].unique().tolist()
+        status_sel = st.multiselect(
+            "Filtrar por Status Mov",
+            options=status_disponiveis,
+            default=status_disponiveis,
+            key="filtro_status_mov"
+        )
+
+        mov_filtrado = mov[mov["Status Mov"].isin(status_sel)] if status_sel else mov
+
         buffer = io.BytesIO()
-        mov.to_excel(buffer, index=False)
+        mov_filtrado.to_excel(buffer, index=False)
         buffer.seek(0)
 
         st.download_button(
@@ -353,9 +300,11 @@ def render(df_hist, moeda_br, data_selecionada=None):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        mov["Vlr Ant"]   = mov["Vlr Ant"].apply(moeda_br)
-        mov["Vlr Atual"] = mov["Vlr Atual"].apply(moeda_br)
+        mov_display = mov_filtrado.copy()
+        mov_display["Vlr Ant"]   = mov_display["Vlr Ant"].apply(moeda_br)
+        mov_display["Vlr Atual"] = mov_display["Vlr Atual"].apply(moeda_br)
 
-        st.dataframe(mov, use_container_width=True, hide_index=True)
+        st.caption(f"{len(mov_filtrado)} itens")
+        st.dataframe(mov_display, use_container_width=True, hide_index=True)
     else:
         st.info("Nenhuma movimentação encontrada para o período.")
