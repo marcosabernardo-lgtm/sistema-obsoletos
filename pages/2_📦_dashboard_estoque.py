@@ -189,33 +189,41 @@ def cor_perc(v):
 
 col1, col2, col3 = st.columns(3)
 
+# Card 1 — Valor atual + variações MoM e YoY
+mom_linha = ""
+if valor_mom is not None:
+    mom_linha = f'<div class="kpi-sub" style="color:{cor_perc(perc_mom)};font-size:13px">{seta(perc_mom)} {abs(perc_mom):.1f}% vs mês anterior ({pd.Timestamp(data_mom).strftime("%y-%b").lower()})</div>'
+
+yoy_linha = ""
+if valor_yoy is not None:
+    yoy_linha = f'<div class="kpi-sub" style="color:{cor_perc(perc_yoy)};font-size:13px">{seta(perc_yoy)} {abs(perc_yoy):.1f}% vs ano anterior ({pd.Timestamp(data_yoy).strftime("%y-%b").lower()})</div>'
+
 col1.markdown(f"""
 <div class="kpi-card">
     <div class="kpi-title">Valor Estoque {data_selecionada.strftime('%y-%b').lower()}</div>
     <div class="kpi-value">{moeda_br(valor_atual)}</div>
-    <div class="kpi-sub">&nbsp;</div>
+    {mom_linha}
+    {yoy_linha}
 </div>
 """, unsafe_allow_html=True)
 
+# Card 2 — Só valor MoM
 if valor_mom is not None:
-    sub_mom = f'<div class="kpi-sub" style="color:{cor_perc(perc_mom)}">{seta(perc_mom)} {abs(perc_mom):.1f}% vs mês anterior</div>'
     col2.markdown(f"""
 <div class="kpi-card">
     <div class="kpi-title">Valor Estoque MoM {pd.Timestamp(data_mom).strftime('%y-%b').lower()}</div>
     <div class="kpi-value">{moeda_br(valor_mom)}</div>
-    {sub_mom}
 </div>
 """, unsafe_allow_html=True)
 else:
     col2.markdown('<div class="kpi-card"><div class="kpi-title">MoM</div><div class="kpi-value">—</div></div>', unsafe_allow_html=True)
 
+# Card 3 — Só valor YoY
 if valor_yoy is not None:
-    sub_yoy = f'<div class="kpi-sub" style="color:{cor_perc(perc_yoy)}">{seta(perc_yoy)} {abs(perc_yoy):.1f}% vs ano anterior</div>'
     col3.markdown(f"""
 <div class="kpi-card">
     <div class="kpi-title">Valor Estoque YoY {pd.Timestamp(data_yoy).strftime('%y-%b').lower()}</div>
     <div class="kpi-value">{moeda_br(valor_yoy)}</div>
-    {sub_yoy}
 </div>
 """, unsafe_allow_html=True)
 else:
