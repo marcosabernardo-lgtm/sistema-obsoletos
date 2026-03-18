@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 from tabs.estoque.evolucao_estoque import render as render_evolucao_estoque
-from utils.navbar import render_navbar
+from utils.navbar import render_navbar, render_filtros_topo
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 render_navbar("Dashboard Evolução de Estoque")
@@ -13,24 +13,10 @@ render_navbar("Dashboard Evolução de Estoque")
 # -------------------------------------------------
 st.markdown("""
 <style>
-section[data-testid="stSidebar"]{
-    width:260px !important;
-}
-section[data-testid="stSidebar"] div[data-baseweb="select"] > div,
-section[data-testid="stSidebar"] div[data-baseweb="select"] > div:focus-within {
-    border: 2px solid #EC6E21 !important;
-    border-radius: 8px !important;
-    background-color: #005562 !important;
-    color: white !important;
-}
-section[data-testid="stSidebar"] div[data-baseweb="select"] span,
-section[data-testid="stSidebar"] div[data-baseweb="select"] div {
-    color: white !important;
-}
-section[data-testid="stSidebar"] label {
-    color: white !important;
-    font-weight: 600 !important;
-}
+/* Esconde sidebar completamente neste dashboard */
+section[data-testid="stSidebar"] { display: none !important; }
+[data-testid="collapsedControl"]  { display: none !important; }
+
 div[data-testid="stDataFrame"] [role="columnheader"],
 div[data-testid="stDataFrame"] thead th {
     background-color:#0f5a60 !important;
@@ -76,7 +62,7 @@ def moeda_br_curta(valor):
 CAMINHO_BASE = "data/estoque/estoque_historico.parquet"
 
 if not os.path.exists(CAMINHO_BASE):
-    st.warning("⚠️ Nenhuma base de dados encontrada. Acesse a página **app** para fazer o upload.")
+    st.warning("⚠️ Nenhuma base de dados encontrada. Acesse o **Configurador** para processar os dados.")
     st.stop()
 
 try:
@@ -100,18 +86,14 @@ df_hist = df_hist.sort_values("Data Fechamento")
 CAMINHO_OBSOLETOS_DIR = "data/obsoletos"
 
 if os.path.exists(CAMINHO_OBSOLETOS_DIR):
-    arquivos_obs = [
-        f for f in os.listdir(CAMINHO_OBSOLETOS_DIR)
-        if f.endswith(".parquet")
-    ]
+    arquivos_obs = [f for f in os.listdir(CAMINHO_OBSOLETOS_DIR) if f.endswith(".parquet")]
     if arquivos_obs:
         try:
             df_obsoleto = pd.concat([
                 pd.read_parquet(os.path.join(CAMINHO_OBSOLETOS_DIR, f))
                 for f in arquivos_obs
             ], ignore_index=True)
-        except Exception as e:
-            st.warning("⚠️ Erro ao carregar base de obsoletos.")
+        except Exception:
             df_obsoleto = pd.DataFrame()
     else:
         df_obsoleto = pd.DataFrame()
@@ -119,34 +101,34 @@ else:
     df_obsoleto = pd.DataFrame()
 
 # -------------------------------------------------
-# SIDEBAR — FILTROS
+# FILTROS NO TOPO — chips
 # -------------------------------------------------
-st.sidebar.header("Filtros")
-
 datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=True)
-datas_fmt = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
+datas_fmt_list = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
+datas_map = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
-data_sel = st.sidebar.selectbox(
-    "Data de Fechamento",
-    options=list(datas_fmt.keys()),
-    index=0
+# Pré-carrega empresas e contas para o primeiro fechamento
+data_preview = pd.Timestamp(datas_disponiveis[0])
+df_preview = df_hist[df_hist["Data Fechamento"] == data_preview]
+empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique()) if "Empresa / Filial" in df_preview.columns else []
+
+# Contas dinâmicas conforme empresas já selecionadas
+empresas_ja_sel = st.session_state.get("estoque_empresas", [])
+df_temp_conta = df_preview.copy()
+if empresas_ja_sel:
+    df_temp_conta = df_temp_conta[df_temp_conta["Empresa / Filial"].isin(empresas_ja_sel)]
+contas_disponiveis = sorted(df_temp_conta["Conta"].dropna().unique()) if "Conta" in df_temp_conta.columns else []
+
+filtros = render_filtros_topo(
+    datas=datas_fmt_list,
+    empresas=empresas_disponiveis,
+    extras={"Conta": contas_disponiveis} if contas_disponiveis else None,
+    key_prefix="estoque"
 )
-data_selecionada = pd.Timestamp(datas_fmt[data_sel])
 
-# BASE INICIAL para filtros dinâmicos
-df_base_filtros = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
-
-# EMPRESA
-empresas_opcoes = sorted(df_base_filtros["Empresa / Filial"].dropna().unique()) if "Empresa / Filial" in df_base_filtros.columns else []
-empresas_sel = st.sidebar.multiselect("Empresa / Filial", empresas_opcoes)
-
-# CONTA — dinâmica conforme empresa selecionada
-df_temp = df_base_filtros.copy()
-if empresas_sel:
-    df_temp = df_temp[df_temp["Empresa / Filial"].isin(empresas_sel)]
-
-contas_opcoes = sorted(df_temp["Conta"].dropna().unique()) if "Conta" in df_temp.columns else []
-contas_sel = st.sidebar.multiselect("Conta", contas_opcoes)
+data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
+empresas_sel     = filtros["empresas"]
+contas_sel       = filtros.get("conta", [])
 
 # -------------------------------------------------
 # FILTRAR BASE KPI
