@@ -1,6 +1,7 @@
 import pandas as pd
 import zipfile
 import io
+from collections import defaultdict
 
 
 # ==========================================================
@@ -58,7 +59,7 @@ def executar_motor_estoque(caminho_zip):
             )
 
         # ------------------------------------------------------
-        # MAQUINAS USADAS — agora com coluna Tipo
+        # MAQUINAS USADAS — com suporte à coluna Tipo
         # ------------------------------------------------------
 
         arquivos_usadas = [
@@ -66,7 +67,7 @@ def executar_motor_estoque(caminho_zip):
             if "06_Usadas/" in n and n.lower().endswith(".xlsx")
         ]
 
-        # Mapeia: (empresa, codigo) -> tipo
+        # Mapeia: empresa -> { tipo -> set(codigos) }
         usadas_tipo_por_empresa = {}
 
         for nome in arquivos_usadas:
@@ -89,17 +90,20 @@ def executar_motor_estoque(caminho_zip):
 
             df_u.columns = df_u.columns.str.strip()
 
-            # Suporte ao formato novo (com coluna Tipo) e antigo (sem coluna Tipo)
+            por_tipo = defaultdict(set)
+
             if "Tipo" in df_u.columns:
+                # Formato novo: agrupa códigos por tipo usando isin() vetorizado
                 df_u["Codigo"] = df_u["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
-                df_u["Tipo"]   = df_u["Tipo"].astype(str).str.strip()
-                tipo_map = dict(zip(df_u["Codigo"], df_u["Tipo"]))
+                df_u["Tipo"] = df_u["Tipo"].astype(str).str.strip()
+                for _, row in df_u.iterrows():
+                    por_tipo[row["Tipo"]].add(row["Codigo"])
             else:
                 # Formato antigo: todos são Maquina Usada
                 codigos = set(df_u["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False))
-                tipo_map = {c: "Maquina Usada" for c in codigos}
+                por_tipo["Maquina Usada"] = codigos
 
-            usadas_tipo_por_empresa[empresa] = tipo_map
+            usadas_tipo_por_empresa[empresa] = por_tipo
 
     # ------------------------------------------------------
     # TRATAMENTO BASE
@@ -130,15 +134,15 @@ def executar_motor_estoque(caminho_zip):
     df["Data Fechamento"] = pd.to_datetime(df["Data Fechamento"], errors="coerce")
 
     # ------------------------------------------------------
-    # MARCAR TIPO DA MAQUINA (Usada ou Nova)
+    # MARCAR TIPO DA MAQUINA — vetorizado com isin()
     # ------------------------------------------------------
 
     if usadas_tipo_por_empresa:
-        for empresa, tipo_map in usadas_tipo_por_empresa.items():
-            for codigo, tipo in tipo_map.items():
+        for empresa, por_tipo in usadas_tipo_por_empresa.items():
+            for tipo, codigos in por_tipo.items():
                 mask = (
                     df["Empresa / Filial"].str.startswith(empresa)
-                    & (df["Produto"] == codigo)
+                    & df["Produto"].isin(codigos)  # vetorizado, sem risco de sobrescrita
                 )
                 df.loc[mask, "Conta"] = tipo
 
