@@ -25,7 +25,7 @@ def render(df_filtrado, moeda_br):
     </style>
     """, unsafe_allow_html=True)
 
-    col_filtro1, col_filtro2, col_export = st.columns([2, 2, 1])
+    col_filtro1, col_export = st.columns([4, 1])
 
     with col_filtro1:
         visao = st.radio(
@@ -42,42 +42,6 @@ def render(df_filtrado, moeda_br):
 
     # Total geral para cálculo do %
     total_custo_geral = base["Custo Total"].sum() if "Custo Total" in base.columns else 0
-
-    # --------------------------------------------------
-    # FILTRO STATUS DO MOVIMENTO — ordem lógica
-    # --------------------------------------------------
-
-    # Mapeamento: opção exibida -> faixas que ela representa
-    OPCOES_STATUS = {
-        "Todos":         None,
-        "Até 1 ano":     ["Até 6 meses", "Até 1 ano"],
-        "+ 1 ano":       ["+ 1 ano"],
-        "+ 2 anos":      ["+ 2 anos"],
-        "> 1 ano":       ["+ 1 ano", "+ 2 anos", "Sem Movimento"],
-        "Sem Movimento": ["Sem Movimento"],
-    }
-
-    with col_filtro2:
-        if "Status do Movimento" in base.columns:
-
-            existentes    = base["Status do Movimento"].dropna().unique().tolist()
-            opcoes_visiveis = [
-                op for op in OPCOES_STATUS
-                if op == "Todos"
-                or op == "> 1 ano"
-                or any(f in existentes for f in (OPCOES_STATUS[op] or []))
-            ]
-
-            status_sel = st.radio(
-                "Status do Movimento",
-                opcoes_visiveis,
-                horizontal=True,
-                key="base_historica_status"
-            )
-
-            faixas = OPCOES_STATUS[status_sel]
-            if faixas is not None:
-                base = base[base["Status do Movimento"].isin(faixas)]
 
     base["Data Fechamento"] = pd.to_datetime(base["Data Fechamento"]).dt.date
 

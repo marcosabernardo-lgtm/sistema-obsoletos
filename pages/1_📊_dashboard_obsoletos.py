@@ -98,31 +98,38 @@ df_hist = carregar_base(PASTA_OBSOLETOS)
 # -------------------------------------------------
 
 datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=True)
-datas_fmt_list = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
-datas_map = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
+datas_fmt_list    = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
+datas_map         = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
-# Pré-carrega opções para o fechamento mais recente
-data_preview = pd.Timestamp(datas_disponiveis[0])
-df_preview = df_hist[df_hist["Data Fechamento"] == data_preview]
+data_preview      = pd.Timestamp(datas_disponiveis[0])
+df_preview        = df_hist[df_hist["Data Fechamento"] == data_preview]
 empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique())
 
-# Contas dinâmicas conforme empresas já selecionadas
 empresas_ja_sel = st.session_state.get("obsoletos_empresas", [])
-df_temp_conta = df_preview.copy()
+df_temp_conta   = df_preview.copy()
 if empresas_ja_sel:
     df_temp_conta = df_temp_conta[df_temp_conta["Empresa / Filial"].isin(empresas_ja_sel)]
 contas_disponiveis = sorted(df_temp_conta["Conta"].dropna().unique())
 
+# Opções de Status do Movimento — ordem lógica fixa
+ORDEM_STATUS = ["Todos", "Até 1 ano", "+ 1 ano", "+ 2 anos", "> 1 ano", "Sem Movimento"]
+status_existentes = sorted(df_preview["Status do Movimento"].dropna().unique().tolist()) if "Status do Movimento" in df_preview.columns else []
+status_disponiveis = [s for s in ORDEM_STATUS if s == "Todos" or s == "> 1 ano" or s in status_existentes]
+
+extras = {"Conta": contas_disponiveis} if contas_disponiveis else {}
+extras["Status do Movimento"] = status_disponiveis
+
 filtros = render_filtros_topo(
     datas=datas_fmt_list,
     empresas=empresas_disponiveis,
-    extras={"Conta": contas_disponiveis} if contas_disponiveis else None,
+    extras=extras if extras else None,
     key_prefix="obsoletos"
 )
 
 data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
 empresas_sel     = filtros["empresas"]
 contas_sel       = filtros.get("conta", [])
+status_sel       = filtros.get("status_do_movimento", [])
 
 # -------------------------------------------------
 # APLICA FILTROS
@@ -139,10 +146,26 @@ if contas_sel:
 st.session_state["df_kpi_completo"] = df_kpi
 
 # -------------------------------------------------
-# BASE FILTRADA
+# BASE FILTRADA (Obsoleto)
 # -------------------------------------------------
 
 df_filtrado = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"].copy()
+
+# Aplica filtro de Status do Movimento se selecionado
+MAPA_STATUS = {
+    "Até 1 ano":     ["Até 6 meses", "Até 1 ano"],
+    "+ 1 ano":       ["+ 1 ano"],
+    "+ 2 anos":      ["+ 2 anos"],
+    "> 1 ano":       ["+ 1 ano", "+ 2 anos", "Sem Movimento"],
+    "Sem Movimento": ["Sem Movimento"],
+}
+
+if status_sel and "Status do Movimento" in df_filtrado.columns:
+    faixas = []
+    for s in status_sel:
+        faixas += MAPA_STATUS.get(s, [s])
+    faixas = list(set(faixas))
+    df_filtrado = df_filtrado[df_filtrado["Status do Movimento"].isin(faixas)]
 
 # -------------------------------------------------
 # KPIs
