@@ -32,18 +32,31 @@ def render(df_filtrado, moeda_br):
         base = st.session_state.get("df_kpi_completo", df_filtrado).copy()
 
     # --------------------------------------------------
-    # FILTRO STATUS DO MOVIMENTO
+    # FILTRO STATUS DO MOVIMENTO — ordem lógica
     # --------------------------------------------------
 
     with col_filtro2:
         if "Status do Movimento" in base.columns:
-            opcoes_status = ["Todos"] + sorted(base["Status do Movimento"].dropna().unique().tolist())
+
+            ORDEM_STATUS = [
+                "Todos",
+                "Até 6 meses",
+                "Até 1 ano",
+                "+ 1 ano",
+                "+ 2 anos",
+                "Sem Movimento",
+            ]
+
+            existentes   = base["Status do Movimento"].dropna().unique().tolist()
+            opcoes_status = [s for s in ORDEM_STATUS if s == "Todos" or s in existentes]
+
             status_sel = st.radio(
                 "Status do Movimento",
                 opcoes_status,
                 horizontal=True,
                 key="base_historica_status"
             )
+
             if status_sel != "Todos":
                 base = base[base["Status do Movimento"] == status_sel]
 
