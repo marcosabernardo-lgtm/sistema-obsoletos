@@ -277,7 +277,17 @@ def executar_motor(caminho_zip):
     df_final = df_final.drop(columns=["Ult_Mov", "Ult_Entrada", "Ult_Saida"])
 
     df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].str.title()
-    df_final["Conta"] = df_final["Conta"].str.title()
+    # Normaliza abreviações antes do title()
+    CONTA_CORRECOES = {
+        "MR":                  "Material Revenda",
+        "Mr":                  "Material Revenda",
+        "MATERIAL REVENDA":    "Material Revenda",
+        "MATERIAL DE REVENDA": "Material De Revenda",
+    }
+    df_final["Conta"] = df_final["Conta"].astype(str).str.strip()
+    df_final["Conta"] = df_final["Conta"].str.upper().map(
+        lambda x: CONTA_CORRECOES.get(x, x)
+    ).str.title()
     df_final = df_final.drop(columns=["ID_UNICO"])
 
     DataBase = pd.to_datetime(df_final["Data Fechamento"].iloc[0])
