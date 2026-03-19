@@ -13,15 +13,6 @@ def render(df_filtrado, moeda_br):
         border-radius: 10px;
         padding: 10px 16px;
     }
-    .mini-card {
-        background-color: #005562;
-        border: 1px solid rgba(236,110,33,0.5);
-        border-radius: 8px;
-        padding: 10px 16px;
-        text-align: center;
-    }
-    .mini-card-title { font-size: 11px; color: rgba(255,255,255,0.5); letter-spacing: 1px; text-transform: uppercase; }
-    .mini-card-value { font-size: 18px; font-weight: 700; color: white; margin-top: 4px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -39,9 +30,6 @@ def render(df_filtrado, moeda_br):
         base = df_filtrado.copy()
     else:
         base = st.session_state.get("df_kpi_completo", df_filtrado).copy()
-
-    # Total geral para cálculo do %
-    total_custo_geral = base["Custo Total"].sum() if "Custo Total" in base.columns else 0
 
     base["Data Fechamento"] = pd.to_datetime(base["Data Fechamento"]).dt.date
 
@@ -66,33 +54,6 @@ def render(df_filtrado, moeda_br):
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
-
-    # --------------------------------------------------
-    # MINI CARDS
-    # --------------------------------------------------
-
-    custo_filtrado = base["Custo Total"].sum() if "Custo Total" in base.columns else 0
-    perc_total     = (custo_filtrado / total_custo_geral * 100) if total_custo_geral > 0 else 0
-
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-    mc1, mc2, _ = st.columns([1, 1, 4])
-
-    mc1.markdown(f"""
-    <div class="mini-card">
-        <div class="mini-card-title">Custo Total</div>
-        <div class="mini-card-value">{moeda_br(custo_filtrado)}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    mc2.markdown(f"""
-    <div class="mini-card">
-        <div class="mini-card-title">% do Total Obsoleto</div>
-        <div class="mini-card-value">{perc_total:.1f}%</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
     # --------------------------------------------------
     # FORMATA PARA EXIBIÇÃO

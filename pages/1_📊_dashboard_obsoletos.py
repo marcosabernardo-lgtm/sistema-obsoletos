@@ -112,11 +112,13 @@ if empresas_ja_sel:
 contas_disponiveis = sorted(df_temp_conta["Conta"].dropna().unique())
 
 # Opções de Status do Movimento — ordem lógica fixa
-ORDEM_STATUS = ["Todos", "Até 1 ano", "+ 1 ano", "+ 2 anos", "> 1 ano", "Sem Movimento"]
-status_existentes = sorted(df_preview["Status do Movimento"].dropna().unique().tolist()) if "Status do Movimento" in df_preview.columns else []
-status_disponiveis = [s for s in ORDEM_STATUS if s == "Todos" or s == "> 1 ano" or s in status_existentes]
+ORDEM_STATUS = ["Todas", "Até 1 ano", "+ 1 ano", "+ 2 anos", "> 1 ano", "Sem Movimento"]
+status_existentes  = sorted(df_preview["Status do Movimento"].dropna().unique().tolist()) if "Status do Movimento" in df_preview.columns else []
+status_disponiveis = [s for s in ORDEM_STATUS if s == "Todas" or s == "> 1 ano" or s in status_existentes]
 
-extras = {"Conta": contas_disponiveis} if contas_disponiveis else {}
+extras = {}
+if contas_disponiveis:
+    extras["Conta"] = contas_disponiveis
 extras["Status do Movimento"] = status_disponiveis
 
 filtros = render_filtros_topo(
@@ -132,7 +134,7 @@ contas_sel       = filtros.get("conta", [])
 status_sel       = filtros.get("status_do_movimento", [])
 
 # -------------------------------------------------
-# APLICA FILTROS
+# APLICA FILTROS BASE
 # -------------------------------------------------
 
 df_kpi = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
@@ -146,12 +148,9 @@ if contas_sel:
 st.session_state["df_kpi_completo"] = df_kpi
 
 # -------------------------------------------------
-# BASE FILTRADA (Obsoleto)
+# MAPA DE STATUS — agrupa faixas para o filtro > 1 ano
 # -------------------------------------------------
 
-df_filtrado = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"].copy()
-
-# Aplica filtro de Status do Movimento se selecionado
 MAPA_STATUS = {
     "Até 1 ano":     ["Até 6 meses", "Até 1 ano"],
     "+ 1 ano":       ["+ 1 ano"],
@@ -160,21 +159,29 @@ MAPA_STATUS = {
     "Sem Movimento": ["Sem Movimento"],
 }
 
-if status_sel and "Status do Movimento" in df_filtrado.columns:
+def aplicar_filtro_status(df, status_sel):
+    if not status_sel or "Todas" in status_sel:
+        return df
     faixas = []
     for s in status_sel:
         faixas += MAPA_STATUS.get(s, [s])
-    faixas = list(set(faixas))
-    df_filtrado = df_filtrado[df_filtrado["Status do Movimento"].isin(faixas)]
+    return df[df["Status do Movimento"].isin(set(faixas))]
 
 # -------------------------------------------------
-# KPIs
+# BASE OBSOLETO — com e sem filtro de status
+# -------------------------------------------------
+
+df_obsoleto_base = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"].copy()
+df_filtrado      = aplicar_filtro_status(df_obsoleto_base, status_sel)
+
+# -------------------------------------------------
+# KPIs — Valor Estoque fixo, demais refletem filtro status
 # -------------------------------------------------
 
 estoque_total    = df_kpi["Custo Total"].sum()
-estoque_obsoleto = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"]["Custo Total"].sum()
+estoque_obsoleto = df_filtrado["Custo Total"].sum()
 perc_obsoleto    = estoque_obsoleto / estoque_total if estoque_total > 0 else 0
-itens_obsoletos  = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"]["Produto"].nunique()
+itens_obsoletos  = df_filtrado["Produto"].nunique()
 
 col1, col2, col3, col4 = st.columns(4)
 
