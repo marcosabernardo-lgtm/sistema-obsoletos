@@ -99,14 +99,34 @@ def render(df_hist, moeda_br, data_selecionada):
         }
         </style>
         """, unsafe_allow_html=True)
-        status_sel = st.radio(
-            "Filtrar por Status Movimento",
-            ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"],
-            horizontal=True,
-            key=f"radio_{key_prefix}"
-        )
+        col_filtro, col_export = st.columns([4, 1])
+
+        with col_filtro:
+            status_sel = st.radio(
+                "Filtrar por Status Movimento",
+                ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"],
+                horizontal=True,
+                key=f"radio_{key_prefix}"
+            )
 
         df_filtrado = df.copy() if status_sel == "Todos" else df[df["Status Mov"] == status_sel].copy()
+
+        # Export — ao lado do filtro
+        tipo_tmp    = "MoM" if key_prefix == "mom" else "YoY"
+        atual_tmp   = pd.Timestamp(data_selecionada).strftime('%y-%b').lower()
+        with col_export:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            buffer_tmp = io.BytesIO()
+            df_filtrado.to_excel(buffer_tmp, index=False)
+            buffer_tmp.seek(0)
+            st.download_button(
+                label="📥 Exportar",
+                data=buffer_tmp,
+                file_name=f"variacao_{tipo_tmp.lower()}_{atual_tmp}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"export_top_{key_prefix}",
+                use_container_width=True
+            )
 
         # Labels dinâmicos
         tipo        = "MoM" if key_prefix == "mom" else "YoY"
@@ -170,27 +190,7 @@ def render(df_hist, moeda_br, data_selecionada):
             unsafe_allow_html=True
         )
 
-        # Export Excel
-        df_export = df_filtrado[["Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao",
-                                  "Valor_Atual", "Valor_Comp", "Variacao", "Perc"]].copy()
-        df_export = df_export.rename(columns={
-            "Status Mov":      "Status Movimento",
-            "Descricao":       "Descrição",
-            "Valor_Atual":     val_label,
-            "Valor_Comp":      comp_label,
-            "Variacao":        delta_label,
-            "Perc":            perc_label,
-        })
-        buffer = io.BytesIO()
-        df_export.to_excel(buffer, index=False)
-        buffer.seek(0)
-        st.download_button(
-            label="📥 Exportar Excel",
-            data=buffer,
-            file_name=f"variacao_{tipo.lower()}_{atual_label}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key=f"export_{key_prefix}"
-        )
+
 
     # ── ABAS ──────────────────────────────────────────────
     label_atual = data_selecionada.strftime("%d/%m/%Y")
