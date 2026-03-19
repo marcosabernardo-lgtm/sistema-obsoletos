@@ -234,12 +234,12 @@ with tab1:
         "Data_Inventario":    "Data Inventario",
         "Nome_Empresa":       "Empresa / Filial",
         "Codigo":             "Produto",
-        "Qtd_Inventariada":   "Qtd Inventariada",
+        "Qtd_Inventariada":   "Qtd Invent",
         "Qtd_Protheus":       "Qtd Protheus",
         "Qtd_Divergente":     "Qtd Divergente",
-        "Valor_Unitario":     "Valor Unitario",
+        "Valor_Unitario":     "Valor Unit",
         "Valor_Protheus":     "Valor Protheus",
-        "Valor_Inventariado": "Valor Inventariado",
+        "Valor_Inventariado": "Valor Invent",
         "Valor_Divergente":   "Valor Divergente",
     })
 
@@ -249,8 +249,8 @@ with tab1:
     )
 
     colunas_ordem = [
-        "Data Inventario", "Empresa / Filial", "Produto", "Descricao", "Valor Unitario",
-        "Qtd Inventariada", "Valor Inventariado",
+        "Data Inventario", "Empresa / Filial", "Produto", "Descricao", "Valor Unit",
+        "Qtd Invent", "Valor Invent",
         "Qtd Protheus", "Valor Protheus",
         "Qtd Divergente", "Valor Divergente",
     ]
@@ -273,8 +273,8 @@ with tab1:
     df_page = df_tab.iloc[inicio:fim].copy()
     df_raw  = df_page.copy()
 
-    colunas_moeda = ["Valor Inventariado", "Valor Protheus", "Valor Divergente", "Valor Unitario"]
-    colunas_qtd   = ["Qtd Inventariada", "Qtd Protheus", "Qtd Divergente"]
+    colunas_moeda = ["Valor Invent", "Valor Protheus", "Valor Divergente", "Valor Unit"]
+    colunas_qtd   = ["Qtd Invent", "Qtd Protheus", "Qtd Divergente"]
 
     for c in colunas_moeda:
         if c in df_page.columns:
