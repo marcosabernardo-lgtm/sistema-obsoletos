@@ -30,72 +30,30 @@ def render(df_hist, moeda_br, data_selecionada):
         df_yoy = pd.DataFrame(columns=df_hist.columns)
         data_yoy = None
 
-    # CSS global
+    # CSS cards
     st.markdown("""
     <style>
-    .card-mov {
-        background-color:#005562;
-        border:2px solid #EC6E21;
-        border-radius:10px;
-        padding:14px 16px;
-        text-align:center;
-    }
+    .card-mov { background-color:#005562; border:2px solid #EC6E21; border-radius:10px; padding:14px 16px; text-align:center; }
     .card-mov .titulo { font-size:12px; color:#ccc; margin-bottom:4px; }
     .card-mov .valor  { font-size:20px; font-weight:700; color:white; }
     .card-mov .sub    { font-size:12px; margin-top:4px; }
-
-    .filtro-card {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 10px;
-        padding: 12px 20px 4px;
-        margin-bottom: 16px;
-    }
+    .filtro-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px 20px 4px; margin-bottom: 16px; }
     </style>
     """, unsafe_allow_html=True)
 
-    # Helper — descrição limpa
-    def desc_limpa(produto):
-        desc_map = (
-            df_hist[df_hist["Descricao"].notna() &
-                    (df_hist["Descricao"].astype(str).str.strip() != "") &
-                    (df_hist["Descricao"].astype(str) != "0")]
-            .groupby("Produto")["Descricao"].first().to_dict()
-        )
-        return desc_map.get(produto, "—")
+    # Helper descrição
+    desc_map = (
+        df_hist[df_hist["Descricao"].notna() &
+                (df_hist["Descricao"].astype(str).str.strip() != "") &
+                (df_hist["Descricao"].astype(str) != "0")]
+        .groupby("Produto")["Descricao"].first().to_dict()
+    )
 
     def status_mov(row):
         if row["Valor_Comp"] > 0 and row["Valor_Atual"] == 0: return "Zerado"
         if row["Variacao"] < 0:  return "Reduziu"
         if row["Variacao"] > 0:  return "Aumentou"
         return "Manteve"
-
-    def cor_status(s):
-        if s == "Aumentou": return "color:#ff6b6b;font-weight:700"
-        if s in ("Reduziu", "Zerado"): return "color:#51cf66;font-weight:700"
-        return "color:#f0a500;font-weight:700"
-
-    def icone_perc(perc, s):
-        if s == "Aumentou":       return f'<span style="color:#ff6b6b;font-weight:700">⬆ {abs(perc):.1f}%</span>'
-        if s in ("Reduziu","Zerado"): return f'<span style="color:#51cf66;font-weight:700">⬇ {abs(perc):.1f}%</span>'
-        return '<span style="color:#f0a500;font-weight:700">● 0%</span>'
-
-    def icone_delta(v):
-        if v > 0:   return f'<span style="color:#ff6b6b">+{moeda_br(abs(v))}</span>'
-        elif v < 0: return f'<span style="color:#51cf66">-{moeda_br(abs(v))}</span>'
-        return f'<span style="color:#aaa">{moeda_br(0)}</span>'
-
-    css_tabela = (
-        "<style>"
-        ".tb-mov{width:100%;border-collapse:collapse;font-size:13px;color:white}"
-        ".tb-mov th{background:#0f5a60;color:white;padding:9px 12px;text-align:left;"
-        "border-bottom:2px solid #EC6E21;font-weight:700;white-space:nowrap}"
-        ".tb-mov th:nth-child(n+6){text-align:right}"
-        ".tb-mov td{padding:7px 12px;border-bottom:1px solid #1a6e75;background:#005562;color:white}"
-        ".tb-mov td:nth-child(n+6){text-align:right}"
-        ".tb-mov tr:hover td{background:#0a6570}"
-        "</style>"
-    )
 
     def montar_df(df_comp):
         grp_atual = df_atual.groupby(["Empresa / Filial", "Conta", "Produto"]).agg(
@@ -107,23 +65,21 @@ def render(df_hist, moeda_br, data_selecionada):
         ).reset_index()
 
         df = grp_atual.merge(grp_comp, on="Produto", how="outer").fillna(0)
-        df["Descricao"] = df["Produto"].apply(desc_limpa)
-        df["Variacao"]  = df["Valor_Atual"] - df["Valor_Comp"]
-        df["Perc"]      = df.apply(
-            lambda r: (r["Variacao"] / r["Valor_Comp"] * 100) if r["Valor_Comp"] != 0 else 0, axis=1
-        )
+        df["Descricao"]  = df["Produto"].map(desc_map).fillna("—").astype(str)
+        df["Variacao"]   = df["Valor_Atual"] - df["Valor_Comp"]
+        df["Perc"]       = df.apply(lambda r: (r["Variacao"] / r["Valor_Comp"] * 100) if r["Valor_Comp"] != 0 else 0, axis=1)
         df["Status Mov"] = df.apply(status_mov, axis=1)
         return df.sort_values("Variacao", key=abs, ascending=False).reset_index(drop=True)
 
     def render_cards(df, label_comp, label_atual):
-        total_comp  = df["Valor_Comp"].sum()
-        total_atual = df["Valor_Atual"].sum()
+        total_comp   = df["Valor_Comp"].sum()
+        total_atual  = df["Valor_Atual"].sum()
         total_aument = df[df["Status Mov"] == "Aumentou"]["Variacao"].sum()
         total_reduz  = df[df["Status Mov"] == "Reduziu"]["Variacao"].abs().sum()
         total_zerado = df[df["Status Mov"] == "Zerado"]["Valor_Comp"].sum()
-        qtd_aument = len(df[df["Status Mov"] == "Aumentou"])
-        qtd_reduz  = len(df[df["Status Mov"] == "Reduziu"])
-        qtd_zerado = len(df[df["Status Mov"] == "Zerado"])
+        qtd_aument   = len(df[df["Status Mov"] == "Aumentou"])
+        qtd_reduz    = len(df[df["Status Mov"] == "Reduziu"])
+        qtd_zerado   = len(df[df["Status Mov"] == "Zerado"])
 
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.markdown(f'<div class="card-mov"><div class="titulo">Estoque {label_comp}</div><div class="valor">{moeda_br(total_comp)}</div><div class="sub" style="color:#ccc">Período anterior</div></div>', unsafe_allow_html=True)
@@ -135,7 +91,6 @@ def render(df_hist, moeda_br, data_selecionada):
     def render_tabela(df, label_comp, key_prefix):
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Filtro com grade estilo card
         st.markdown('<div class="filtro-card">', unsafe_allow_html=True)
         status_sel = st.radio(
             "Filtrar por Status Mov",
@@ -147,37 +102,22 @@ def render(df_hist, moeda_br, data_selecionada):
 
         df_filtrado = df.copy() if status_sel == "Todos" else df[df["Status Mov"] == status_sel].copy()
 
-        st.caption(f"{len(df_filtrado)} produtos encontrados")
+        # Monta tabela para exibição
+        df_exib = df_filtrado[[
+            "Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao",
+            "Valor_Atual", "Valor_Comp", "Variacao", "Perc"
+        ]].copy()
 
-        linhas = ""
-        for _, row in df_filtrado.iterrows():
-            cs = cor_status(row["Status Mov"])
-            linhas += (
-                "<tr>"
-                f"<td style='{cs}'>{row['Status Mov']}</td>"
-                f"<td>{row.get('Empresa / Filial','')}</td>"
-                f"<td>{row.get('Conta','')}</td>"
-                f"<td>{row['Produto']}</td>"
-                f"<td>{row['Descricao'][:40]}</td>"
-                f"<td style='text-align:right'>{moeda_br(row['Valor_Atual'])}</td>"
-                f"<td style='text-align:right'>{moeda_br(row['Valor_Comp'])}</td>"
-                f"<td style='text-align:right'>{icone_delta(row['Variacao'])}</td>"
-                f"<td style='text-align:right'>{icone_perc(row['Perc'], row['Status Mov'])}</td>"
-                "</tr>"
-            )
+        df_exib["Valor Atual"]       = df_exib["Valor_Atual"].apply(moeda_br)
+        df_exib[f"Valor {label_comp}"] = df_exib["Valor_Comp"].apply(moeda_br)
+        df_exib[f"Δ {label_comp}"]   = df_exib["Variacao"].apply(lambda v: f"+{moeda_br(abs(v))}" if v > 0 else f"-{moeda_br(abs(v))}" if v < 0 else moeda_br(0))
+        df_exib[f"% {label_comp}"]   = df_exib["Perc"].apply(lambda v: f"+{v:.1f}%" if v > 0 else f"{v:.1f}%")
 
-        st.markdown(
-            css_tabela +
-            f"<p style='color:#aaa;font-size:12px'>{len(df_filtrado)} produtos</p>"
-            "<table class='tb-mov'><thead><tr>"
-            "<th>Status Mov</th><th>Empresa / Filial</th><th>Conta</th><th>Produto</th><th>Descrição</th>"
-            f"<th style='text-align:right'>Valor Atual</th>"
-            f"<th style='text-align:right'>Valor {label_comp}</th>"
-            f"<th style='text-align:right'>Δ {label_comp}</th>"
-            f"<th style='text-align:right'>% {label_comp}</th>"
-            "</tr></thead><tbody>" + linhas + "</tbody></table>",
-            unsafe_allow_html=True
-        )
+        df_exib = df_exib.drop(columns=["Valor_Atual", "Valor_Comp", "Variacao", "Perc"])
+        df_exib = df_exib.rename(columns={"Descricao": "Descrição"})
+
+        st.caption(f"{len(df_filtrado)} produtos")
+        st.dataframe(df_exib, use_container_width=True, hide_index=True)
 
     # ── ABAS ──────────────────────────────────────────────
     label_atual = data_selecionada.strftime("%d/%m/%Y")
