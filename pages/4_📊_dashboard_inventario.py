@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 
-from utils.navbar import render_navbar, render_filtros_topo
+from utils.navbar import render_navbar
 
 st.set_page_config(page_title="Dashboard Inventário", layout="wide")
 render_navbar("Dashboard Inventário")
@@ -103,24 +103,52 @@ df["Data_Inventario"] = pd.to_datetime(df["Data_Inventario"])
 # FILTROS NO TOPO
 # -------------------------------------------------
 
-datas_disponiveis    = sorted(df["Data_Inventario"].dt.date.unique(), reverse=True)
-datas_fmt_list       = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
-datas_map            = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
+datas_disponiveis = sorted(df["Data_Inventario"].dt.date.unique(), reverse=True)
+datas_fmt_list    = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
+datas_map         = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
-data_preview_str     = st.session_state.get("inventario_data", datas_fmt_list[0])
-data_preview         = pd.Timestamp(datas_map.get(data_preview_str, datas_disponiveis[0]))
-df_preview           = df[df["Data_Inventario"] == data_preview]
+st.markdown("""
+<style>
+div[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+    background-color: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    border-radius: 10px !important;
+}
+div[data-testid="stSelectbox"] [data-baseweb="select"] span {
+    color: white !important;
+    font-weight: 600 !important;
+}
+div[data-testid="stSelectbox"] label {
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    letter-spacing: 2px !important;
+    text-transform: uppercase !important;
+    color: rgba(255,255,255,0.35) !important;
+}
+.filtros-container {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 12px 20px 4px;
+    margin-bottom: 20px;
+}
+</style>
+""", unsafe_allow_html=True)
 
-empresas_disponiveis = sorted(df_preview["Nome_Empresa"].dropna().unique()) if "Nome_Empresa" in df_preview.columns else []
+st.markdown('<div class="filtros-container">', unsafe_allow_html=True)
+col_data, col_empresa = st.columns([1, 2])
 
-filtros = render_filtros_topo(
-    datas=datas_fmt_list,
-    empresas=empresas_disponiveis,
-    key_prefix="inventario"
-)
+with col_data:
+    data_sel = st.selectbox("Fechamento", options=datas_fmt_list, index=0, key="inventario_data")
 
-data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
-empresas_sel     = filtros["empresas"]
+data_selecionada = pd.Timestamp(datas_map[data_sel])
+df_data          = df[df["Data_Inventario"] == data_selecionada]
+empresas_disp    = ["Todas"] + sorted(df_data["Nome_Empresa"].dropna().unique().tolist()) if "Nome_Empresa" in df_data.columns else ["Todas"]
+
+with col_empresa:
+    empresa_sel = st.selectbox("Empresa / Filial", options=empresas_disp, index=0, key="inventario_empresa")
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 # -------------------------------------------------
 # FILTRAR BASE KPI
@@ -128,8 +156,8 @@ empresas_sel     = filtros["empresas"]
 
 df_kpi = df[df["Data_Inventario"] == data_selecionada].copy()
 
-if empresas_sel:
-    df_kpi = df_kpi[df_kpi["Nome_Empresa"].isin(empresas_sel)]
+if empresa_sel != "Todas":
+    df_kpi = df_kpi[df_kpi["Nome_Empresa"] == empresa_sel]
 
 # -------------------------------------------------
 # CALCULAR KPIs
