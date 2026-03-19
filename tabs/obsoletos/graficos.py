@@ -17,56 +17,56 @@ def render(df_filtrado, moeda_br):
         ".tb-obs tr:hover td{background:#0a6570}</style>"
     )
 
-    def montar_tabela(df_group, col_nome, titulo):
-        st.subheader(titulo)
+    def montar_tabela(df_group, col_nome):
         total = df_group["Custo Total"].sum()
         linhas = ""
         for _, row in df_group.iterrows():
             perc = row["Custo Total"] / total * 100 if total > 0 else 0
-            itens = int(row["Itens"])
             linhas += (
                 f"<tr><td>{row[col_nome]}</td>"
-                f"<td>{itens:,}</td>"
                 f"<td>{moeda_br(row['Custo Total'])}</td>"
                 f"<td style='color:#EC6E21;font-weight:600'>{perc:.1f}%</td></tr>"
             )
-        # Total
-        total_itens = int(df_group["Itens"].sum())
         linhas += (
             f"<tr><td>Total</td>"
-            f"<td>{total_itens:,}</td>"
             f"<td>{moeda_br(total)}</td>"
             f"<td style='color:#EC6E21;font-weight:600'>100%</td></tr>"
         )
         st.markdown(
             css + f"<table class='tb-obs'><thead><tr>"
-            f"<th>{col_nome}</th><th style='text-align:right'>Itens</th>"
-            f"<th style='text-align:right'>Valor Obsoleto</th><th style='text-align:right'>%</th>"
+            f"<th>{col_nome}</th>"
+            f"<th style='text-align:right'>Valor Obsoleto</th>"
+            f"<th style='text-align:right'>%</th>"
             f"</tr></thead><tbody>{linhas}</tbody></table>",
             unsafe_allow_html=True
         )
-        st.markdown("---")
 
-    # Empresa
-    df_emp = (
-        base.groupby("Empresa / Filial")
-        .agg(Itens=("Produto", "count"), **{"Custo Total": ("Custo Total", "sum")})
-        .reset_index().sort_values("Custo Total", ascending=False)
-    )
-    montar_tabela(df_emp, "Empresa / Filial", "Obsoleto por Empresa / Filial")
+    tab1, tab2, tab3 = st.tabs([
+        "🏢 Por Empresa / Filial",
+        "📋 Por Status do Movimento",
+        "📦 Por Conta"
+    ])
 
-    # Status do Movimento
-    df_status = (
-        base.groupby("Status do Movimento")
-        .agg(Itens=("Produto", "count"), **{"Custo Total": ("Custo Total", "sum")})
-        .reset_index().sort_values("Custo Total", ascending=False)
-    )
-    montar_tabela(df_status, "Status do Movimento", "Obsoleto por Status do Movimento")
+    with tab1:
+        df_emp = (
+            base.groupby("Empresa / Filial")
+            .agg(**{"Custo Total": ("Custo Total", "sum")})
+            .reset_index().sort_values("Custo Total", ascending=False)
+        )
+        montar_tabela(df_emp, "Empresa / Filial")
 
-    # Conta
-    df_conta = (
-        base.groupby("Conta")
-        .agg(Itens=("Produto", "count"), **{"Custo Total": ("Custo Total", "sum")})
-        .reset_index().sort_values("Custo Total", ascending=False)
-    )
-    montar_tabela(df_conta, "Conta", "Obsoleto por Conta")
+    with tab2:
+        df_status = (
+            base.groupby("Status do Movimento")
+            .agg(**{"Custo Total": ("Custo Total", "sum")})
+            .reset_index().sort_values("Custo Total", ascending=False)
+        )
+        montar_tabela(df_status, "Status do Movimento")
+
+    with tab3:
+        df_conta = (
+            base.groupby("Conta")
+            .agg(**{"Custo Total": ("Custo Total", "sum")})
+            .reset_index().sort_values("Custo Total", ascending=False)
+        )
+        montar_tabela(df_conta, "Conta")
