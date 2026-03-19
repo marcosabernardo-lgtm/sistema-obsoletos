@@ -147,6 +147,8 @@ def render(df_hist, moeda_br, data_selecionada):
 
         df_filtrado = df.copy() if status_sel == "Todos" else df[df["Status Mov"] == status_sel].copy()
 
+        st.caption(f"{len(df_filtrado)} produtos encontrados")
+
         linhas = ""
         for _, row in df_filtrado.iterrows():
             cs = cor_status(row["Status Mov"])
@@ -164,7 +166,7 @@ def render(df_hist, moeda_br, data_selecionada):
                 "</tr>"
             )
 
-        st.html(
+        st.markdown(
             css_tabela +
             f"<p style='color:#aaa;font-size:12px'>{len(df_filtrado)} produtos</p>"
             "<table class='tb-mov'><thead><tr>"
@@ -173,7 +175,8 @@ def render(df_hist, moeda_br, data_selecionada):
             f"<th style='text-align:right'>Valor {label_comp}</th>"
             f"<th style='text-align:right'>Δ {label_comp}</th>"
             f"<th style='text-align:right'>% {label_comp}</th>"
-            "</tr></thead><tbody>" + linhas + "</tbody></table>"
+            "</tr></thead><tbody>" + linhas + "</tbody></table>",
+            unsafe_allow_html=True
         )
 
     # ── ABAS ──────────────────────────────────────────────
