@@ -171,21 +171,21 @@ valor_inventariado = df_kpi["Valor_Inventariado"].sum() if "Valor_Inventariado" 
 valor_divergente   = df_kpi["Valor_Divergente"].sum()   if "Valor_Divergente"   in df_kpi.columns else 0
 
 # -------------------------------------------------
-# LINHA 1 — Qtd
+# CARDS — 1 linha com 6 colunas
 # -------------------------------------------------
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4, col5, col6 = st.columns(6)
 
 col1.markdown(f"""
 <div class="kpi-card">
-<div class="kpi-title">Qtd Itens Inventariados</div>
+<div class="kpi-title">Qtd Inventariada</div>
 <div class="kpi-value">{fmt_qtd(qtd_inventariada)}</div>
 </div>
 """, unsafe_allow_html=True)
 
 col2.markdown(f"""
 <div class="kpi-card">
-<div class="kpi-title">Qtd Itens Divergentes</div>
+<div class="kpi-title">Qtd Divergentes</div>
 <div class="kpi-value">{fmt_qtd(qtd_divergentes)}</div>
 </div>
 """, unsafe_allow_html=True)
@@ -196,16 +196,6 @@ col3.markdown(f"""
 <div class="kpi-value-green">{acuracidade_itens*100:.2f}%</div>
 </div>
 """, unsafe_allow_html=True)
-
-st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-st.markdown("<hr style='border-color:rgba(255,255,255,0.08);margin:0'>", unsafe_allow_html=True)
-st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-# -------------------------------------------------
-# LINHA 2 — Valor
-# -------------------------------------------------
-
-col4, col5, col6 = st.columns(3)
 
 col4.markdown(f"""
 <div class="kpi-card">
