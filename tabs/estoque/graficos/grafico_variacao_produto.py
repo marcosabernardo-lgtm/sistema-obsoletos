@@ -67,7 +67,7 @@ def render(df_hist, moeda_br, data_selecionada):
         df["Variacao"]   = df["Valor_Atual"] - df["Valor_Comp"]
         df["Perc"]       = df.apply(lambda r: (r["Variacao"] / r["Valor_Comp"] * 100) if r["Valor_Comp"] != 0 else 0, axis=1)
         df["Status Mov"] = df.apply(status_mov, axis=1)
-        return df.sort_values("Variacao", key=abs, ascending=False).reset_index(drop=True)
+        return df.sort_values("Valor_Atual", ascending=False).reset_index(drop=True)
 
     def render_cards(df, label_comp, label_atual):
         total_comp   = df["Valor_Comp"].sum()
