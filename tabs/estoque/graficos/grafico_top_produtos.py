@@ -95,10 +95,12 @@ def render(df_hist, moeda_br, data_selecionada):
                 f"<td style='text-align:right;color:#EC6E21'>{r['% Var']}</td></tr>"
                 for _, r in df_alta.iterrows()
             )
-            st.html(css + "<table class='tb-top'><thead><tr>"
+            st.markdown(css + "<table class='tb-top'><thead><tr>"
                     "<th>Produto</th><th>Descrição</th><th style='text-align:right'>Valor Atual</th>"
                     f"<th style='text-align:right'>Variação vs {label_comp}</th><th style='text-align:right'>% Var</th>"
-                    "</tr></thead><tbody>" + linhas + "</tbody></table>")
+                    "</tr></thead><tbody>" + linhas + "</tbody></table>",
+            unsafe_allow_html=True
+        )
 
         with col2:
             st.markdown("**⬇ Maiores Quedas**")
@@ -110,10 +112,12 @@ def render(df_hist, moeda_br, data_selecionada):
                 f"<td style='text-align:right;color:#EC6E21'>{r['% Var']}</td></tr>"
                 for _, r in df_queda.iterrows()
             )
-            st.html(css + "<table class='tb-top'><thead><tr>"
+            st.markdown(css + "<table class='tb-top'><thead><tr>"
                     "<th>Produto</th><th>Descrição</th><th style='text-align:right'>Valor Atual</th>"
                     f"<th style='text-align:right'>Variação vs {label_comp}</th><th style='text-align:right'>% Var</th>"
-                    "</tr></thead><tbody>" + linhas + "</tbody></table>")
+                    "</tr></thead><tbody>" + linhas + "</tbody></table>",
+            unsafe_allow_html=True
+        )
 
     # ── ABA 1: Maior Valor em Estoque ─────────────────────────────────────────
     with sub1:
@@ -144,13 +148,14 @@ def render(df_hist, moeda_br, data_selecionada):
                 "</tr>"
             )
 
-        st.html(
+        st.markdown(
             css +
             "<table class='tb-top'><thead><tr>"
             "<th>Empresa / Filial</th><th>Conta</th><th>Produto</th><th>Descrição</th>"
-            "<th style='text-align:right'>Qtd</th><th style='text-align:right'>Valor</th>"
+            "<th style='text-align:right'>Qtd Estoque</th><th style='text-align:right'>Valor Estoque</th>"
             "<th style='text-align:right'>% Estoque</th>"
-            "</tr></thead><tbody>" + linhas + "</tbody></table>"
+            "</tr></thead><tbody>" + linhas + "</tbody></table>",
+        unsafe_allow_html=True
         )
 
         buffer = io.BytesIO()
