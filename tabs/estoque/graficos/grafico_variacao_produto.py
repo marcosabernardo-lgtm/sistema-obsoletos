@@ -1,4 +1,3 @@
-# v2 - abas MoM e YoY
 import streamlit as st
 import pandas as pd
 
@@ -65,7 +64,7 @@ def render(df_hist, moeda_br, data_selecionada):
             Valor_Comp=("Custo Total", "sum")
         ).reset_index()
 
-        df = grp_atual.merge(grp_comp, on="Produto", how="outer").fillna(0)
+        df = grp_atual.merge(grp_comp, on="Produto", how="left").fillna(0)
         df["Descricao"]  = df["Produto"].map(desc_map).fillna("—").astype(str)
         df["Variacao"]   = df["Valor_Atual"] - df["Valor_Comp"]
         df["Perc"]       = df.apply(lambda r: (r["Variacao"] / r["Valor_Comp"] * 100) if r["Valor_Comp"] != 0 else 0, axis=1)
@@ -92,14 +91,22 @@ def render(df_hist, moeda_br, data_selecionada):
     def render_tabela(df, label_comp, key_prefix):
         st.markdown("<br>", unsafe_allow_html=True)
 
-        st.markdown('<div class="filtro-card">', unsafe_allow_html=True)
+        st.markdown("""
+        <style>
+        div[data-testid="stRadio"] > div {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 10px 16px;
+        }
+        </style>
+        """, unsafe_allow_html=True)
         status_sel = st.radio(
             "Filtrar por Status Mov",
             ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"],
             horizontal=True,
             key=f"radio_{key_prefix}"
         )
-        st.markdown('</div>', unsafe_allow_html=True)
 
         df_filtrado = df.copy() if status_sel == "Todos" else df[df["Status Mov"] == status_sel].copy()
 
