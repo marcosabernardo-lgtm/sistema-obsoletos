@@ -65,21 +65,49 @@ def moeda_br(valor):
 
 def fmt_qtd(valor):
     try:
-        v = float(valor)
-        return f"{v:,.0f}".replace(",", ".")
+        return f"{float(valor):,.0f}".replace(",", ".")
     except:
         return "—"
 
 colunas_moeda = ["Valor Inventariado", "Valor Protheus", "Valor Divergente", "Valor Unitario"]
 colunas_qtd   = ["Qtd Inventariada", "Qtd Protheus", "Qtd Divergente"]
 
-df_fmt = df.copy()
+# -------------------------------------------------
+# PAGINAÇÃO
+# -------------------------------------------------
+
+LINHAS_POR_PAGINA = 50
+total_linhas  = len(df)
+total_paginas = max(1, -(-total_linhas // LINHAS_POR_PAGINA))  # ceil division
+
+col_info, col_nav = st.columns([3, 1])
+
+with col_info:
+    st.write(f"Base de Inventário — **{total_linhas:,}** registros".replace(",", "."))
+
+with col_nav:
+    pagina = st.number_input(
+        "Página",
+        min_value=1,
+        max_value=total_paginas,
+        value=1,
+        step=1,
+        label_visibility="collapsed"
+    )
+    st.caption(f"Página {pagina} de {total_paginas}")
+
+inicio = (pagina - 1) * LINHAS_POR_PAGINA
+fim    = inicio + LINHAS_POR_PAGINA
+
+df_page     = df.iloc[inicio:fim].copy()
+df_page_raw = df_page.copy()
+
 for c in colunas_moeda:
-    if c in df_fmt.columns:
-        df_fmt[c] = df_fmt[c].apply(moeda_br)
+    if c in df_page.columns:
+        df_page[c] = df_page[c].apply(moeda_br)
 for c in colunas_qtd:
-    if c in df_fmt.columns:
-        df_fmt[c] = df_fmt[c].apply(fmt_qtd)
+    if c in df_page.columns:
+        df_page[c] = df_page[c].apply(fmt_qtd)
 
 # -------------------------------------------------
 # RENDERIZAR TABELA HTML
@@ -98,10 +126,11 @@ def render_tabela(df_render, df_raw):
             style = ""
             if c in ["Qtd Divergente", "Valor Divergente"]:
                 try:
-                    raw = df_raw.iloc[i][c] if i < len(df_raw) else 0
-                    if float(str(raw).replace("R$","").replace(".","").replace(",",".").strip()) > 0:
+                    raw = df_raw.iloc[i][c]
+                    v   = float(raw)
+                    if v > 0:
                         style = "color:#EC6E21;font-weight:600"
-                    elif float(str(raw).replace("R$","").replace(".","").replace(",",".").strip()) < 0:
+                    elif v < 0:
                         style = "color:#51cf66;font-weight:600"
                 except:
                     pass
@@ -155,5 +184,4 @@ def render_tabela(df_render, df_raw):
     </div>
     """
 
-st.write("Base de Inventário")
-st.markdown(render_tabela(df_fmt, df), unsafe_allow_html=True)
+st.markdown(render_tabela(df_page, df_page_raw), unsafe_allow_html=True)
