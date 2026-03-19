@@ -57,8 +57,10 @@ def render(df, moeda_br, data_selecionada=None):
         elif perc < -1: return f'<span style="color:#51cf66;font-weight:700">&#11015; {abs(perc):.0f}%</span>'
         else:           return f'<span style="color:#f0a500;font-weight:700">&#9679; {abs(perc):.0f}%</span>'
 
-    mom_label = f"Vir Est MoM ({pd.Timestamp(data_mom).strftime('%y-%b').lower()})" if data_mom else "Vir Est MoM"
-    yoy_label = f"Vir Est YoY ({pd.Timestamp(data_yoy).strftime('%y-%b').lower()})" if data_yoy else "Vir Est YoY"
+    atual_label = data_ref.strftime('%d-%b').lower()
+    mom_label   = f"MoM {pd.Timestamp(data_mom).strftime('%d-%b').lower()}" if data_mom else "MoM"
+    yoy_label   = f"YoY {pd.Timestamp(data_yoy).strftime('%d-%b').lower()}" if data_yoy else "YoY"
+    atual_col   = f"Valor Estoque {atual_label}"
 
     linhas = ""
     for _, row in df_tabela.iterrows():
@@ -99,10 +101,10 @@ def render(df, moeda_br, data_selecionada=None):
     tabela = (
         css
         + "<table class='tb-emp'><thead><tr>"
-        + f"<th>Empresa / Filial</th><th>Valor Estoque (Total)</th><th>{mom_label}</th><th>% MoM</th><th>{yoy_label}</th><th>% YoY</th>"
+        + f"<th>Empresa / Filial</th><th>{atual_col}</th><th>{mom_label}</th><th>% MoM</th><th>{yoy_label}</th><th>% YoY</th>"
         + "</tr></thead><tbody>"
         + linhas + total_html
         + "</tbody></table>"
     )
 
-    st.html(tabela)
+    st.markdown(tabela, unsafe_allow_html=True)
