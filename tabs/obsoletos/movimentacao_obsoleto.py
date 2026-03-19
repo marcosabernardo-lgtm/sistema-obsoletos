@@ -30,90 +30,9 @@ def card(titulo, valor, cor_borda="#EC6E21", cor_valor=None, subtitulo=None):
 
 
 # -------------------------------------------------------
-# 2. GERADOR DE TEXTO ANÁLISE
-# -------------------------------------------------------
-def gerar_texto_analise(variacao_real, valor_entrou, valor_saiu, valor_reduziu, var_custo,
-                        qtd_entrou, qtd_saiu, qtd_reduziu, moeda_br):
-
-    saldo_status = valor_entrou - valor_saiu
-
-    if variacao_real < 0:
-        cor_titulo = "#28a745"
-        titulo = "✅ O Estoque Obsoleto REDUZIU neste mês"
-    else:
-        cor_titulo = "#dc3545"
-        titulo = "⚠️ O Estoque Obsoleto AUMENTOU neste mês"
-
-    texto_resultado = (
-        f"O estoque obsoleto variou **{moeda_br(abs(variacao_real))}** "
-        f"({'redução' if variacao_real < 0 else 'aumento'}) neste período."
-    )
-
-    if saldo_status > 0:
-        texto_fluxo = (
-            f"⚠️ **Fluxo Operacional Negativo:** "
-            f"**{qtd_entrou} itens** ({moeda_br(valor_entrou)}) viraram obsoletos, "
-            f"contra apenas **{qtd_saiu} itens** ({moeda_br(valor_saiu)}) que saíram totalmente. "
-            f"O saldo do fluxo é de +{moeda_br(saldo_status)} — a torneira está aberta."
-        )
-        cor_fluxo = "#ff6b6b"
-    else:
-        texto_fluxo = (
-            f"✅ **Fluxo Operacional Positivo:** "
-            f"Zeramos **{qtd_saiu} itens** ({moeda_br(valor_saiu)}) do obsoleto, "
-            f"mais do que os **{qtd_entrou} itens** ({moeda_br(valor_entrou)}) que entraram. "
-            f"O saldo do fluxo é de {moeda_br(saldo_status)}."
-        )
-        cor_fluxo = "#51cf66"
-
-    if valor_reduziu > 0:
-        if variacao_real < 0 and saldo_status > 0:
-            texto_baixas = (
-                f"⚠️ **Atenção — Resultado mascarado pelas reduções parciais:** "
-                f"O obsoleto reduziu no mês, mas o fluxo de novos itens ainda é negativo. "
-                f"A redução de **{moeda_br(valor_reduziu)}** veio da diminuição de quantidade "
-                f"em **{qtd_reduziu} itens** que foram parcialmente vendidos ou consumidos."
-            )
-            cor_baixas = "#ffa94d"
-        else:
-            texto_baixas = (
-                f"📦 **Reduções parciais:** **{qtd_reduziu} itens** tiveram redução de quantidade, "
-                f"representando **{moeda_br(valor_reduziu)}** a menos no obsoleto."
-            )
-            cor_baixas = "#aaa"
-    else:
-        texto_baixas = "Não houve reduções parciais de itens obsoletos neste período."
-        cor_baixas = "#aaa"
-
-    if abs(var_custo) < 1:
-        texto_custo = "A variação de custo médio dos itens já obsoletos foi irrelevante neste período."
-        cor_custo = "#aaa"
-    elif var_custo < 0:
-        texto_custo = (
-            f"📉 **Variação de Custo:** Itens já obsoletos tiveram redução de custo médio "
-            f"de **{moeda_br(abs(var_custo))}**, contribuindo para a redução do obsoleto."
-        )
-        cor_custo = "#51cf66"
-    else:
-        texto_custo = (
-            f"📈 **Variação de Custo:** Itens já obsoletos tiveram aumento de custo médio "
-            f"de **{moeda_br(var_custo)}**, pressionando o obsoleto para cima."
-        )
-        cor_custo = "#ff6b6b"
-
-    return titulo, cor_titulo, texto_resultado, texto_fluxo, cor_fluxo, texto_baixas, cor_baixas, texto_custo, cor_custo
-
-
-# -------------------------------------------------------
-# 3. FUNÇÃO PRINCIPAL
+# 2. FUNÇÃO PRINCIPAL
 # -------------------------------------------------------
 def render(df_hist, moeda_br, data_selecionada=None):
-
-    if "analise_visivel" not in st.session_state:
-        st.session_state["analise_visivel"] = False
-
-    def toggle_analise():
-        st.session_state["analise_visivel"] = not st.session_state["analise_visivel"]
 
     df = df_hist.copy()
 
@@ -205,7 +124,6 @@ def render(df_hist, moeda_br, data_selecionada=None):
     qtd_saiu      = len(saiu)
     valor_reduziu = (reduziu["Vlr Ant"] - reduziu["Vlr Atual"]).sum()
     qtd_reduziu   = len(reduziu)
-    var_custo_val = variacao["Vlr Atual"].sum() - variacao["Vlr Ant"].sum()
     obs_ant       = df_ant["Custo Total"].sum()
     obs_atual     = df_atual["Custo Total"].sum()
     variacao_real = obs_atual - obs_ant
@@ -236,32 +154,6 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     st.markdown("---")
 
-    col_btn, col_vazia = st.columns([1, 4])
-    if not st.session_state["analise_visivel"]:
-        with col_btn:
-            st.button("🤖 Analisar Cenário", type="primary", on_click=toggle_analise, use_container_width=True)
-
-    if st.session_state["analise_visivel"]:
-        titulo, cor_titulo, texto_resultado, texto_fluxo, cor_fluxo, texto_baixas, cor_baixas, texto_custo, cor_custo = gerar_texto_analise(
-            variacao_real, valor_entrou, valor_saiu, valor_reduziu, var_custo_val,
-            qtd_entrou, qtd_saiu, qtd_reduziu, moeda_br
-        )
-        st.markdown(f"""
-        <div style="background-color:#1E1E1E;padding:20px;border-radius:10px;border:1px solid #444;margin-bottom:15px;">
-        <h3 style="color:{cor_titulo}; margin-top:0;">{titulo}</h3>
-        <p style="color:#ccc;">{texto_resultado}</p>
-        <hr style="border-color:#333">
-        <p style="color:{cor_fluxo};">{texto_fluxo}</p>
-        <p style="color:{cor_baixas};">{texto_baixas}</p>
-        <p style="color:{cor_custo};">{texto_custo}</p>
-        </div>
-        """, unsafe_allow_html=True)
-        col_fechar, _ = st.columns([1, 4])
-        with col_fechar:
-            st.button("❌ Fechar Análise", on_click=toggle_analise)
-
-    st.markdown("---")
-
     # -------------------------------------------------------
     # TABELA COM FILTRO DE STATUS MOV
     # -------------------------------------------------------
@@ -278,7 +170,6 @@ def render(df_hist, moeda_br, data_selecionada=None):
         mov = pd.concat(frames, ignore_index=True)
         mov = mov.sort_values("Vlr Atual", ascending=False)
 
-        # Filtro de Status Mov — radio button
         status_radio = st.radio(
             "Visualizar",
             options=["Todos", "🔴 Entrou", "🟢 Saiu", "🔽 Reduziu"],
