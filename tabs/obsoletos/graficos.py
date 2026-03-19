@@ -1,168 +1,72 @@
 import streamlit as st
-import altair as alt
+import pandas as pd
 
 
 def render(df_filtrado, moeda_br):
 
     ultima_data = df_filtrado["Data Fechamento"].max()
+    base = df_filtrado[df_filtrado["Data Fechamento"] == ultima_data]
 
-    base = df_filtrado[
-        df_filtrado["Data Fechamento"] == ultima_data
-    ]
-
-    # -------------------------------------------------
-    # EMPRESA
-    # -------------------------------------------------
-
-    st.subheader("Obsoleto por Empresa / Filial")
-
-    empresa = (
-        base.groupby("Empresa / Filial")["Custo Total"]
-        .sum()
-        .reset_index()
-        .sort_values("Custo Total", ascending=False)
+    css = (
+        "<style>.tb-obs{width:100%;border-collapse:collapse;font-size:13px;color:white}"
+        ".tb-obs th{background:#0f5a60;padding:10px 12px;text-align:left;border-bottom:2px solid #EC6E21;font-weight:700}"
+        ".tb-obs th:not(:first-child){text-align:right}"
+        ".tb-obs td{padding:7px 12px;border-bottom:1px solid #1a6e75;background:#005562;color:white}"
+        ".tb-obs td:not(:first-child){text-align:right}"
+        ".tb-obs tr:last-child td{font-weight:700;border-top:2px solid #EC6E21}"
+        ".tb-obs tr:hover td{background:#0a6570}</style>"
     )
 
-    empresa["%"] = empresa["Custo Total"] / empresa["Custo Total"].sum()
-
-    empresa["Label"] = empresa.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
-        axis=1
-    )
-
-    chart = alt.Chart(empresa).mark_bar(
-        color="#EC6E21",
-        stroke="white",
-        strokeWidth=1
-    ).encode(
-        x=alt.X("Custo Total", axis=None),
-        y=alt.Y(
-            "Empresa / Filial",
-            sort=alt.SortField(field="Custo Total", order="descending"),
-            axis=alt.Axis(title=None, labelLimit=200)
+    def montar_tabela(df_group, col_nome, titulo):
+        st.subheader(titulo)
+        total = df_group["Custo Total"].sum()
+        linhas = ""
+        for _, row in df_group.iterrows():
+            perc = row["Custo Total"] / total * 100 if total > 0 else 0
+            itens = int(row["Itens"])
+            linhas += (
+                f"<tr><td>{row[col_nome]}</td>"
+                f"<td>{itens:,}</td>"
+                f"<td>{moeda_br(row['Custo Total'])}</td>"
+                f"<td style='color:#EC6E21;font-weight:600'>{perc:.1f}%</td></tr>"
+            )
+        # Total
+        total_itens = int(df_group["Itens"].sum())
+        linhas += (
+            f"<tr><td>Total</td>"
+            f"<td>{total_itens:,}</td>"
+            f"<td>{moeda_br(total)}</td>"
+            f"<td style='color:#EC6E21;font-weight:600'>100%</td></tr>"
         )
-    )
-
-    text = alt.Chart(empresa).mark_text(
-        align="left",
-        dx=5,
-        color="white"
-    ).encode(
-        x="Custo Total",
-        y=alt.Y(
-            "Empresa / Filial",
-            sort=alt.SortField(field="Custo Total", order="descending")
-        ),
-        text="Label"
-    )
-
-    st.altair_chart(
-        (chart + text).properties(background="transparent"),
-        use_container_width=True
-    )
-
-    st.markdown("---")
-
-    # -------------------------------------------------
-    # STATUS
-    # -------------------------------------------------
-
-    st.subheader("Obsoleto por Status do Movimento")
-
-    status = (
-        base.groupby("Status do Movimento")["Custo Total"]
-        .sum()
-        .reset_index()
-        .sort_values("Custo Total", ascending=False)
-    )
-
-    status["%"] = status["Custo Total"] / status["Custo Total"].sum()
-
-    status["Label"] = status.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
-        axis=1
-    )
-
-    chart = alt.Chart(status).mark_bar(
-        color="#EC6E21",
-        stroke="white",
-        strokeWidth=1
-    ).encode(
-        x=alt.X("Custo Total", axis=None),
-        y=alt.Y(
-            "Status do Movimento",
-            sort=alt.SortField(field="Custo Total", order="descending"),
-            axis=alt.Axis(title=None, labelLimit=200)
+        st.markdown(
+            css + f"<table class='tb-obs'><thead><tr>"
+            f"<th>{col_nome}</th><th style='text-align:right'>Itens</th>"
+            f"<th style='text-align:right'>Valor Obsoleto</th><th style='text-align:right'>%</th>"
+            f"</tr></thead><tbody>{linhas}</tbody></table>",
+            unsafe_allow_html=True
         )
+        st.markdown("---")
+
+    # Empresa
+    df_emp = (
+        base.groupby("Empresa / Filial")
+        .agg(Itens=("Produto", "count"), **{"Custo Total": ("Custo Total", "sum")})
+        .reset_index().sort_values("Custo Total", ascending=False)
     )
+    montar_tabela(df_emp, "Empresa / Filial", "Obsoleto por Empresa / Filial")
 
-    text = alt.Chart(status).mark_text(
-        align="left",
-        dx=5,
-        color="white"
-    ).encode(
-        x="Custo Total",
-        y=alt.Y(
-            "Status do Movimento",
-            sort=alt.SortField(field="Custo Total", order="descending")
-        ),
-        text="Label"
+    # Status do Movimento
+    df_status = (
+        base.groupby("Status do Movimento")
+        .agg(Itens=("Produto", "count"), **{"Custo Total": ("Custo Total", "sum")})
+        .reset_index().sort_values("Custo Total", ascending=False)
     )
+    montar_tabela(df_status, "Status do Movimento", "Obsoleto por Status do Movimento")
 
-    st.altair_chart(
-        (chart + text).properties(background="transparent"),
-        use_container_width=True
+    # Conta
+    df_conta = (
+        base.groupby("Conta")
+        .agg(Itens=("Produto", "count"), **{"Custo Total": ("Custo Total", "sum")})
+        .reset_index().sort_values("Custo Total", ascending=False)
     )
-
-    st.markdown("---")
-
-    # -------------------------------------------------
-    # CONTA
-    # -------------------------------------------------
-
-    st.subheader("Obsoleto por Conta")
-
-    conta = (
-        base.groupby("Conta")["Custo Total"]
-        .sum()
-        .reset_index()
-        .sort_values("Custo Total", ascending=False)
-    )
-
-    conta["%"] = conta["Custo Total"] / conta["Custo Total"].sum()
-
-    conta["Label"] = conta.apply(
-        lambda x: f'{moeda_br(x["Custo Total"])} ({x["%"]*100:.1f}%)',
-        axis=1
-    )
-
-    chart = alt.Chart(conta).mark_bar(
-        color="#EC6E21",
-        stroke="white",
-        strokeWidth=1
-    ).encode(
-        x=alt.X("Custo Total", axis=None),
-        y=alt.Y(
-            "Conta",
-            sort=alt.SortField(field="Custo Total", order="descending"),
-            axis=alt.Axis(title=None, labelLimit=300)
-        )
-    )
-
-    text = alt.Chart(conta).mark_text(
-        align="left",
-        dx=5,
-        color="white"
-    ).encode(
-        x="Custo Total",
-        y=alt.Y(
-            "Conta",
-            sort=alt.SortField(field="Custo Total", order="descending")
-        ),
-        text="Label"
-    )
-
-    st.altair_chart(
-        (chart + text).properties(background="transparent"),
-        use_container_width=True
-    )
+    montar_tabela(df_conta, "Conta", "Obsoleto por Conta")
