@@ -131,24 +131,37 @@ data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
 empresas_sel     = filtros["empresas"]
 contas_sel       = filtros.get("conta", [])
 
-# Status do Movimento — selectbox próprio (não multiselect)
+# Status do Movimento — radio buttons
 st.markdown("""
 <style>
 .filtros-status {
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.07);
     border-radius: 12px;
-    padding: 12px 20px 4px;
+    padding: 10px 20px 10px;
     margin-bottom: 20px;
+}
+.filtros-status div[data-testid="stRadio"] > div {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+.filtros-status div[data-testid="stRadio"] label {
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    letter-spacing: 2px !important;
+    text-transform: uppercase !important;
+    color: rgba(255,255,255,0.35) !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="filtros-status">', unsafe_allow_html=True)
-status_sel_val = st.selectbox(
-    "Status do Movimento",
+status_sel_val = st.radio(
+    "STATUS DO MOVIMENTO",
     options=status_disponiveis,
     index=0,
+    horizontal=True,
     key="obsoletos_status_mov"
 )
 st.markdown('</div>', unsafe_allow_html=True)

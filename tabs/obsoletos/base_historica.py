@@ -5,55 +5,34 @@ import io
 
 def render(df_filtrado, moeda_br):
 
-    st.markdown("""
-    <style>
-    div[data-testid="stRadio"] > div {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.15);
-        border-radius: 10px;
-        padding: 10px 16px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    col_info, col_export = st.columns([4, 1])
 
-    col_filtro1, col_export = st.columns([4, 1])
-
-    with col_filtro1:
-        visao = st.radio(
-            "Visualizar",
-            ["Obsoleto", "Geral"],
-            horizontal=True,
-            key="base_historica_visao"
-        )
-
-    if visao == "Obsoleto":
-        base = df_filtrado.copy()
-    else:
-        base = st.session_state.get("df_kpi_completo", df_filtrado).copy()
-
-    base["Data Fechamento"] = pd.to_datetime(base["Data Fechamento"]).dt.date
-
-    # --------------------------------------------------
-    # ORDENAR POR CUSTO TOTAL (maior → menor)
-    # --------------------------------------------------
-
-    if "Custo Total" in base.columns:
-        base = base.sort_values("Custo Total", ascending=False)
+    with col_info:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
 
     with col_export:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        base = df_filtrado.copy()
+        base["Data Fechamento"] = pd.to_datetime(base["Data Fechamento"]).dt.date
+
+        if "Custo Total" in base.columns:
+            base = base.sort_values("Custo Total", ascending=False)
+
         buffer = io.BytesIO()
         base.to_excel(buffer, index=False)
         buffer.seek(0)
-        data_ref    = base["Data Fechamento"].max() if not base.empty else "sem_data"
-        label_visao = "obsoletos" if visao == "Obsoleto" else "geral"
+        data_ref = base["Data Fechamento"].max() if not base.empty else "sem_data"
         st.download_button(
             label="📥 Exportar",
             data=buffer.getvalue(),
-            file_name=f"base_historica_{label_visao}_{data_ref}.xlsx",
+            file_name=f"base_historica_obsoletos_{data_ref}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
+
+    base["Data Fechamento"] = pd.to_datetime(base["Data Fechamento"]).dt.date
+
+    if "Custo Total" in base.columns:
+        base = base.sort_values("Custo Total", ascending=False)
 
     # --------------------------------------------------
     # FORMATA PARA EXIBIÇÃO
