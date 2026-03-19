@@ -249,7 +249,7 @@ with tab1:
     )
 
     colunas_ordem = [
-        "Data Inventario", "Empresa / Filial", "Produto", "Descricao",
+        "Data Inventario", "Empresa / Filial", "Produto", "Descricao", "Valor Unitario",
         "Qtd Inventariada", "Valor Inventariado",
         "Qtd Protheus", "Valor Protheus",
         "Qtd Divergente", "Valor Divergente",
