@@ -220,4 +220,4 @@ with tab4:
     render_top20(df_filtrado, moeda_br)
 
 with tab5:
-    render_graficos(df_filtrado, moeda_br)
+    render_graficos(df_filtrado, moeda_br, df_hist_filtrado)

@@ -2,17 +2,23 @@ import streamlit as st
 import pandas as pd
 
 
-def render(df_filtrado, moeda_br):
+def render(df_filtrado, moeda_br, df_hist_filtrado=None):
 
-    datas = sorted(df_filtrado["Data Fechamento"].unique())
+    # Usa df_hist_filtrado para ter todos os fechamentos
+    df_base = df_hist_filtrado if df_hist_filtrado is not None else df_filtrado
+
+    datas = sorted(df_base["Data Fechamento"].unique())
     ultima_data = max(datas)
     base = df_filtrado[df_filtrado["Data Fechamento"] == ultima_data]
 
-    # MoM — fechamento anterior
+    # MoM — fechamento anterior com obsoletos do hist filtrado
     idx = list(datas).index(ultima_data)
     if idx > 0:
         data_mom = datas[idx - 1]
-        base_mom = df_filtrado[df_filtrado["Data Fechamento"] == data_mom]
+        base_mom = df_base[
+            (df_base["Data Fechamento"] == data_mom) &
+            (df_base["Status Estoque"] == "Obsoleto")
+        ]
         label_mom = pd.Timestamp(data_mom).strftime('%y-%b').lower()
     else:
         base_mom = pd.DataFrame()
