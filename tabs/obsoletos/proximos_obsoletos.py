@@ -61,7 +61,6 @@ def render(df_kpi, moeda_br):
     qtd_critico  = len(df[df["Risco"] == "🔴 Crítico"])
     qtd_alerta   = len(df[df["Risco"] == "🟠 Alerta"])
     qtd_atencao  = len(df[df["Risco"] == "🟡 Atenção"])
-    valor_total  = df["Custo Total"].sum()
 
     c1, c2, c3, c4 = st.columns(4)
 
@@ -83,13 +82,6 @@ def render(df_kpi, moeda_br):
     <div style="border:2px solid #ffe066;border-radius:12px;padding:16px;text-align:center;min-height:90px">
         <div style="font-size:13px;color:white">🟡 Atenção (60-90 dias)</div>
         <div style="font-size:22px;font-weight:bold;color:#ffe066">{qtd_atencao} itens</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    c4.markdown(f"""
-    <div style="border:2px solid #EC6E21;border-radius:12px;padding:16px;text-align:center;min-height:90px">
-        <div style="font-size:13px;color:white">Valor em Risco</div>
-        <div style="font-size:22px;font-weight:bold;color:white">{moeda_br(valor_total)}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -121,8 +113,17 @@ def render(df_kpi, moeda_br):
             label_visibility="collapsed"
         )
 
-    df_tab = df.copy() if risco_sel == "Todos" else df[df["Risco"] == risco_sel].copy()
-    df_tab = df_tab.sort_values("Dias Restantes")
+    df_tab      = df.copy() if risco_sel == "Todos" else df[df["Risco"] == risco_sel].copy()
+    df_tab      = df_tab.sort_values("Custo Total", ascending=False)
+    valor_risco = df_tab["Custo Total"].sum()
+
+    # Atualiza card Valor em Risco com valor do filtro atual
+    c4.markdown(f"""
+    <div style="border:2px solid #EC6E21;border-radius:12px;padding:16px;text-align:center;min-height:90px">
+        <div style="font-size:13px;color:white">Valor em Risco</div>
+        <div style="font-size:22px;font-weight:bold;color:white">{moeda_br(valor_risco)}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
     with col_export:
         buffer = io.BytesIO()
