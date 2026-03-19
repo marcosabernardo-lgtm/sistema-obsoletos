@@ -1,12 +1,10 @@
-import os
 import pandas as pd
 import zipfile
+import io
 from pathlib import Path
 
 
-PASTA_ZIP       = "analytics/dados_inventario"
 CAMINHO_ESTOQUE = "data/estoque/estoque_historico.parquet"
-CAMINHO_SAIDA   = "data/inventario/inventario_historico.parquet"
 
 
 # ==========================================================
@@ -18,11 +16,11 @@ def extrair_info_nome(nome_arquivo):
     nome = Path(nome_arquivo).stem
 
     try:
-        empresa       = nome[:4]
-        dia           = int(nome[4:6])
-        mes           = int(nome[6:8])
-        ano           = int(nome[8:12])
-        data          = pd.Timestamp(ano, mes, dia)
+        empresa         = nome[:4]
+        dia             = int(nome[4:6])
+        mes             = int(nome[6:8])
+        ano             = int(nome[8:12])
+        data            = pd.Timestamp(ano, mes, dia)
         data_fechamento = data + pd.offsets.MonthEnd(0)
     except Exception:
         raise ValueError(f"Nome de arquivo fora do padrão esperado: {nome_arquivo}")
@@ -31,118 +29,87 @@ def extrair_info_nome(nome_arquivo):
 
 
 # ==========================================================
-# PROCESSA TODOS OS ZIPs DA PASTA
+# MOTOR INVENTÁRIO — processa 1 ZIP por vez
 # ==========================================================
 
-def processar_zip():
+def executar_motor_inventario(caminho_zip):
 
-    # ----------------------------------------------------------
-    # BUSCA TODOS OS ZIPs DA PASTA
-    # ----------------------------------------------------------
+    inventarios = []
 
-    if not os.path.exists(PASTA_ZIP):
-        raise Exception(f"Pasta não encontrada: {PASTA_ZIP}")
+    with zipfile.ZipFile(caminho_zip) as z:
 
-    arquivos_zip = sorted([
-        f for f in os.listdir(PASTA_ZIP)
-        if f.endswith(".zip")
-    ])
+        # --------------------------------------------------
+        # INVENTÁRIO
+        # --------------------------------------------------
 
-    if not arquivos_zip:
-        raise Exception(f"Nenhum ZIP encontrado em: {PASTA_ZIP}")
+        arquivos = [
+            f for f in z.namelist()
+            if f.startswith("01_Inventario/") and f.endswith(".xlsx")
+        ]
 
-    todos_inventarios = []
+        for arquivo in arquivos:
 
-    for nome_zip in arquivos_zip:
+            empresa, data_inventario = extrair_info_nome(arquivo.split("/")[-1])
 
-        caminho_zip = os.path.join(PASTA_ZIP, nome_zip)
+            df = pd.read_excel(z.open(arquivo), header=1)
 
-        print(f"Processando: {nome_zip}")
+            df.columns = df.columns.str.strip().str.upper()
 
-        inventarios = []
-
-        with zipfile.ZipFile(caminho_zip) as z:
-
-            # --------------------------------------------------
-            # INVENTÁRIO
-            # --------------------------------------------------
-
-            arquivos = [
-                f for f in z.namelist()
-                if f.startswith("01_Inventario/") and f.endswith(".xlsx")
-            ]
-
-            for arquivo in arquivos:
-
-                empresa, data_inventario = extrair_info_nome(arquivo.split("/")[-1])
-
-                df = pd.read_excel(z.open(arquivo), header=1)
-
-                df.columns = df.columns.str.strip().str.upper()
-
-                df = df.rename(columns={
-                    "CODIGO":                     "Codigo",
-                    "DESCRICAO":                  "Descricao",
-                    "QUANTIDADE INVENTARIADA":    "Qtd_Inventariada",
-                    "QTD NA DATA DO INVENTARIO":  "Qtd_Protheus",
-                    "DIFERENCA QUANTIDADE":       "Qtd_Divergente",
-                    "DIFERENCA VALOR":            "Valor_Divergente"
-                })
-
-                # Remove linhas sem código
-                df = df[df["Codigo"].notna()]
-
-                # Protege contra valores inválidos no Codigo
-                df["Codigo"] = pd.to_numeric(df["Codigo"], errors="coerce")
-                df = df[df["Codigo"].notna()]
-                df["Codigo"] = df["Codigo"].astype(int).astype(str).str.zfill(6)
-
-                df["Empresa"]         = empresa
-                df["Data_Inventario"] = data_inventario
-
-                df["Qtd_Itens_Inventariados"] = 1
-                df["Qtd_Itens_Divergentes"]   = (df["Qtd_Divergente"] != 0).astype(int)
-
-                inventarios.append(df)
-
-            inventario = pd.concat(inventarios, ignore_index=True)
-
-            # --------------------------------------------------
-            # EMPRESAS
-            # --------------------------------------------------
-
-            empresas = pd.read_excel(z.open("02_Empresas/02_Empresas.xlsx"))
-
-            empresas["Empresa"] = (
-                empresas["Empresa"]
-                .astype(int)
-                .astype(str)
-                .str.zfill(4)
-            )
-
-            inventario["Empresa"] = (
-                inventario["Empresa"]
-                .astype(str)
-                .str.zfill(4)
-            )
-
-            inventario = inventario.merge(
-                empresas,
-                on="Empresa",
-                how="left"
-            )
-
-            inventario = inventario.rename(columns={
-                "Empresa / Filial": "Nome_Empresa"
+            df = df.rename(columns={
+                "CODIGO":                    "Codigo",
+                "DESCRICAO":                 "Descricao",
+                "QUANTIDADE INVENTARIADA":   "Qtd_Inventariada",
+                "QTD NA DATA DO INVENTARIO": "Qtd_Protheus",
+                "DIFERENCA QUANTIDADE":      "Qtd_Divergente",
+                "DIFERENCA VALOR":           "Valor_Divergente"
             })
 
-        todos_inventarios.append(inventario)
+            # Remove linhas sem código
+            df = df[df["Codigo"].notna()]
 
-    # ----------------------------------------------------------
-    # CONSOLIDA TODOS OS ZIPs
-    # ----------------------------------------------------------
+            # Protege contra valores inválidos no Codigo
+            df["Codigo"] = pd.to_numeric(df["Codigo"], errors="coerce")
+            df = df[df["Codigo"].notna()]
+            df["Codigo"] = df["Codigo"].astype(int).astype(str).str.zfill(6)
 
-    inventario_final = pd.concat(todos_inventarios, ignore_index=True)
+            df["Empresa"]         = empresa
+            df["Data_Inventario"] = data_inventario
+
+            df["Qtd_Itens_Inventariados"] = 1
+            df["Qtd_Itens_Divergentes"]   = (df["Qtd_Divergente"] != 0).astype(int)
+
+            inventarios.append(df)
+
+        inventario = pd.concat(inventarios, ignore_index=True)
+
+        # --------------------------------------------------
+        # EMPRESAS
+        # --------------------------------------------------
+
+        empresas = pd.read_excel(z.open("02_Empresas/02_Empresas.xlsx"))
+
+        empresas["Empresa"] = (
+            empresas["Empresa"]
+            .astype(int)
+            .astype(str)
+            .str.zfill(4)
+        )
+
+        inventario["Empresa"] = (
+            inventario["Empresa"]
+            .astype(str)
+            .str.zfill(4)
+        )
+
+        inventario = inventario.merge(
+            empresas,
+            on="Empresa",
+            how="left"
+        )
+
+        inventario = inventario.rename(columns={
+            "Empresa / Filial": "Nome_Empresa"
+        })
 
     # ----------------------------------------------------------
     # ESTOQUE — join com valor unitário
@@ -165,12 +132,12 @@ def processar_zip():
     )
 
     # Filtra apenas datas relevantes para evitar duplicatas no merge
-    datas_inventario = inventario_final["Data_Inventario"].unique()
+    datas_inventario = inventario["Data_Inventario"].unique()
     estoque = estoque[estoque["Data Fechamento"].isin(datas_inventario)]
 
     estoque = estoque[["Data Fechamento", "Produto", "Valor_Unitario"]]
 
-    inventario_final = inventario_final.merge(
+    inventario = inventario.merge(
         estoque,
         left_on=["Codigo", "Data_Inventario"],
         right_on=["Produto", "Data Fechamento"],
@@ -181,19 +148,19 @@ def processar_zip():
     # CÁLCULOS
     # ----------------------------------------------------------
 
-    inventario_final["Valor_Protheus"] = (
-        inventario_final["Qtd_Protheus"] * inventario_final["Valor_Unitario"]
+    inventario["Valor_Protheus"] = (
+        inventario["Qtd_Protheus"] * inventario["Valor_Unitario"]
     )
 
-    inventario_final["Valor_Inventariado"] = (
-        inventario_final["Qtd_Inventariada"] * inventario_final["Valor_Unitario"]
+    inventario["Valor_Inventariado"] = (
+        inventario["Qtd_Inventariada"] * inventario["Valor_Unitario"]
     )
 
     # ----------------------------------------------------------
     # ORGANIZAÇÃO FINAL
     # ----------------------------------------------------------
 
-    inventario_final = inventario_final[
+    df_final = inventario[
         [
             "Data_Inventario",
             "Empresa",
@@ -210,16 +177,16 @@ def processar_zip():
             "Qtd_Itens_Inventariados",
             "Qtd_Itens_Divergentes"
         ]
-    ]
+    ].copy()
 
-    inventario_final = inventario_final.sort_values("Data_Inventario")
+    df_final = df_final.sort_values("Data_Inventario")
 
-    Path("data/inventario").mkdir(parents=True, exist_ok=True)
+    # ----------------------------------------------------------
+    # EXPORTAÇÃO
+    # ----------------------------------------------------------
 
-    inventario_final.to_parquet(CAMINHO_SAIDA, index=False)
+    buffer = io.BytesIO()
+    df_final.to_excel(buffer, index=False)
+    buffer.seek(0)
 
-    print(f"Inventário processado com sucesso — {len(inventario_final)} registros salvos.")
-
-
-if __name__ == "__main__":
-    processar_zip()
+    return df_final, buffer.getvalue()
