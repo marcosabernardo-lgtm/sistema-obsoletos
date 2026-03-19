@@ -16,9 +16,9 @@ def render(df_filtrado, moeda_br):
     </style>
     """, unsafe_allow_html=True)
 
-    col_filtro, col_export = st.columns([4, 1])
+    col_filtro1, col_filtro2, col_export = st.columns([2, 2, 1])
 
-    with col_filtro:
+    with col_filtro1:
         visao = st.radio(
             "Visualizar",
             ["Obsoleto", "Geral"],
@@ -31,7 +31,30 @@ def render(df_filtrado, moeda_br):
     else:
         base = st.session_state.get("df_kpi_completo", df_filtrado).copy()
 
+    # --------------------------------------------------
+    # FILTRO STATUS DO MOVIMENTO
+    # --------------------------------------------------
+
+    with col_filtro2:
+        if "Status do Movimento" in base.columns:
+            opcoes_status = ["Todos"] + sorted(base["Status do Movimento"].dropna().unique().tolist())
+            status_sel = st.radio(
+                "Status do Movimento",
+                opcoes_status,
+                horizontal=True,
+                key="base_historica_status"
+            )
+            if status_sel != "Todos":
+                base = base[base["Status do Movimento"] == status_sel]
+
     base["Data Fechamento"] = pd.to_datetime(base["Data Fechamento"]).dt.date
+
+    # --------------------------------------------------
+    # ORDENAR POR CUSTO TOTAL (maior → menor)
+    # --------------------------------------------------
+
+    if "Custo Total" in base.columns:
+        base = base.sort_values("Custo Total", ascending=False)
 
     with col_export:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
@@ -48,17 +71,20 @@ def render(df_filtrado, moeda_br):
             use_container_width=True
         )
 
-    # Formata para exibição
+    # --------------------------------------------------
+    # FORMATA PARA EXIBIÇÃO
+    # --------------------------------------------------
+
     base_display = base.copy()
 
     if "Vlr Unit" in base_display.columns:
         base_display["Vlr Unit"] = pd.to_numeric(base_display["Vlr Unit"], errors="coerce").apply(
             lambda x: moeda_br(x) if pd.notna(x) else ""
         )
+
     if "Custo Total" in base_display.columns:
         base_display["Custo Total"] = base_display["Custo Total"].apply(moeda_br)
 
-    # Renomeia e formata Ult_Movimentacao
     if "Ult_Movimentacao" in base_display.columns:
         base_display["Ult_Movimentacao"] = pd.to_datetime(
             base_display["Ult_Movimentacao"], errors="coerce"
