@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import io
 
 
 def render(df_hist, moeda_br, data_selecionada):
@@ -30,14 +31,13 @@ def render(df_hist, moeda_br, data_selecionada):
         df_yoy = pd.DataFrame(columns=df_hist.columns)
         data_yoy = None
 
-    # CSS cards
+    # CSS
     st.markdown("""
     <style>
     .card-mov { background-color:#005562; border:2px solid #EC6E21; border-radius:10px; padding:14px 16px; text-align:center; }
     .card-mov .titulo { font-size:12px; color:#ccc; margin-bottom:4px; }
     .card-mov .valor  { font-size:20px; font-weight:700; color:white; }
     .card-mov .sub    { font-size:12px; margin-top:4px; }
-    .filtro-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 12px 20px 4px; margin-bottom: 16px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -59,11 +59,9 @@ def render(df_hist, moeda_br, data_selecionada):
         grp_atual = df_atual.groupby(["Empresa / Filial", "Conta", "Produto"]).agg(
             Valor_Atual=("Custo Total", "sum")
         ).reset_index()
-
         grp_comp = df_comp.groupby("Produto").agg(
             Valor_Comp=("Custo Total", "sum")
         ).reset_index()
-
         df = grp_atual.merge(grp_comp, on="Produto", how="left").fillna(0)
         df["Descricao"]  = df["Produto"].map(desc_map).fillna("—").astype(str)
         df["Variacao"]   = df["Valor_Atual"] - df["Valor_Comp"]
@@ -102,13 +100,21 @@ def render(df_hist, moeda_br, data_selecionada):
         </style>
         """, unsafe_allow_html=True)
         status_sel = st.radio(
-            "Filtrar por Status Mov",
+            "Filtrar por Status Movimento",
             ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"],
             horizontal=True,
             key=f"radio_{key_prefix}"
         )
 
         df_filtrado = df.copy() if status_sel == "Todos" else df[df["Status Mov"] == status_sel].copy()
+
+        # Labels dinâmicos
+        tipo        = "MoM" if key_prefix == "mom" else "YoY"
+        atual_label = pd.Timestamp(data_selecionada).strftime('%y-%b').lower()
+        val_label   = f"Valor Estoque {atual_label}"
+        comp_label  = f"{tipo} {label_comp}"
+        delta_label = f"Δ {tipo} {label_comp}"
+        perc_label  = f"% {tipo}"
 
         def cor_status(s):
             if s == "Aumentou": return "color:#ff6b6b;font-weight:700"
@@ -155,13 +161,35 @@ def render(df_hist, moeda_br, data_selecionada):
         st.markdown(
             css_tb +
             f"<table class='tb-var'><thead><tr>"
-            "<th>Status Mov</th><th>Empresa / Filial</th><th>Conta</th><th>Produto</th><th>Descrição</th>"
-            f"<th style='text-align:right'>Valor Atual</th>"
-            f"<th style='text-align:right'>Valor {label_comp}</th>"
-            f"<th style='text-align:right'>Δ {label_comp}</th>"
-            f"<th style='text-align:right'>% {label_comp}</th>"
+            "<th>Status Movimento</th><th>Empresa / Filial</th><th>Conta</th><th>Produto</th><th>Descrição</th>"
+            f"<th style='text-align:right'>{val_label}</th>"
+            f"<th style='text-align:right'>{comp_label}</th>"
+            f"<th style='text-align:right'>{delta_label}</th>"
+            f"<th style='text-align:right'>{perc_label}</th>"
             "</tr></thead><tbody>" + linhas + "</tbody></table>",
             unsafe_allow_html=True
+        )
+
+        # Export Excel
+        df_export = df_filtrado[["Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao",
+                                  "Valor_Atual", "Valor_Comp", "Variacao", "Perc"]].copy()
+        df_export = df_export.rename(columns={
+            "Status Mov":      "Status Movimento",
+            "Descricao":       "Descrição",
+            "Valor_Atual":     val_label,
+            "Valor_Comp":      comp_label,
+            "Variacao":        delta_label,
+            "Perc":            perc_label,
+        })
+        buffer = io.BytesIO()
+        df_export.to_excel(buffer, index=False)
+        buffer.seek(0)
+        st.download_button(
+            label="📥 Exportar Excel",
+            data=buffer,
+            file_name=f"variacao_{tipo.lower()}_{atual_label}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key=f"export_{key_prefix}"
         )
 
     # ── ABAS ──────────────────────────────────────────────
@@ -170,19 +198,19 @@ def render(df_hist, moeda_br, data_selecionada):
     tab_mom, tab_yoy = st.tabs(["📈 Variação MoM", "📅 Variação YoY"])
 
     with tab_mom:
-        if df_mom.empty:
+        if df_mom is None or (hasattr(df_mom, 'empty') and df_mom.empty):
             st.info("Sem dados do mês anterior.")
         else:
-            label_mom = pd.Timestamp(data_mom).strftime("%d/%m/%Y")
+            label_mom = pd.Timestamp(data_mom).strftime("%y-%b").lower()
             df_mom_var = montar_df(df_mom)
             render_cards(df_mom_var, label_mom, label_atual)
             render_tabela(df_mom_var, label_mom, "mom")
 
     with tab_yoy:
-        if df_yoy.empty:
+        if df_yoy is None or (hasattr(df_yoy, 'empty') and df_yoy.empty):
             st.info("Sem dados do ano anterior.")
         else:
-            label_yoy = pd.Timestamp(data_yoy).strftime("%d/%m/%Y")
+            label_yoy = pd.Timestamp(data_yoy).strftime("%y-%b").lower()
             df_yoy_var = montar_df(df_yoy)
             render_cards(df_yoy_var, label_yoy, label_atual)
             render_tabela(df_yoy_var, label_yoy, "yoy")
