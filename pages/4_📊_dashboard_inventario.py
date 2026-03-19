@@ -29,6 +29,31 @@ section[data-testid="stSidebar"] { display: none !important; }
 .kpi-title{ font-size:14px; color:white; }
 .kpi-value{ font-size:26px; font-weight:700; color:white; }
 .kpi-value-green{ font-size:26px; font-weight:700; color:#51cf66; }
+
+/* Estilo do radio como botões */
+div[data-testid="stRadio"] > div {
+    display: flex;
+    gap: 10px;
+    flex-direction: row !important;
+}
+div[data-testid="stRadio"] label {
+    background-color: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 6px 20px;
+    color: rgba(255,255,255,0.6) !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+div[data-testid="stRadio"] label:has(input:checked) {
+    background-color: rgba(236,110,33,0.15);
+    border-color: #EC6E21;
+    color: #EC6E21 !important;
+}
+div[data-testid="stRadio"] input { display: none; }
+div[data-testid="stRadio"] > label { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -110,9 +135,9 @@ if empresas_sel:
 # CALCULAR KPIs
 # -------------------------------------------------
 
-qtd_inventariada  = df_kpi["Qtd_Itens_Inventariados"].sum() if "Qtd_Itens_Inventariados" in df_kpi.columns else len(df_kpi)
-qtd_divergentes   = int(df_kpi["Qtd_Itens_Divergentes"].sum()) if "Qtd_Itens_Divergentes" in df_kpi.columns else 0
-acuracidade_itens = (qtd_inventariada - qtd_divergentes) / qtd_inventariada if qtd_inventariada > 0 else 0
+qtd_inventariada   = df_kpi["Qtd_Itens_Inventariados"].sum() if "Qtd_Itens_Inventariados" in df_kpi.columns else len(df_kpi)
+qtd_divergentes    = int(df_kpi["Qtd_Itens_Divergentes"].sum()) if "Qtd_Itens_Divergentes" in df_kpi.columns else 0
+acuracidade_itens  = (qtd_inventariada - qtd_divergentes) / qtd_inventariada if qtd_inventariada > 0 else 0
 
 valor_inventariado = df_kpi["Valor_Inventariado"].sum() if "Valor_Inventariado" in df_kpi.columns else 0
 valor_divergente   = df_kpi["Valor_Divergente"].sum()   if "Valor_Divergente"   in df_kpi.columns else 0
@@ -185,7 +210,24 @@ tab1, = st.tabs(["📚 Base Histórica"])
 
 with tab1:
 
+    # Filtro Geral / Divergente
+    visao = st.radio(
+        "Visualização",
+        options=["Geral", "Divergente"],
+        index=0,
+        key="inv_visao",
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
     df_tab = df_kpi.copy()
+
+    # Aplica filtro de visão
+    if visao == "Divergente":
+        df_tab = df_tab[df_tab["Qtd_Divergente"] != 0] if "Qtd_Divergente" in df_tab.columns else df_tab
+
     df_tab["Data_Inventario"] = df_tab["Data_Inventario"].dt.date
 
     df_tab = df_tab.rename(columns={
