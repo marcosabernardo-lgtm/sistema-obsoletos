@@ -50,12 +50,20 @@ def render(df_filtrado, moeda_br):
 
     # Formata para exibição
     base_display = base.copy()
+
     if "Vlr Unit" in base_display.columns:
         base_display["Vlr Unit"] = pd.to_numeric(base_display["Vlr Unit"], errors="coerce").apply(
             lambda x: moeda_br(x) if pd.notna(x) else ""
         )
     if "Custo Total" in base_display.columns:
         base_display["Custo Total"] = base_display["Custo Total"].apply(moeda_br)
+
+    # Renomeia e formata Ult_Movimentacao
+    if "Ult_Movimentacao" in base_display.columns:
+        base_display["Ult_Movimentacao"] = pd.to_datetime(
+            base_display["Ult_Movimentacao"], errors="coerce"
+        ).apply(lambda x: x.strftime("%d/%m/%Y") if pd.notna(x) else "")
+        base_display = base_display.rename(columns={"Ult_Movimentacao": "Ult Movimento"})
 
     st.caption(f"{len(base)} produtos")
     st.dataframe(base_display, use_container_width=True, hide_index=True)
