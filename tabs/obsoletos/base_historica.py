@@ -47,30 +47,37 @@ def render(df_filtrado, moeda_br):
     # FILTRO STATUS DO MOVIMENTO — ordem lógica
     # --------------------------------------------------
 
+    # Mapeamento: opção exibida -> faixas que ela representa
+    OPCOES_STATUS = {
+        "Todos":         None,
+        "Até 1 ano":     ["Até 6 meses", "Até 1 ano"],
+        "+ 1 ano":       ["+ 1 ano"],
+        "+ 2 anos":      ["+ 2 anos"],
+        "> 1 ano":       ["+ 1 ano", "+ 2 anos", "Sem Movimento"],
+        "Sem Movimento": ["Sem Movimento"],
+    }
+
     with col_filtro2:
         if "Status do Movimento" in base.columns:
 
-            ORDEM_STATUS = [
-                "Todos",
-                "Até 6 meses",
-                "Até 1 ano",
-                "+ 1 ano",
-                "+ 2 anos",
-                "Sem Movimento",
-            ]
-
             existentes    = base["Status do Movimento"].dropna().unique().tolist()
-            opcoes_status = [s for s in ORDEM_STATUS if s == "Todos" or s in existentes]
+            opcoes_visiveis = [
+                op for op in OPCOES_STATUS
+                if op == "Todos"
+                or op == "> 1 ano"
+                or any(f in existentes for f in (OPCOES_STATUS[op] or []))
+            ]
 
             status_sel = st.radio(
                 "Status do Movimento",
-                opcoes_status,
+                opcoes_visiveis,
                 horizontal=True,
                 key="base_historica_status"
             )
 
-            if status_sel != "Todos":
-                base = base[base["Status do Movimento"] == status_sel]
+            faixas = OPCOES_STATUS[status_sel]
+            if faixas is not None:
+                base = base[base["Status do Movimento"].isin(faixas)]
 
     base["Data Fechamento"] = pd.to_datetime(base["Data Fechamento"]).dt.date
 
