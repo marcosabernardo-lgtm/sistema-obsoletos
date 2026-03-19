@@ -119,7 +119,6 @@ status_disponiveis = [s for s in ORDEM_STATUS if s == "Todas" or s == "> 1 ano" 
 extras = {}
 if contas_disponiveis:
     extras["Conta"] = contas_disponiveis
-extras["Status do Movimento"] = status_disponiveis
 
 filtros = render_filtros_topo(
     datas=datas_fmt_list,
@@ -131,7 +130,30 @@ filtros = render_filtros_topo(
 data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
 empresas_sel     = filtros["empresas"]
 contas_sel       = filtros.get("conta", [])
-status_sel       = filtros.get("status_do_movimento", [])
+
+# Status do Movimento — selectbox próprio (não multiselect)
+st.markdown("""
+<style>
+.filtros-status {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 12px 20px 4px;
+    margin-bottom: 20px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="filtros-status">', unsafe_allow_html=True)
+status_sel_val = st.selectbox(
+    "Status do Movimento",
+    options=status_disponiveis,
+    index=0,
+    key="obsoletos_status_mov"
+)
+st.markdown('</div>', unsafe_allow_html=True)
+
+status_sel = [status_sel_val] if status_sel_val != "Todas" else []
 
 # -------------------------------------------------
 # APLICA FILTROS BASE
