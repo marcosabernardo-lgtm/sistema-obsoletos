@@ -62,7 +62,7 @@ def render(df_hist, moeda_br, data_selecionada):
         elif v < 0: return f'<span style="color:#51cf66">⬇ -{moeda_br(abs(v))}</span>'
         return f'<span style="color:#aaa">● {moeda_br(0)}</span>'
 
-    def tabela_variacao(df_base, df_comp, label_comp):
+    def tabela_variacao(df_base, df_comp, label_comp, tipo="MoM"):
         if df_comp.empty:
             st.info(f"Sem dados de {label_comp} para calcular variação.")
             return
@@ -83,6 +83,11 @@ def render(df_hist, moeda_br, data_selecionada):
             axis=1
         )
 
+        atual_label = pd.Timestamp(data_selecionada).strftime('%y-%b').lower()
+        val_label   = f"Valor Estoque {atual_label}"
+        delta_label = f"Δ {tipo} {label_comp}"
+        perc_label  = f"% {tipo}"
+
         col1, col2 = st.columns(2)
 
         with col1:
@@ -96,8 +101,8 @@ def render(df_hist, moeda_br, data_selecionada):
                 for _, r in df_alta.iterrows()
             )
             st.markdown(css + "<table class='tb-top'><thead><tr>"
-                    "<th>Produto</th><th>Descrição</th><th style='text-align:right'>Valor Atual</th>"
-                    f"<th style='text-align:right'>Variação vs {label_comp}</th><th style='text-align:right'>% Var</th>"
+                    f"<th>Produto</th><th>Descrição</th><th style='text-align:right'>{val_label}</th>"
+                    f"<th style='text-align:right'>{delta_label}</th><th style='text-align:right'>{perc_label}</th>"
                     "</tr></thead><tbody>" + linhas + "</tbody></table>",
             unsafe_allow_html=True
         )
@@ -113,8 +118,8 @@ def render(df_hist, moeda_br, data_selecionada):
                 for _, r in df_queda.iterrows()
             )
             st.markdown(css + "<table class='tb-top'><thead><tr>"
-                    "<th>Produto</th><th>Descrição</th><th style='text-align:right'>Valor Atual</th>"
-                    f"<th style='text-align:right'>Variação vs {label_comp}</th><th style='text-align:right'>% Var</th>"
+                    f"<th>Produto</th><th>Descrição</th><th style='text-align:right'>{val_label}</th>"
+                    f"<th style='text-align:right'>{delta_label}</th><th style='text-align:right'>{perc_label}</th>"
                     "</tr></thead><tbody>" + linhas + "</tbody></table>",
             unsafe_allow_html=True
         )
@@ -166,10 +171,10 @@ def render(df_hist, moeda_br, data_selecionada):
 
     # ── ABA 2: Maior Variação MoM ─────────────────────────────────────────────
     with sub2:
-        label_mom = pd.Timestamp(data_mom).strftime('%d/%m/%Y') if not df_mom.empty else "mês anterior"
-        tabela_variacao(df_atual, df_mom, label_mom)
+        label_mom = pd.Timestamp(data_mom).strftime('%y-%b').lower() if not df_mom.empty else "mês anterior"
+        tabela_variacao(df_atual, df_mom, label_mom, tipo="MoM")
 
     # ── ABA 3: Maior Variação YoY ─────────────────────────────────────────────
     with sub3:
-        label_yoy = pd.Timestamp(data_yoy).strftime('%d/%m/%Y') if not df_yoy.empty else "ano anterior"
-        tabela_variacao(df_atual, df_yoy, label_yoy)
+        label_yoy = pd.Timestamp(data_yoy).strftime('%y-%b').lower() if not df_yoy.empty else "ano anterior"
+        tabela_variacao(df_atual, df_yoy, label_yoy, tipo="YoY")
