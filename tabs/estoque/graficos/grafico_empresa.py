@@ -57,9 +57,9 @@ def render(df, moeda_br, data_selecionada=None):
         elif perc < -1: return f'<span style="color:#51cf66;font-weight:700">&#11015; {abs(perc):.0f}%</span>'
         else:           return f'<span style="color:#f0a500;font-weight:700">&#9679; {abs(perc):.0f}%</span>'
 
-    atual_label = data_ref.strftime('%d-%b').lower()
-    mom_label   = f"MoM {pd.Timestamp(data_mom).strftime('%d-%b').lower()}" if data_mom else "MoM"
-    yoy_label   = f"YoY {pd.Timestamp(data_yoy).strftime('%d-%b').lower()}" if data_yoy else "YoY"
+    atual_label = data_ref.strftime('%y-%b').lower()
+    mom_label   = f"MoM {pd.Timestamp(data_mom).strftime('%y-%b').lower()}" if data_mom else "MoM"
+    yoy_label   = f"YoY {pd.Timestamp(data_yoy).strftime('%y-%b').lower()}" if data_yoy else "YoY"
     atual_col   = f"Valor Estoque {atual_label}"
 
     linhas = ""
