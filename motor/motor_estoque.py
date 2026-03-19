@@ -50,7 +50,6 @@ def executar_motor_estoque(caminho_zip):
             raise Exception("Arquivo 02_Estoque_Atual não encontrado no ZIP")
 
         with z.open(arquivo_estoque) as f:
-
             df = pd.read_excel(
                 f,
                 sheet_name="Detalhado",
@@ -59,7 +58,7 @@ def executar_motor_estoque(caminho_zip):
             )
 
         # ------------------------------------------------------
-        # MAQUINAS USADAS
+        # MAQUINAS USADAS — agora com coluna Tipo
         # ------------------------------------------------------
 
         arquivos_usadas = [
@@ -67,7 +66,8 @@ def executar_motor_estoque(caminho_zip):
             if "06_Usadas/" in n and n.lower().endswith(".xlsx")
         ]
 
-        usadas_por_empresa = {}
+        # Mapeia: (empresa, codigo) -> tipo
+        usadas_tipo_por_empresa = {}
 
         for nome in arquivos_usadas:
 
@@ -75,37 +75,31 @@ def executar_motor_estoque(caminho_zip):
 
             if "TOOLS" in nome_upper:
                 empresa = "Tools"
-
             elif "MAQUINAS" in nome_upper:
                 empresa = "Maquinas"
-
             elif "ROBOTICA" in nome_upper:
                 empresa = "Robotica"
-
             elif "SERVICE" in nome_upper:
                 empresa = "Service"
-
             else:
                 continue
 
             with z.open(nome) as f:
-
-                df_u = pd.read_excel(
-                    f,
-                    dtype=str,
-                    engine="openpyxl"
-                )
+                df_u = pd.read_excel(f, dtype=str, engine="openpyxl")
 
             df_u.columns = df_u.columns.str.strip()
 
-            codigos = set(
-                df_u["Codigo"]
-                .astype(str)
-                .str.strip()
-                .str.replace(".0", "", regex=False)
-            )
+            # Suporte ao formato novo (com coluna Tipo) e antigo (sem coluna Tipo)
+            if "Tipo" in df_u.columns:
+                df_u["Codigo"] = df_u["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
+                df_u["Tipo"]   = df_u["Tipo"].astype(str).str.strip()
+                tipo_map = dict(zip(df_u["Codigo"], df_u["Tipo"]))
+            else:
+                # Formato antigo: todos são Maquina Usada
+                codigos = set(df_u["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False))
+                tipo_map = {c: "Maquina Usada" for c in codigos}
 
-            usadas_por_empresa[empresa] = codigos
+            usadas_tipo_por_empresa[empresa] = tipo_map
 
     # ------------------------------------------------------
     # TRATAMENTO BASE
@@ -119,11 +113,8 @@ def executar_motor_estoque(caminho_zip):
     })
 
     df["Conta"] = df["Conta"].astype(str).str.strip().str.title()
-
     df["Empresa"] = df["Empresa"].apply(normalizar_empresa)
-
     df["Filial"] = df["Filial"].astype(str).str.title()
-
     df["Empresa / Filial"] = df["Empresa"] + " / " + df["Filial"]
 
     df["Produto"] = (
@@ -133,39 +124,23 @@ def executar_motor_estoque(caminho_zip):
         .str.replace(".0", "", regex=False)
     )
 
-    df["Saldo Atual"] = pd.to_numeric(
-        df["Saldo Atual"],
-        errors="coerce"
-    )
+    df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce")
+    df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce")
 
-    df["Custo Total"] = pd.to_numeric(
-        df["Custo Total"],
-        errors="coerce"
-    )
+    df["Data Fechamento"] = pd.to_datetime(df["Data Fechamento"], errors="coerce")
 
     # ------------------------------------------------------
-    # DATA FECHAMENTO
+    # MARCAR TIPO DA MAQUINA (Usada ou Nova)
     # ------------------------------------------------------
 
-    df["Data Fechamento"] = pd.to_datetime(
-        df["Data Fechamento"],
-        errors="coerce"
-    )
-
-    # ------------------------------------------------------
-    # MARCAR MAQUINA USADA
-    # ------------------------------------------------------
-
-    if usadas_por_empresa:
-
-        for empresa, codigos in usadas_por_empresa.items():
-
-            mask = (
-                df["Empresa / Filial"].str.startswith(empresa)
-                & df["Produto"].isin(codigos)
-            )
-
-            df.loc[mask, "Conta"] = "Maquina Usada"
+    if usadas_tipo_por_empresa:
+        for empresa, tipo_map in usadas_tipo_por_empresa.items():
+            for codigo, tipo in tipo_map.items():
+                mask = (
+                    df["Empresa / Filial"].str.startswith(empresa)
+                    & (df["Produto"] == codigo)
+                )
+                df.loc[mask, "Conta"] = tipo
 
     df = df.drop(columns=["Empresa", "Filial"])
 
@@ -190,9 +165,7 @@ def executar_motor_estoque(caminho_zip):
     # ------------------------------------------------------
 
     buffer = io.BytesIO()
-
     df_final.to_excel(buffer, index=False)
-
     buffer.seek(0)
 
     return df_final, buffer.getvalue()
