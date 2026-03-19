@@ -19,8 +19,16 @@ section[data-testid="stSidebar"] { display: none !important; }
     border-radius:10px;
     text-align:center;
 }
+.kpi-card-green{
+    background-color:#005562;
+    border:2px solid #51cf66;
+    padding:16px;
+    border-radius:10px;
+    text-align:center;
+}
 .kpi-title{ font-size:14px; color:white; }
 .kpi-value{ font-size:26px; font-weight:700; color:white; }
+.kpi-value-green{ font-size:26px; font-weight:700; color:#51cf66; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,18 +78,13 @@ df["Data_Inventario"] = pd.to_datetime(df["Data_Inventario"])
 # FILTROS NO TOPO
 # -------------------------------------------------
 
-datas_disponiveis  = sorted(df["Data_Inventario"].dt.date.unique(), reverse=True)
-datas_fmt_list     = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
-datas_map          = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
+datas_disponiveis    = sorted(df["Data_Inventario"].dt.date.unique(), reverse=True)
+datas_fmt_list       = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
+datas_map            = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
-data_preview_str   = st.session_state.get("inventario_data", datas_fmt_list[0])
-data_preview       = pd.Timestamp(datas_map.get(data_preview_str, datas_disponiveis[0]))
-df_preview         = df[df["Data_Inventario"] == data_preview]
-
-empresas_ja_sel    = st.session_state.get("inventario_empresas", [])
-df_emp_filtro      = df_preview.copy()
-if empresas_ja_sel:
-    df_emp_filtro  = df_emp_filtro[df_emp_filtro["Nome_Empresa"].isin(empresas_ja_sel)]
+data_preview_str     = st.session_state.get("inventario_data", datas_fmt_list[0])
+data_preview         = pd.Timestamp(datas_map.get(data_preview_str, datas_disponiveis[0]))
+df_preview           = df[df["Data_Inventario"] == data_preview]
 
 empresas_disponiveis = sorted(df_preview["Nome_Empresa"].dropna().unique()) if "Nome_Empresa" in df_preview.columns else []
 
@@ -104,41 +107,71 @@ if empresas_sel:
     df_kpi = df_kpi[df_kpi["Nome_Empresa"].isin(empresas_sel)]
 
 # -------------------------------------------------
-# KPIs
+# CALCULAR KPIs
 # -------------------------------------------------
 
-total_itens       = len(df_kpi)
-itens_divergentes = int(df_kpi["Qtd_Itens_Divergentes"].sum()) if "Qtd_Itens_Divergentes" in df_kpi.columns else 0
-perc_divergentes  = itens_divergentes / total_itens if total_itens > 0 else 0
-valor_divergente  = df_kpi["Valor_Divergente"].sum() if "Valor_Divergente" in df_kpi.columns else 0
+qtd_inventariada  = df_kpi["Qtd_Itens_Inventariados"].sum() if "Qtd_Itens_Inventariados" in df_kpi.columns else len(df_kpi)
+qtd_divergentes   = int(df_kpi["Qtd_Itens_Divergentes"].sum()) if "Qtd_Itens_Divergentes" in df_kpi.columns else 0
+acuracidade_itens = (qtd_inventariada - qtd_divergentes) / qtd_inventariada if qtd_inventariada > 0 else 0
 
-col1, col2, col3, col4 = st.columns(4)
+valor_inventariado = df_kpi["Valor_Inventariado"].sum() if "Valor_Inventariado" in df_kpi.columns else 0
+valor_divergente   = df_kpi["Valor_Divergente"].sum()   if "Valor_Divergente"   in df_kpi.columns else 0
+
+# -------------------------------------------------
+# LINHA 1 — Qtd
+# -------------------------------------------------
+
+col1, col2, col3 = st.columns(3)
 
 col1.markdown(f"""
 <div class="kpi-card">
-<div class="kpi-title">Total de Itens</div>
-<div class="kpi-value">{fmt_qtd(total_itens)}</div>
+<div class="kpi-title">Qtd Itens Inventariados</div>
+<div class="kpi-value">{fmt_qtd(qtd_inventariada)}</div>
 </div>
 """, unsafe_allow_html=True)
 
 col2.markdown(f"""
 <div class="kpi-card">
-<div class="kpi-title">Itens Divergentes</div>
-<div class="kpi-value">{fmt_qtd(itens_divergentes)}</div>
+<div class="kpi-title">Qtd Itens Divergentes</div>
+<div class="kpi-value">{fmt_qtd(qtd_divergentes)}</div>
 </div>
 """, unsafe_allow_html=True)
 
 col3.markdown(f"""
-<div class="kpi-card">
-<div class="kpi-title">% Divergência</div>
-<div class="kpi-value">{perc_divergentes*100:.2f}%</div>
+<div class="kpi-card-green">
+<div class="kpi-title">Acuracidade %</div>
+<div class="kpi-value-green">{acuracidade_itens*100:.2f}%</div>
 </div>
 """, unsafe_allow_html=True)
 
+st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+st.markdown("<hr style='border-color:rgba(255,255,255,0.08);margin:0'>", unsafe_allow_html=True)
+st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+# -------------------------------------------------
+# LINHA 2 — Valor
+# -------------------------------------------------
+
+col4, col5, col6 = st.columns(3)
+
 col4.markdown(f"""
+<div class="kpi-card">
+<div class="kpi-title">Valor Inventariado</div>
+<div class="kpi-value">{moeda_br(valor_inventariado)}</div>
+</div>
+""", unsafe_allow_html=True)
+
+col5.markdown(f"""
 <div class="kpi-card">
 <div class="kpi-title">Valor Divergente</div>
 <div class="kpi-value">{moeda_br(valor_divergente)}</div>
+</div>
+""", unsafe_allow_html=True)
+
+col6.markdown(f"""
+<div class="kpi-card-green">
+<div class="kpi-title">Acuracidade %</div>
+<div class="kpi-value-green">{acuracidade_itens*100:.2f}%</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -152,7 +185,6 @@ tab1, = st.tabs(["📚 Base Histórica"])
 
 with tab1:
 
-    # Renomear e reordenar
     df_tab = df_kpi.copy()
     df_tab["Data_Inventario"] = df_tab["Data_Inventario"].dt.date
 
@@ -169,7 +201,10 @@ with tab1:
         "Valor_Divergente":   "Valor Divergente",
     })
 
-    df_tab = df_tab.drop(columns=[c for c in ["Empresa", "Qtd Itens Inventariados", "Qtd Itens Divergentes"] if c in df_tab.columns], errors="ignore")
+    df_tab = df_tab.drop(
+        columns=[c for c in ["Empresa", "Qtd Itens Inventariados", "Qtd Itens Divergentes"] if c in df_tab.columns],
+        errors="ignore"
+    )
 
     colunas_ordem = [
         "Data Inventario", "Empresa / Filial", "Produto", "Descricao",
@@ -191,10 +226,10 @@ with tab1:
         pagina = st.number_input("Página", min_value=1, max_value=total_paginas, value=1, step=1, label_visibility="collapsed")
         st.caption(f"Página {pagina} de {total_paginas}")
 
-    inicio    = (pagina - 1) * LINHAS_POR_PAGINA
-    fim       = inicio + LINHAS_POR_PAGINA
-    df_page   = df_tab.iloc[inicio:fim].copy()
-    df_raw    = df_page.copy()
+    inicio  = (pagina - 1) * LINHAS_POR_PAGINA
+    fim     = inicio + LINHAS_POR_PAGINA
+    df_page = df_tab.iloc[inicio:fim].copy()
+    df_raw  = df_page.copy()
 
     colunas_moeda = ["Valor Inventariado", "Valor Protheus", "Valor Divergente", "Valor Unitario"]
     colunas_qtd   = ["Qtd Inventariada", "Qtd Protheus", "Qtd Divergente"]
@@ -206,10 +241,9 @@ with tab1:
         if c in df_page.columns:
             df_page[c] = df_page[c].apply(fmt_qtd)
 
-    # Tabela HTML
-    colunas  = list(df_page.columns)
-    header   = "".join(f"<th>{c}</th>" for c in colunas)
-    rows     = ""
+    colunas = list(df_page.columns)
+    header  = "".join(f"<th>{c}</th>" for c in colunas)
+    rows    = ""
     for i, (_, row) in enumerate(df_page.iterrows()):
         cells = ""
         for c in colunas:
@@ -231,7 +265,7 @@ with tab1:
     .inv-table-wrap {{ overflow-x:auto; border-radius:10px; border:1px solid rgba(255,255,255,0.08); }}
     .inv-table {{ width:100%; border-collapse:collapse; font-size:13px; font-family:sans-serif; }}
     .inv-table thead th {{ background-color:#0f5a60; color:white; font-weight:600; padding:10px 14px; text-align:left; border-bottom:2px solid #EC6E21; white-space:nowrap; }}
-    .inv-table tbody tr {{ border-bottom:1px solid rgba(255,255,255,0.06); transition:background 0.15s; }}
+    .inv-table tbody tr {{ border-bottom:1px solid rgba(255,255,255,0.06); }}
     .inv-table tbody tr:hover {{ background-color:rgba(236,110,33,0.08); }}
     .inv-table tbody td {{ padding:9px 14px; color:white; background-color:#0f5a60; white-space:nowrap; }}
     .inv-table tbody tr:nth-child(even) td {{ background-color:#0d4f55; }}
