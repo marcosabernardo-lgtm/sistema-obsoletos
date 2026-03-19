@@ -6,10 +6,11 @@ from datetime import datetime
 from motor.motor_obsoletos import executar_motor
 from motor.motor_estoque import executar_motor_estoque
 from motor.motor_dio import executar_motor_dio
-from motor.motor_inventario import processar_zip as executar_motor_inventario
+from motor.motor_inventario import executar_motor_inventario
 
 from storage.base_obsoletos_lake import salvar_fechamento_obsoletos
 from storage.base_estoque_lake import salvar_fechamento_estoque
+from storage.base_inventario_lake import salvar_fechamento_inventario
 
 st.set_page_config(page_title="Configurador", layout="wide")
 
@@ -66,6 +67,7 @@ os.makedirs("data", exist_ok=True)
 os.makedirs("data/obsoletos", exist_ok=True)
 os.makedirs("data/estoque", exist_ok=True)
 os.makedirs("data/dio", exist_ok=True)
+os.makedirs("data/inventario", exist_ok=True)
 
 LOG_PATH = "data/log_uploads.parquet"
 
@@ -303,21 +305,29 @@ if tipo_processo == "Atualizar Inventário":
     st.info(f"**{len(novos_inv)} arquivo(s)** serão processados: {', '.join(novos_inv)}")
 
     if st.button("🚀 Processar Inventário"):
+        total_registros = 0
+        erros = []
+
         for arquivo in novos_inv:
             caminho = os.path.join(PASTA_INV, arquivo)
             st.write(f"⏳ Processando `{arquivo}`...")
             try:
                 with st.spinner(f"Processando {arquivo}..."):
-                    import motor.motor_inventario as mi
-                    mi.CAMINHO_ZIP = caminho
-                    mi.processar_zip()
-                    qtd = len(pd.read_parquet("data/inventario/inventario_historico.parquet"))
+                    df_final, _ = executar_motor_inventario(caminho)
+                    salvar_fechamento_inventario(df_final)
+                    qtd = len(df_final)
+                    total_registros += qtd
                     salvar_log(arquivo, qtd, "Inventário")
                     st.write(f"✅ `{arquivo}` — {qtd} registros")
             except Exception as e:
+                erros.append(arquivo)
                 st.error(f"❌ Erro em `{arquivo}`: {e}")
 
-        st.success("✅ Inventário processado!")
+        if erros:
+            st.warning(f"Concluído com erros em: {', '.join(erros)}")
+        else:
+            st.success(f"✅ Inventário processado! Total: {total_registros} registros")
+
         st.cache_data.clear()
         st.rerun()
 
