@@ -110,22 +110,59 @@ def render(df_hist, moeda_br, data_selecionada):
 
         df_filtrado = df.copy() if status_sel == "Todos" else df[df["Status Mov"] == status_sel].copy()
 
-        # Monta tabela para exibição
-        df_exib = df_filtrado[[
-            "Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao",
-            "Valor_Atual", "Valor_Comp", "Variacao", "Perc"
-        ]].copy()
+        def cor_status(s):
+            if s == "Aumentou": return "color:#ff6b6b;font-weight:700"
+            if s in ("Reduziu", "Zerado"): return "color:#51cf66;font-weight:700"
+            return "color:#f0a500;font-weight:700"
 
-        df_exib["Valor Atual"]       = df_exib["Valor_Atual"].apply(moeda_br)
-        df_exib[f"Valor {label_comp}"] = df_exib["Valor_Comp"].apply(moeda_br)
-        df_exib[f"Δ {label_comp}"]   = df_exib["Variacao"].apply(lambda v: f"+{moeda_br(abs(v))}" if v > 0 else f"-{moeda_br(abs(v))}" if v < 0 else moeda_br(0))
-        df_exib[f"% {label_comp}"]   = df_exib["Perc"].apply(lambda v: f"+{v:.1f}%" if v > 0 else f"{v:.1f}%")
+        def icone_delta(v):
+            if v > 0:   return f'<span style="color:#ff6b6b">+{moeda_br(abs(v))}</span>'
+            elif v < 0: return f'<span style="color:#51cf66">-{moeda_br(abs(v))}</span>'
+            return f'<span style="color:#aaa">{moeda_br(0)}</span>'
 
-        df_exib = df_exib.drop(columns=["Valor_Atual", "Valor_Comp", "Variacao", "Perc"])
-        df_exib = df_exib.rename(columns={"Descricao": "Descrição"})
+        def icone_perc(perc, s):
+            if s == "Aumentou":            return f'<span style="color:#ff6b6b;font-weight:700">⬆ {abs(perc):.1f}%</span>'
+            if s in ("Reduziu", "Zerado"): return f'<span style="color:#51cf66;font-weight:700">⬇ {abs(perc):.1f}%</span>'
+            return '<span style="color:#f0a500;font-weight:700">● 0%</span>'
+
+        css_tb = (
+            "<style>.tb-var{width:100%;border-collapse:collapse;font-size:13px;color:white}"
+            ".tb-var th{background:#0f5a60;padding:10px 12px;text-align:left;border-bottom:2px solid #EC6E21;font-weight:700;white-space:nowrap}"
+            ".tb-var th:nth-child(n+6){text-align:right}"
+            ".tb-var td{padding:7px 12px;border-bottom:1px solid #1a6e75;background:#005562;color:white}"
+            ".tb-var td:nth-child(n+6){text-align:right}"
+            ".tb-var tr:hover td{background:#0a6570}</style>"
+        )
+
+        linhas = ""
+        for _, row in df_filtrado.iterrows():
+            cs = cor_status(row["Status Mov"])
+            linhas += (
+                "<tr>"
+                f"<td style='{cs}'>{row['Status Mov']}</td>"
+                f"<td>{row.get('Empresa / Filial','')}</td>"
+                f"<td>{row.get('Conta','')}</td>"
+                f"<td>{row['Produto']}</td>"
+                f"<td>{row['Descricao'][:40]}</td>"
+                f"<td style='text-align:right'>{moeda_br(row['Valor_Atual'])}</td>"
+                f"<td style='text-align:right'>{moeda_br(row['Valor_Comp'])}</td>"
+                f"<td style='text-align:right'>{icone_delta(row['Variacao'])}</td>"
+                f"<td style='text-align:right'>{icone_perc(row['Perc'], row['Status Mov'])}</td>"
+                "</tr>"
+            )
 
         st.caption(f"{len(df_filtrado)} produtos")
-        st.dataframe(df_exib, use_container_width=True, hide_index=True)
+        st.markdown(
+            css_tb +
+            f"<table class='tb-var'><thead><tr>"
+            "<th>Status Mov</th><th>Empresa / Filial</th><th>Conta</th><th>Produto</th><th>Descrição</th>"
+            f"<th style='text-align:right'>Valor Atual</th>"
+            f"<th style='text-align:right'>Valor {label_comp}</th>"
+            f"<th style='text-align:right'>Δ {label_comp}</th>"
+            f"<th style='text-align:right'>% {label_comp}</th>"
+            "</tr></thead><tbody>" + linhas + "</tbody></table>",
+            unsafe_allow_html=True
+        )
 
     # ── ABAS ──────────────────────────────────────────────
     label_atual = data_selecionada.strftime("%d/%m/%Y")
