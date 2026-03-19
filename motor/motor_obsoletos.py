@@ -47,7 +47,6 @@ def executar_estoque(caminho_zip):
             if "06_Usadas/" in n and n.lower().endswith(".xlsx")
         ]
 
-        # Mapeia (empresa) -> {codigo: tipo}
         usadas_tipo_por_empresa = {}
 
         for nome in arquivos_usadas:
@@ -69,7 +68,6 @@ def executar_estoque(caminho_zip):
             df_u.columns = df_u.columns.str.strip()
             df_u["Codigo"] = df_u["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
 
-            # Suporte ao formato novo (com coluna Tipo) e antigo (sem coluna Tipo)
             if "Tipo" in df_u.columns:
                 df_u["Tipo"] = df_u["Tipo"].astype(str).str.strip()
                 tipo_map = dict(zip(df_u["Codigo"], df_u["Tipo"]))
@@ -94,7 +92,6 @@ def executar_estoque(caminho_zip):
     df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce")
     df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce")
 
-    # Marca tipo da máquina (Maquina Usada ou Maquina Nova)
     if usadas_tipo_por_empresa:
         for empresa, tipo_map in usadas_tipo_por_empresa.items():
             for codigo, tipo in tipo_map.items():
@@ -314,7 +311,7 @@ def executar_motor(caminho_zip):
         if row["Meses Ult Mov"] <= 12:
             return "Até 1 ano"
         if row["Meses Ult Mov"] <= 24:
-            return "Até 2 anos"
+            return "+ 1 ano"
         return "+ 2 anos"
 
     df_final["Status do Movimento"] = df_final.apply(status_mov, axis=1)
