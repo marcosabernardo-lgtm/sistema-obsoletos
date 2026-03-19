@@ -11,6 +11,7 @@ from tabs.obsoletos.top20_produtos import render as render_top20
 from tabs.obsoletos.graficos import render as render_graficos
 from tabs.obsoletos.movimentacao_obsoleto import render as render_movimentacao
 from tabs.obsoletos.evolucao_estoque import render as render_evolucao
+from tabs.obsoletos.proximos_obsoletos import render as render_proximos
 
 
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
@@ -264,10 +265,11 @@ if contas_sel:
 # ABAS
 # -------------------------------------------------
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📚 Base Histórica",
     "📈 Evolução do Estoque",
     "🔄 Movimentação do Obsoleto",
+    "⚠️ Próximos Obsoletos",
     "🏆 Top 20 Produtos",
     "📊 Gráficos"
 ])
@@ -282,7 +284,10 @@ with tab3:
     render_movimentacao(df_hist_filtrado, moeda_br, data_selecionada)
 
 with tab4:
-    render_top20(df_filtrado, moeda_br)
+    render_proximos(df_kpi, moeda_br)
 
 with tab5:
+    render_top20(df_filtrado, moeda_br)
+
+with tab6:
     render_graficos(df_filtrado, moeda_br, df_hist_filtrado)
