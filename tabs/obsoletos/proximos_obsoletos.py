@@ -73,24 +73,24 @@ def render(df_kpi, moeda_br):
     c1.markdown(f"""
     <div style="border:2px solid #ff6b6b;border-radius:12px;padding:16px;text-align:center;min-height:90px">
         <div style="font-size:13px;color:white">🔴 Crítico (&lt; 30 dias)</div>
-        <div style="font-size:22px;font-weight:bold;color:#ff6b6b">{qtd_critico} itens</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">{moeda_br(valor_critico)}</div>
+        <div style="font-size:22px;font-weight:bold;color:#ff6b6b">{moeda_br(valor_critico)}</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">{qtd_critico} itens</div>
     </div>
     """, unsafe_allow_html=True)
 
     c2.markdown(f"""
     <div style="border:2px solid #ffa94d;border-radius:12px;padding:16px;text-align:center;min-height:90px">
         <div style="font-size:13px;color:white">🟠 Alerta (30-60 dias)</div>
-        <div style="font-size:22px;font-weight:bold;color:#ffa94d">{qtd_alerta} itens</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">{moeda_br(valor_alerta)}</div>
+        <div style="font-size:22px;font-weight:bold;color:#ffa94d">{moeda_br(valor_alerta)}</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">{qtd_alerta} itens</div>
     </div>
     """, unsafe_allow_html=True)
 
     c3.markdown(f"""
     <div style="border:2px solid #ffe066;border-radius:12px;padding:16px;text-align:center;min-height:90px">
         <div style="font-size:13px;color:white">🟡 Atenção (60-90 dias)</div>
-        <div style="font-size:22px;font-weight:bold;color:#ffe066">{qtd_atencao} itens</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">{moeda_br(valor_atencao)}</div>
+        <div style="font-size:22px;font-weight:bold;color:#ffe066">{moeda_br(valor_atencao)}</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">{qtd_atencao} itens</div>
     </div>
     """, unsafe_allow_html=True)
 
