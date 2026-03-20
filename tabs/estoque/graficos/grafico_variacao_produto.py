@@ -97,6 +97,25 @@ def render(df_hist, moeda_br, data_selecionada):
             border-radius: 10px;
             padding: 10px 16px;
         }
+        /* text_input igual ao selectbox */
+        div[data-testid="stTextInput"] > div > div > input {
+            background-color: #0e1117 !important;
+            border: 1px solid rgba(250,250,250,0.2) !important;
+            border-radius: 6px !important;
+            color: white !important;
+            padding: 8px 12px !important;
+        }
+        div[data-testid="stTextInput"] > div > div > input:focus {
+            border-color: #EC6E21 !important;
+            box-shadow: none !important;
+        }
+        div[data-testid="stTextInput"] label {
+            color: rgba(250,250,250,0.6) !important;
+            font-size: 0.75rem !important;
+            font-weight: 400 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+        }
         </style>
         """, unsafe_allow_html=True)
         col_filtro, col_export = st.columns([4, 1])
