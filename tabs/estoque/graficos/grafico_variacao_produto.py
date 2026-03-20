@@ -41,14 +41,6 @@ def render(df_hist, moeda_br, data_selecionada):
     </style>
     """, unsafe_allow_html=True)
 
-    # Helper descrição
-    desc_map = (
-        df_hist[df_hist["Descricao"].notna() &
-                (df_hist["Descricao"].astype(str).str.strip() != "") &
-                (df_hist["Descricao"].astype(str) != "0")]
-        .groupby("Produto")["Descricao"].first().to_dict()
-    )
-
     def status_mov(row):
         if row["Valor_Comp"] > 0 and row["Valor_Atual"] == 0: return "Zerado"
         if row["Variacao"] < 0:  return "Reduziu"
@@ -56,6 +48,15 @@ def render(df_hist, moeda_br, data_selecionada):
         return "Manteve"
 
     def montar_df(df_comp):
+        # Descrição por Empresa+Conta+Produto para evitar conflito entre produtos com mesmo código
+        desc_map = (
+            df_hist[df_hist["Descricao"].notna() &
+                    (df_hist["Descricao"].astype(str).str.strip() != "") &
+                    (df_hist["Descricao"].astype(str) != "0")]
+            .groupby(["Empresa / Filial", "Conta", "Produto"])["Descricao"].first()
+            .to_dict()
+        )
+
         grp_atual = df_atual.groupby(["Empresa / Filial", "Conta", "Produto"]).agg(
             Valor_Atual=("Custo Total", "sum")
         ).reset_index()
@@ -63,7 +64,9 @@ def render(df_hist, moeda_br, data_selecionada):
             Valor_Comp=("Custo Total", "sum")
         ).reset_index()
         df = grp_atual.merge(grp_comp, on=["Empresa / Filial", "Conta", "Produto"], how="outer").fillna(0)
-        df["Descricao"]  = df["Produto"].map(desc_map).fillna("—").astype(str)
+        df["Descricao"] = df.apply(
+            lambda r: desc_map.get((r["Empresa / Filial"], r["Conta"], r["Produto"]), "—"), axis=1
+        ).astype(str)
         df["Variacao"]   = df["Valor_Atual"] - df["Valor_Comp"]
         df["Perc"]       = df.apply(lambda r: (r["Variacao"] / r["Valor_Comp"] * 100) if r["Valor_Comp"] != 0 else 0, axis=1)
         df["Status Mov"] = df.apply(status_mov, axis=1)
