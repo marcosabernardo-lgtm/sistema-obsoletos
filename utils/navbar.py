@@ -44,6 +44,52 @@ def render_navbar(titulo: str = ""):
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
 
 
+def split_empresa_filial(empresas_filiais: list):
+    """
+    Recebe lista de 'Empresa / Filial' e retorna
+    (empresas_unicas, filiais_unicas) separadas.
+    """
+    empresas = sorted(set(ef.split(" / ")[0].strip() for ef in empresas_filiais if " / " in ef))
+    filiais  = sorted(set(ef.split(" / ")[1].strip() for ef in empresas_filiais if " / " in ef))
+    return empresas, filiais
+
+
+def filtrar_por_empresa_filial(df_preview, empresa_sel, filial_sel):
+    """
+    Filtra df_preview pelo campo 'Empresa / Filial' com base nas
+    seleções de empresa e filial separadas.
+    Retorna (empresas_disponiveis, filiais_disponiveis, ef_selecionados)
+    """
+    col = "Empresa / Filial"
+    todos = sorted(df_preview[col].dropna().unique())
+
+    # Filial disponível filtrada pela empresa selecionada
+    if empresa_sel:
+        ef_por_empresa = [ef for ef in todos if ef.split(" / ")[0].strip() in empresa_sel]
+    else:
+        ef_por_empresa = todos
+    _, filiais_disp = split_empresa_filial(ef_por_empresa)
+
+    # Empresa disponível filtrada pela filial selecionada
+    if filial_sel:
+        ef_por_filial = [ef for ef in todos if ef.split(" / ")[1].strip() in filial_sel]
+    else:
+        ef_por_filial = todos
+    empresas_disp, _ = split_empresa_filial(ef_por_filial)
+
+    # EF selecionados para aplicar no df
+    ef_sel = []
+    for ef in todos:
+        partes = ef.split(" / ")
+        emp, fil = partes[0].strip(), partes[1].strip()
+        ok_emp = (not empresa_sel) or (emp in empresa_sel)
+        ok_fil = (not filial_sel)  or (fil in filial_sel)
+        if ok_emp and ok_fil:
+            ef_sel.append(ef)
+
+    return empresas_disp, filiais_disp, ef_sel
+
+
 def render_filtros_topo(datas: list, empresas: list, extras: dict = None, key_prefix: str = "filtro"):
     """
     Renderiza filtros como barra horizontal no topo da página.
@@ -51,11 +97,14 @@ def render_filtros_topo(datas: list, empresas: list, extras: dict = None, key_pr
 
     Parâmetros:
         datas       : lista de strings de datas disponíveis
-        empresas    : lista de empresas disponíveis
+        empresas    : lista de 'Empresa / Filial' disponíveis (campo original)
         extras      : dict com filtros adicionais {label: [opcoes]}
         key_prefix  : prefixo para as chaves
 
-    Retorna dict com valores selecionados.
+    Retorna dict com valores selecionados, incluindo:
+        - "empresas"     : lista de 'Empresa / Filial' que batem com os filtros
+        - "empresa_sel"  : empresas selecionadas
+        - "filial_sel"   : filiais selecionadas
     """
 
     st.markdown("""
@@ -119,12 +168,26 @@ def render_filtros_topo(datas: list, empresas: list, extras: dict = None, key_pr
 
     st.markdown('<div class="filtros-container">', unsafe_allow_html=True)
 
-    # Monta colunas dinamicamente
+    # Monta colunas dinamicamente: Data | Empresa | Filial | extras...
     n_extras = len(extras) if extras else 0
-    col_sizes = [1] + [2] + ([1.5] * n_extras)
+    col_sizes = [1, 1.5, 1.5] + ([1.2] * n_extras)
     cols = st.columns(col_sizes)
 
     resultado = {}
+
+    # Recupera seleções atuais para bidirecionalidade
+    empresa_ja_sel = st.session_state.get(f"{key_prefix}_empresa_sel", [])
+    filial_ja_sel  = st.session_state.get(f"{key_prefix}_filial_sel",  [])
+
+    # Calcula opções bidirecionais
+    empresas_unicas, filiais_unicas = split_empresa_filial(empresas)
+    empresas_disp, filiais_disp, ef_sel = filtrar_por_empresa_filial(
+        __import__("pandas").DataFrame({
+            "Empresa / Filial": empresas
+        }),
+        empresa_ja_sel,
+        filial_ja_sel
+    )
 
     # Data
     with cols[0]:
@@ -138,26 +201,45 @@ def render_filtros_topo(datas: list, empresas: list, extras: dict = None, key_pr
 
     # Empresa
     with cols[1]:
-        empresas_sel = st.multiselect(
-            "Empresa / Filial",
-            options=empresas,
-            default=[],
-            key=f"{key_prefix}_empresas",
+        empresa_sel = st.multiselect(
+            "Empresa",
+            options=empresas_disp,
+            default=[v for v in empresa_ja_sel if v in empresas_disp],
+            key=f"{key_prefix}_empresa_sel",
             placeholder="Todas as empresas"
         )
-        resultado["empresas"] = empresas_sel
+
+    # Filial
+    with cols[2]:
+        filial_sel = st.multiselect(
+            "Filial",
+            options=filiais_disp,
+            default=[v for v in filial_ja_sel if v in filiais_disp],
+            key=f"{key_prefix}_filial_sel",
+            placeholder="Todas as filiais"
+        )
+
+    # Recalcula EF com seleções finais
+    _, _, ef_final = filtrar_por_empresa_filial(
+        __import__("pandas").DataFrame({"Empresa / Filial": empresas}),
+        empresa_sel,
+        filial_sel
+    )
+    resultado["empresas"]    = ef_final  # lista de "Empresa / Filial" para uso nos filtros
+    resultado["empresa_sel"] = empresa_sel
+    resultado["filial_sel"]  = filial_sel
 
     # Extras (Conta, Faixa DIO, etc.)
     if extras:
         for idx, (label, opcoes) in enumerate(extras.items()):
             label_key = label.lower().replace(" ", "_").replace("/", "")
-            with cols[2 + idx]:
+            with cols[3 + idx]:
                 sel = st.multiselect(
                     label,
                     options=opcoes,
                     default=[],
                     key=f"{key_prefix}_{label_key}",
-                    placeholder=f"Todas"
+                    placeholder="Todas"
                 )
                 resultado[label_key] = sel
 

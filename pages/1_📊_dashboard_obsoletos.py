@@ -118,20 +118,15 @@ datas_map         = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
 data_preview      = pd.Timestamp(datas_disponiveis[0])
 df_preview        = df_hist[df_hist["Data Fechamento"] == data_preview]
-# Filtros bidirecionais
-empresas_ja_sel = st.session_state.get("obsoletos_empresas", [])
-contas_ja_sel   = st.session_state.get("obsoletos_conta", [])
+# Lista completa de Empresa / Filial para o filtro (navbar faz o split internamente)
+empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique())
 
-# Empresa: filtrada pelas contas já selecionadas
-df_emp_filtro = df_preview.copy()
-if contas_ja_sel:
-    df_emp_filtro = df_emp_filtro[df_emp_filtro["Conta"].isin(contas_ja_sel)]
-empresas_disponiveis = sorted(df_emp_filtro["Empresa / Filial"].dropna().unique())
-
-# Conta: filtrada pelas empresas já selecionadas
+# Conta: filtrada pelas EF já selecionadas via session_state
+ef_ja_sel     = st.session_state.get("obsoletos_empresas", [])  # compatibilidade
+contas_ja_sel = st.session_state.get("obsoletos_conta", [])
 df_conta_filtro = df_preview.copy()
-if empresas_ja_sel:
-    df_conta_filtro = df_conta_filtro[df_conta_filtro["Empresa / Filial"].isin(empresas_ja_sel)]
+if ef_ja_sel:
+    df_conta_filtro = df_conta_filtro[df_conta_filtro["Empresa / Filial"].isin(ef_ja_sel)]
 contas_disponiveis = sorted(df_conta_filtro["Conta"].dropna().unique())
 
 # Opções de Status do Movimento — ordem lógica fixa
