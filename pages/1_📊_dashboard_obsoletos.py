@@ -285,7 +285,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🔄 Movimentação do Obsoleto",
     "⚠️ Próximos Obsoletos",
     "🏆 Top 20 Produtos",
-    "📊 Gráficos"
+    "📊 Resumos"
 ])
 
 with tab1:
