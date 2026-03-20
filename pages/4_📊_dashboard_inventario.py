@@ -430,8 +430,19 @@ with tab3:
         rows_val.append({"Empresa / Filial": "Total", "% Acuracidade": f"{acu_val_t:.2f}%", "Valor Divergente": moeda_br(val_div_t)})
 
         # --------------------------------------------------
-        # LAYOUT: tabela + gauge lado a lado
+        # FILTRO — igual à aba Análise
         # --------------------------------------------------
+
+        metrica_res = st.radio(
+            "Resumo",
+            options=["Acuracidade Quantidade", "Acuracidade Valor"],
+            index=0,
+            key="inv_resumo_metrica",
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+
+        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
         def gauge(valor, titulo, meta=95):
             fig = go.Figure(go.Indicator(
@@ -485,20 +496,15 @@ with tab3:
             <table class="res-tb"><thead>{header}</thead><tbody>{linhas}</tbody></table>
             """
 
-        # Linha 1 — Quantidade
-        st.markdown("#### 📦 Acuracidade Quantidade")
-        c1, c2 = st.columns([2, 1])
-        with c1:
-            st.markdown(html_tabela(rows_qtd, "Qtd Divergente"), unsafe_allow_html=True)
-        with c2:
-            st.plotly_chart(gauge(acu_qtd_t, "% Acuracidade Itens"), use_container_width=True)
-
-        st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
-
-        # Linha 2 — Valor
-        st.markdown("#### 💰 Acuracidade Valor")
-        c3, c4 = st.columns([2, 1])
-        with c3:
-            st.markdown(html_tabela(rows_val, "Valor Divergente"), unsafe_allow_html=True)
-        with c4:
-            st.plotly_chart(gauge(acu_val_t, "% Acuracidade Valor"), use_container_width=True)
+        if metrica_res == "Acuracidade Quantidade":
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                st.markdown(html_tabela(rows_qtd, "Qtd Divergente"), unsafe_allow_html=True)
+            with c2:
+                st.plotly_chart(gauge(acu_qtd_t, "% Acuracidade Itens"), use_container_width=True)
+        else:
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                st.markdown(html_tabela(rows_val, "Valor Divergente"), unsafe_allow_html=True)
+            with c2:
+                st.plotly_chart(gauge(acu_val_t, "% Acuracidade Valor"), use_container_width=True)
