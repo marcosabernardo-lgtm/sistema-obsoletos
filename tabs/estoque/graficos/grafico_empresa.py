@@ -96,6 +96,11 @@ def render(df, moeda_br, data_selecionada=None):
     with col_dir:
         ord_dir = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key="ord_dir_empresa")
 
+    # Separa linha total antes de filtrar/ordenar
+    col_id = df_exib.columns[0]  # "Empresa / Filial"
+    df_total = df_exib[df_exib[col_id] == "Total"].copy()
+    df_exib  = df_exib[df_exib[col_id] != "Total"].copy()
+
     if busca:
         mask = df_exib.apply(lambda col: col.astype(str).str.contains(busca, case=False, na=False)).any(axis=1)
         df_exib = df_exib[mask]
@@ -106,5 +111,8 @@ def render(df, moeda_br, data_selecionada=None):
     except Exception:
         pass
 
-    st.caption(f"{len(df_exib)} empresas")
+    # Recoloca total sempre no final
+    df_exib = pd.concat([df_exib, df_total], ignore_index=True)
+
+    st.caption(f"{len(df_exib) - 1} empresas")
     st.dataframe(df_exib, use_container_width=True, hide_index=True)

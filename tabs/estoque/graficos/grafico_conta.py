@@ -92,6 +92,11 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
     with col_dir:
         ord_dir = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key="ord_dir_conta")
 
+    # Separa linha total antes de filtrar/ordenar
+    col_id = df_exib.columns[0]  # "Conta"
+    df_total = df_exib[df_exib[col_id] == "Total"].copy()
+    df_exib  = df_exib[df_exib[col_id] != "Total"].copy()
+
     if busca:
         mask = df_exib.apply(lambda col: col.astype(str).str.contains(busca, case=False, na=False)).any(axis=1)
         df_exib = df_exib[mask]
@@ -102,5 +107,8 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
     except Exception:
         pass
 
-    st.caption(f"{len(df_exib)} contas")
+    # Recoloca total sempre no final
+    df_exib = pd.concat([df_exib, df_total], ignore_index=True)
+
+    st.caption(f"{len(df_exib) - 1} contas")
     st.dataframe(df_exib, use_container_width=True, hide_index=True)
