@@ -65,11 +65,11 @@ def render(df, moeda_br, data_selecionada=None):
 
     df_exib = pd.concat([df_exib, total], ignore_index=True)
 
-    col_cfg = {
-        atual_col: st.column_config.NumberColumn(atual_col, format="R$ %.2f"),
-        mom_label: st.column_config.NumberColumn(mom_label, format="R$ %.2f"),
-        "% MoM":   st.column_config.NumberColumn("% MoM", format="%.1f%%"),
-        yoy_label: st.column_config.NumberColumn(yoy_label, format="R$ %.2f"),
-        "% YoY":   st.column_config.NumberColumn("% YoY", format="%.1f%%"),
-    }
-    st.dataframe(df_exib, use_container_width=True, hide_index=True, column_config=col_cfg)
+    for col in [atual_col, mom_label, yoy_label]:
+        if col in df_exib.columns:
+            df_exib[col] = df_exib[col].apply(moeda_br)
+    for col in ["% MoM", "% YoY"]:
+        if col in df_exib.columns:
+            df_exib[col] = df_exib[col].apply(lambda v: f"{v:.1f}%")
+
+    st.dataframe(df_exib, use_container_width=True, hide_index=True)

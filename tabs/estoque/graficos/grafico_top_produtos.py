@@ -65,18 +65,23 @@ def render(df_hist, moeda_br, data_selecionada):
             st.markdown("**⬆ Maiores Altas**")
             df_alta = df_var.sort_values("Variacao", ascending=False).head(top_n)[["Produto", "Descricao", "Valor_Atual", "Variacao", "% Var"]].copy()
             df_alta.columns = ["Produto", "Descrição", val_label, delta_label, perc_label]
-            col_cfg_var = {
-                val_label:   st.column_config.NumberColumn(val_label, format="R$ %.2f"),
-                delta_label: st.column_config.NumberColumn(delta_label, format="R$ %.2f"),
-                perc_label:  st.column_config.NumberColumn(perc_label, format="%.1f%%"),
-            }
-            st.dataframe(df_alta, use_container_width=True, hide_index=True, column_config=col_cfg_var)
+            for col in [val_label, delta_label]:
+                if col in df_alta.columns:
+                    df_alta[col] = df_alta[col].apply(moeda_br)
+            if perc_label in df_alta.columns:
+                df_alta[perc_label] = df_alta[perc_label].apply(lambda v: f"{v:.1f}%" if isinstance(v, (int,float)) else v)
+            st.dataframe(df_alta, use_container_width=True, hide_index=True)
 
         with col2:
             st.markdown("**⬇ Maiores Quedas**")
             df_queda = df_var.sort_values("Variacao", ascending=True).head(top_n)[["Produto", "Descricao", "Valor_Atual", "Variacao", "% Var"]].copy()
             df_queda.columns = ["Produto", "Descrição", val_label, delta_label, perc_label]
-            st.dataframe(df_queda, use_container_width=True, hide_index=True, column_config=col_cfg_var)
+            for col in [val_label, delta_label]:
+                if col in df_queda.columns:
+                    df_queda[col] = df_queda[col].apply(moeda_br)
+            if perc_label in df_queda.columns:
+                df_queda[perc_label] = df_queda[perc_label].apply(lambda v: f"{v:.1f}%" if isinstance(v, (int,float)) else v)
+            st.dataframe(df_queda, use_container_width=True, hide_index=True)
 
     # ABA 1
     with sub1:
@@ -95,12 +100,13 @@ def render(df_hist, moeda_br, data_selecionada):
         df_exib = df_valor[["Empresa / Filial", "Conta", "Produto", "Descrição", "Qtd", "Valor", "% Estoque"]].copy()
         df_exib = df_exib.rename(columns={"Valor": f"Valor Estoque {atual_label}"})
 
-        col_cfg1 = {
-            f"Valor Estoque {atual_label}": st.column_config.NumberColumn(f"Valor Estoque {atual_label}", format="R$ %.2f"),
-            "Qtd": st.column_config.NumberColumn("Qtd", format="%d"),
-            "% Estoque": st.column_config.NumberColumn("% Estoque", format="%.1f%%"),
-        }
-        st.dataframe(df_exib, use_container_width=True, hide_index=True, column_config=col_cfg1)
+        val_col = f"Valor Estoque {atual_label}"
+        if val_col in df_exib.columns:
+            df_exib[val_col] = df_exib[val_col].apply(moeda_br)
+        if "% Estoque" in df_exib.columns:
+            df_exib["% Estoque"] = df_exib["% Estoque"].apply(lambda v: f"{v:.1f}%")
+
+        st.dataframe(df_exib, use_container_width=True, hide_index=True)
 
         buffer = io.BytesIO()
         df_exib.to_excel(buffer, index=False)

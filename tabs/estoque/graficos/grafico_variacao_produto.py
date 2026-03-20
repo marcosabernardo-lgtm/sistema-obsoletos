@@ -146,14 +146,14 @@ def render(df_hist, moeda_br, data_selecionada):
             "Perc":        perc_label,
         })
 
-        col_cfg = {
-            val_label:   st.column_config.NumberColumn(val_label, format="R$ %.2f"),
-            comp_label:  st.column_config.NumberColumn(comp_label, format="R$ %.2f"),
-            delta_label: st.column_config.NumberColumn(delta_label, format="R$ %.2f"),
-            perc_label:  st.column_config.NumberColumn(perc_label, format="%.1f%%"),
-        }
+        for col in [val_label, comp_label, delta_label]:
+            if col in df_exib.columns:
+                df_exib[col] = df_exib[col].apply(moeda_br)
+        if perc_label in df_exib.columns:
+            df_exib[perc_label] = df_exib[perc_label].apply(lambda v: f"{v:.1f}%" if isinstance(v, (int,float)) else v)
+
         st.caption(f"{len(df_filtrado)} produtos")
-        st.dataframe(df_exib, use_container_width=True, hide_index=True, column_config=col_cfg)
+        st.dataframe(df_exib, use_container_width=True, hide_index=True)
 
 
 
