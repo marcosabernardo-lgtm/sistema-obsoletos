@@ -289,7 +289,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 ])
 
 with tab1:
-    render_base_historica(df_filtrado, moeda_br)
+    render_base_historica(df_kpi, moeda_br)
 
 with tab2:
     render_evolucao(df_hist_filtrado, moeda_br)
