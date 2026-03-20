@@ -62,12 +62,19 @@ def render(df_kpi, moeda_br):
     qtd_alerta   = len(df[df["Risco"] == "🟠 Alerta"])
     qtd_atencao  = len(df[df["Risco"] == "🟡 Atenção"])
 
+    valor_critico = df[df["Risco"] == "🔴 Crítico"]["Custo Total"].sum()
+    valor_alerta  = df[df["Risco"] == "🟠 Alerta"]["Custo Total"].sum()
+    valor_atencao = df[df["Risco"] == "🟡 Atenção"]["Custo Total"].sum()
+
+    valor_total = df["Custo Total"].sum()
+
     c1, c2, c3, c4 = st.columns(4)
 
     c1.markdown(f"""
     <div style="border:2px solid #ff6b6b;border-radius:12px;padding:16px;text-align:center;min-height:90px">
         <div style="font-size:13px;color:white">🔴 Crítico (&lt; 30 dias)</div>
         <div style="font-size:22px;font-weight:bold;color:#ff6b6b">{qtd_critico} itens</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">{moeda_br(valor_critico)}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -75,6 +82,7 @@ def render(df_kpi, moeda_br):
     <div style="border:2px solid #ffa94d;border-radius:12px;padding:16px;text-align:center;min-height:90px">
         <div style="font-size:13px;color:white">🟠 Alerta (30-60 dias)</div>
         <div style="font-size:22px;font-weight:bold;color:#ffa94d">{qtd_alerta} itens</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">{moeda_br(valor_alerta)}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -82,6 +90,7 @@ def render(df_kpi, moeda_br):
     <div style="border:2px solid #ffe066;border-radius:12px;padding:16px;text-align:center;min-height:90px">
         <div style="font-size:13px;color:white">🟡 Atenção (60-90 dias)</div>
         <div style="font-size:22px;font-weight:bold;color:#ffe066">{qtd_atencao} itens</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">{moeda_br(valor_atencao)}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -121,7 +130,8 @@ def render(df_kpi, moeda_br):
     c4.markdown(f"""
     <div style="border:2px solid #EC6E21;border-radius:12px;padding:16px;text-align:center;min-height:90px">
         <div style="font-size:13px;color:white">Valor em Risco</div>
-        <div style="font-size:22px;font-weight:bold;color:white">{moeda_br(valor_risco)}</div>
+        <div style="font-size:22px;font-weight:bold;color:white">{moeda_br(valor_total)}</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:4px">total geral</div>
     </div>
     """, unsafe_allow_html=True)
 
