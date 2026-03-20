@@ -405,16 +405,17 @@ with tab3:
         for emp in empresas_res:
             df_e = df_res[df_res["Nome_Empresa"] == emp]
 
+            # Quantidade — usa Qtd_Itens_Inventariados e Qtd_Itens_Divergentes (SKUs)
             qtd_inv = df_e["Qtd_Itens_Inventariados"].sum() if "Qtd_Itens_Inventariados" in df_e.columns else len(df_e)
             qtd_div = df_e["Qtd_Itens_Divergentes"].sum()   if "Qtd_Itens_Divergentes"   in df_e.columns else 0
             acu_qtd = (qtd_inv - qtd_div) / qtd_inv * 100   if qtd_inv > 0 else 0
-            qtd_div_val = df_e["Qtd_Divergente"].sum()       if "Qtd_Divergente"          in df_e.columns else 0
 
+            # Valor
             val_inv = df_e["Valor_Inventariado"].sum() if "Valor_Inventariado" in df_e.columns else 0
             val_div = df_e["Valor_Divergente"].sum()   if "Valor_Divergente"   in df_e.columns else 0
             acu_val = (val_inv - abs(val_div)) / val_inv * 100 if val_inv > 0 else 0
 
-            rows_qtd.append({"Empresa / Filial": emp, "% Acuracidade": f"{acu_qtd:.2f}%", "Qtd Divergente": qtd_div_val})
+            rows_qtd.append({"Empresa / Filial": emp, "% Acuracidade": f"{acu_qtd:.2f}%", "SKUs Divergentes": int(qtd_div)})
             rows_val.append({"Empresa / Filial": emp, "% Acuracidade": f"{acu_val:.2f}%", "Valor Divergente": moeda_br(val_div)})
 
         # Totais
@@ -426,7 +427,7 @@ with tab3:
         val_div_t = df_res["Valor_Divergente"].sum()   if "Valor_Divergente"   in df_res.columns else 0
         acu_val_t = (val_inv_t - abs(val_div_t)) / val_inv_t * 100 if val_inv_t > 0 else 0
 
-        rows_qtd.append({"Empresa / Filial": "Total", "% Acuracidade": f"{acu_qtd_t:.2f}%", "Qtd Divergente": int(df_res["Qtd_Divergente"].sum() if "Qtd_Divergente" in df_res.columns else 0)})
+        rows_qtd.append({"Empresa / Filial": "Total", "% Acuracidade": f"{acu_qtd_t:.2f}%", "SKUs Divergentes": int(qtd_div_t)})
         rows_val.append({"Empresa / Filial": "Total", "% Acuracidade": f"{acu_val_t:.2f}%", "Valor Divergente": moeda_br(val_div_t)})
 
         # --------------------------------------------------
@@ -499,7 +500,7 @@ with tab3:
         if metrica_res == "Acuracidade Quantidade":
             c1, c2 = st.columns([2, 1])
             with c1:
-                st.markdown(html_tabela(rows_qtd, "Qtd Divergente"), unsafe_allow_html=True)
+                st.markdown(html_tabela(rows_qtd, "SKUs Divergentes"), unsafe_allow_html=True)
             with c2:
                 st.plotly_chart(gauge(acu_qtd_t, "% Acuracidade Itens"), use_container_width=True)
         else:
