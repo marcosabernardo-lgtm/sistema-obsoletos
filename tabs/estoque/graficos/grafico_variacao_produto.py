@@ -58,12 +58,15 @@ def render(df_hist, moeda_br, data_selecionada):
         )
 
         grp_atual = df_atual.groupby(["Empresa / Filial", "Conta", "Produto"]).agg(
-            Valor_Atual=("Custo Total", "sum")
+            Valor_Atual=("Custo Total", "sum"),
+            Qtd_Atual=("Saldo Atual", "sum")
         ).reset_index()
         grp_comp = df_comp.groupby(["Empresa / Filial", "Conta", "Produto"]).agg(
-            Valor_Comp=("Custo Total", "sum")
+            Valor_Comp=("Custo Total", "sum"),
+            Qtd_Comp=("Saldo Atual", "sum")
         ).reset_index()
-        df = grp_atual.merge(grp_comp, on=["Empresa / Filial", "Conta", "Produto"], how="outer").fillna(0)
+        df = grp_atual.merge(grp_comp, on=["Empresa / Filial", "Conta", "Produto"], how="outer")
+        df[["Valor_Atual","Qtd_Atual","Valor_Comp","Qtd_Comp"]] = df[["Valor_Atual","Qtd_Atual","Valor_Comp","Qtd_Comp"]].fillna(0)
         df["Descricao"] = df.apply(
             lambda r: desc_map.get((r["Empresa / Filial"], r["Conta"], r["Produto"]), "—"), axis=1
         ).astype(str)
@@ -161,20 +164,27 @@ def render(df_hist, moeda_br, data_selecionada):
         tipo        = "MoM" if key_prefix == "mom" else "YoY"
         atual_label = pd.Timestamp(data_selecionada).strftime('%y-%b').lower()
         val_label   = f"Valor Estoque {atual_label}"
+        qtd_label   = f"Qtd Estoque {atual_label}"
         comp_label  = f"{tipo} {label_comp}"
+        qtd_comp_label = f"Qtd {tipo} {label_comp}"
         delta_label = f"Δ {tipo} {label_comp}"
         perc_label  = f"% {tipo}"
 
-        df_exib = df_filtrado[["Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao", "Valor_Atual", "Valor_Comp", "Variacao", "Perc"]].copy()
+        df_exib = df_filtrado[["Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao", "Qtd_Atual", "Qtd_Comp", "Valor_Atual", "Valor_Comp", "Variacao", "Perc"]].copy()
         df_exib = df_exib.rename(columns={
             "Status Mov":  "Status Movimento",
             "Descricao":   "Descrição",
+            "Qtd_Atual":   qtd_label,
+            "Qtd_Comp":    qtd_comp_label,
             "Valor_Atual": val_label,
             "Valor_Comp":  comp_label,
             "Variacao":    delta_label,
             "Perc":        perc_label,
         })
 
+        for col in [qtd_label, qtd_comp_label]:
+            if col in df_exib.columns:
+                df_exib[col] = df_exib[col].apply(lambda v: int(round(v)) if isinstance(v, (int,float)) else v)
         for col in [val_label, comp_label, delta_label]:
             if col in df_exib.columns:
                 df_exib[col] = df_exib[col].apply(moeda_br)
