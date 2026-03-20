@@ -95,11 +95,13 @@ def render(df_hist, moeda_br, data_selecionada):
         delta_label = f"Δ {tipo} {label_comp}"
         perc_label  = f"% {tipo}"
 
-        # Cards de resumo
-        total_altas  = df_var[df_var["Variacao"] > 0]["Variacao"].sum()
-        total_quedas = df_var[df_var["Variacao"] < 0]["Variacao"].sum()
-        variacao_liq = df_var["Variacao"].sum()
-        cor_liq      = "#ff6b6b" if variacao_liq > 0 else ("#51cf66" if variacao_liq < 0 else "white")
+        # Cards de resumo — baseados nos top_n de cada lado
+        df_alta_cards  = df_var.sort_values("Variacao", ascending=False).head(top_n)
+        df_queda_cards = df_var.sort_values("Variacao", ascending=True).head(top_n)
+        total_altas    = df_alta_cards[df_alta_cards["Variacao"] > 0]["Variacao"].sum()
+        total_quedas   = df_queda_cards[df_queda_cards["Variacao"] < 0]["Variacao"].sum()
+        variacao_liq   = total_altas + total_quedas
+        cor_liq        = "#ff6b6b" if variacao_liq > 0 else ("#51cf66" if variacao_liq < 0 else "white")
 
         st.markdown(
             mini_card("⬆ Total Altas", moeda_br(total_altas), "#ff6b6b") +
