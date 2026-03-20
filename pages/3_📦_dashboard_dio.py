@@ -155,6 +155,7 @@ datas_map = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
 data_preview = pd.Timestamp(datas_disponiveis[0])
 df_preview = df_all[df_all["Data Fechamento"] == data_preview]
+# Lista completa de EF para o navbar (split feito internamente)
 empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique())
 
 filtros = render_filtros_topo(
@@ -165,7 +166,7 @@ filtros = render_filtros_topo(
 )
 
 data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
-empresas_sel     = filtros["empresas"]
+empresas_sel     = filtros["empresas"]  # lista de "Empresa / Filial" filtrada
 faixas_sel       = filtros.get("faixa_dio", [])
 
 # -------------------------------------------------

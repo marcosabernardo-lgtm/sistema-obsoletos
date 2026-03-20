@@ -116,20 +116,22 @@ data_preview_str = st.session_state.get("estoque_data", datas_fmt_list[0])
 data_preview = pd.Timestamp(datas_map.get(data_preview_str, datas_disponiveis[0]))
 df_preview = df_hist[df_hist["Data Fechamento"] == data_preview]
 
-# Filtros bidirecionais — cada um filtra o outro
-empresas_ja_sel = st.session_state.get("estoque_empresas", [])
-contas_ja_sel   = st.session_state.get("estoque_conta", [])
+# Lista completa de EF para o navbar (split feito internamente)
+empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique()) if "Empresa / Filial" in df_preview.columns else []
 
-# Empresa: filtrada pelas contas já selecionadas
-df_emp_filtro = df_preview.copy()
-if contas_ja_sel:
-    df_emp_filtro = df_emp_filtro[df_emp_filtro["Conta"].isin(contas_ja_sel)]
-empresas_disponiveis = sorted(df_emp_filtro["Empresa / Filial"].dropna().unique()) if "Empresa / Filial" in df_emp_filtro.columns else []
+# Conta: bidirecional com EF selecionados
+ef_ja_sel     = st.session_state.get("estoque_empresa_sel", [])
+filial_ja_sel = st.session_state.get("estoque_filial_sel", [])
+contas_ja_sel = st.session_state.get("estoque_conta", [])
 
-# Conta: filtrada pelas empresas já selecionadas
 df_conta_filtro = df_preview.copy()
-if empresas_ja_sel:
-    df_conta_filtro = df_conta_filtro[df_conta_filtro["Empresa / Filial"].isin(empresas_ja_sel)]
+if ef_ja_sel or filial_ja_sel:
+    ef_ativos = [
+        ef for ef in empresas_disponiveis
+        if (not ef_ja_sel or ef.split(" / ")[0].strip() in ef_ja_sel)
+        and (not filial_ja_sel or ef.split(" / ")[1].strip() in filial_ja_sel)
+    ]
+    df_conta_filtro = df_conta_filtro[df_conta_filtro["Empresa / Filial"].isin(ef_ativos)]
 contas_disponiveis = sorted(df_conta_filtro["Conta"].dropna().unique()) if "Conta" in df_conta_filtro.columns else []
 
 filtros = render_filtros_topo(
