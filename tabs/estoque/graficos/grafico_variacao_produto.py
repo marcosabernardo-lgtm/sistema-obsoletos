@@ -53,22 +53,22 @@ def render(df_hist, moeda_br, data_selecionada):
             df_hist[df_hist["Descricao"].notna() &
                     (df_hist["Descricao"].astype(str).str.strip() != "") &
                     (df_hist["Descricao"].astype(str) != "0")]
-            .groupby(["Empresa / Filial", "Conta", "Produto"])["Descricao"].first()
+            .groupby(["Empresa / Filial", "Produto"])["Descricao"].first()
             .to_dict()
         )
 
-        grp_atual = df_atual.groupby(["Empresa / Filial", "Conta", "Produto"]).agg(
+        grp_atual = df_atual.groupby(["Empresa / Filial", "Produto"]).agg(
             Valor_Atual=("Custo Total", "sum"),
             Qtd_Atual=("Saldo Atual", "sum")
         ).reset_index()
-        grp_comp = df_comp.groupby(["Empresa / Filial", "Conta", "Produto"]).agg(
+        grp_comp = df_comp.groupby(["Empresa / Filial", "Produto"]).agg(
             Valor_Comp=("Custo Total", "sum"),
             Qtd_Comp=("Saldo Atual", "sum")
         ).reset_index()
-        df = grp_atual.merge(grp_comp, on=["Empresa / Filial", "Conta", "Produto"], how="outer")
+        df = grp_atual.merge(grp_comp, on=["Empresa / Filial", "Produto"], how="outer")
         df[["Valor_Atual","Qtd_Atual","Valor_Comp","Qtd_Comp"]] = df[["Valor_Atual","Qtd_Atual","Valor_Comp","Qtd_Comp"]].fillna(0)
         df["Descricao"] = df.apply(
-            lambda r: desc_map.get((r["Empresa / Filial"], r["Conta"], r["Produto"]), "—"), axis=1
+            lambda r: desc_map.get((r["Empresa / Filial"], r["Produto"]), "—"), axis=1
         ).astype(str)
         df["Variacao"]   = df["Valor_Atual"] - df["Valor_Comp"]
         df["Perc"] = df.apply(
@@ -161,7 +161,7 @@ def render(df_hist, moeda_br, data_selecionada):
         delta_label = f"Δ {tipo} {label_comp}"
         perc_label  = f"% {tipo}"
 
-        df_exib = df_filtrado[["Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao", "Qtd_Atual", "Qtd_Comp", "Valor_Atual", "Valor_Comp", "Variacao", "Perc"]].copy()
+        df_exib = df_filtrado[["Status Mov", "Empresa / Filial", "Produto", "Descricao", "Qtd_Atual", "Qtd_Comp", "Valor_Atual", "Valor_Comp", "Variacao", "Perc"]].copy()
         df_exib = df_exib.rename(columns={
             "Status Mov":  "Status Movimento",
             "Descricao":   "Descrição",
