@@ -118,13 +118,21 @@ datas_map         = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
 data_preview      = pd.Timestamp(datas_disponiveis[0])
 df_preview        = df_hist[df_hist["Data Fechamento"] == data_preview]
-empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique())
-
+# Filtros bidirecionais
 empresas_ja_sel = st.session_state.get("obsoletos_empresas", [])
-df_temp_conta   = df_preview.copy()
+contas_ja_sel   = st.session_state.get("obsoletos_conta", [])
+
+# Empresa: filtrada pelas contas já selecionadas
+df_emp_filtro = df_preview.copy()
+if contas_ja_sel:
+    df_emp_filtro = df_emp_filtro[df_emp_filtro["Conta"].isin(contas_ja_sel)]
+empresas_disponiveis = sorted(df_emp_filtro["Empresa / Filial"].dropna().unique())
+
+# Conta: filtrada pelas empresas já selecionadas
+df_conta_filtro = df_preview.copy()
 if empresas_ja_sel:
-    df_temp_conta = df_temp_conta[df_temp_conta["Empresa / Filial"].isin(empresas_ja_sel)]
-contas_disponiveis = sorted(df_temp_conta["Conta"].dropna().unique())
+    df_conta_filtro = df_conta_filtro[df_conta_filtro["Empresa / Filial"].isin(empresas_ja_sel)]
+contas_disponiveis = sorted(df_conta_filtro["Conta"].dropna().unique())
 
 # Opções de Status do Movimento — ordem lógica fixa
 ORDEM_STATUS = ["Todas", "Até 6 meses", "Até 1 ano", "+ 1 ano", "+ 2 anos", "Sem Movimento"]
