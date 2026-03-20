@@ -118,15 +118,21 @@ datas_map         = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
 data_preview      = pd.Timestamp(datas_disponiveis[0])
 df_preview        = df_hist[df_hist["Data Fechamento"] == data_preview]
-# Lista completa de Empresa / Filial para o filtro (navbar faz o split internamente)
+# Lista completa de EF para o navbar (split feito internamente)
 empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique())
 
-# Conta: filtrada pelas EF já selecionadas via session_state
-ef_ja_sel     = st.session_state.get("obsoletos_empresas", [])  # compatibilidade
+# Conta: filtrada pelos EF ativos (Empresa + Filial já selecionados)
+ef_ja_sel     = st.session_state.get("obsoletos_empresa_sel", [])
+filial_ja_sel = st.session_state.get("obsoletos_filial_sel", [])
 contas_ja_sel = st.session_state.get("obsoletos_conta", [])
-df_conta_filtro = df_preview.copy()
-if ef_ja_sel:
-    df_conta_filtro = df_conta_filtro[df_conta_filtro["Empresa / Filial"].isin(ef_ja_sel)]
+
+ef_ativos = [
+    ef for ef in empresas_disponiveis
+    if (not ef_ja_sel      or ef.split(" / ")[0].strip() in ef_ja_sel)
+    and (not filial_ja_sel or ef.split(" / ")[1].strip() in filial_ja_sel)
+] if (ef_ja_sel or filial_ja_sel) else list(empresas_disponiveis)
+
+df_conta_filtro = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
 contas_disponiveis = sorted(df_conta_filtro["Conta"].dropna().unique())
 
 # Opções de Status do Movimento — ordem lógica fixa
@@ -142,7 +148,8 @@ filtros = render_filtros_topo(
     datas=datas_fmt_list,
     empresas=empresas_disponiveis,
     extras=extras if extras else None,
-    key_prefix="obsoletos"
+    key_prefix="obsoletos",
+    df_preview=df_preview
 )
 
 data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
