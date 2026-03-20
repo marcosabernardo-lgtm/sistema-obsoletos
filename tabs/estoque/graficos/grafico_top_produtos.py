@@ -151,11 +151,6 @@ def render(df_hist, moeda_br, data_selecionada):
     # ── ABA 1: Maior Valor em Estoque ─────────────────────────────────────────
     with sub1:
 
-        st.markdown(
-            mini_card("Valor Total em Estoque", moeda_br(total_estoque)),
-            unsafe_allow_html=True
-        )
-
         df_valor = (
             df_atual.groupby(["Empresa / Filial", "Conta", "Produto"])
             .agg(Qtd=("Saldo Atual", "sum"), Valor=("Custo Total", "sum"))
@@ -167,6 +162,13 @@ def render(df_hist, moeda_br, data_selecionada):
         df_valor = desc_limpa(df_valor)
         df_valor["% Estoque"] = df_valor["Valor"].apply(
             lambda x: f"{(x / total_estoque * 100):.1f}%" if total_estoque > 0 else "—"
+        )
+
+        # Card com valor dos top_n produtos exibidos
+        valor_top_n = df_valor["Valor"].sum()
+        st.markdown(
+            mini_card(f"Valor Top {top_n} Produtos", moeda_br(valor_top_n)),
+            unsafe_allow_html=True
         )
 
         linhas = ""
