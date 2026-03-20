@@ -165,5 +165,45 @@ def render(df_kpi, moeda_br):
     df_display = df_tab[[c for c in colunas_exibir if c in df_tab.columns]].copy()
     df_display["Custo Total"] = df_display["Custo Total"].apply(moeda_br)
 
+    st.markdown("""
+    <style>
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stTextInput"] > div,
+    div[data-testid="stTextInput"] > div > div {
+        background-color: #005562 !important;
+    }
+    div[data-testid="stTextInput"] input {
+        border: 1px solid rgba(250,250,250,0.2) !important;
+        border-radius: 6px !important;
+        color: white !important;
+        padding: 8px 12px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col_busca, col_ord, col_dir = st.columns([3, 2, 1])
+    with col_busca:
+        busca = st.text_input("🔍 PESQUISAR", placeholder="Produto, empresa, conta...", key="busca_prox_obs")
+    with col_ord:
+        ord_col = st.selectbox("📊 Classificar por", list(df_display.columns), key="ord_col_prox_obs")
+    with col_dir:
+        ord_dir = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key="ord_dir_prox_obs")
+
+    if busca:
+        mask = df_display.apply(lambda col: col.astype(str).str.contains(busca, case=False, na=False)).any(axis=1)
+        df_display = df_display[mask]
+
+    ascending = ord_dir == "⬆ Asc"
+    try:
+        df_display = df_display.sort_values(
+            ord_col, ascending=ascending,
+            key=lambda x: pd.to_numeric(
+                x.astype(str).str.replace(r"[R$\s\.,%+]", "", regex=True).str.replace(",", "."),
+                errors="coerce"
+            ).fillna(x.astype(str))
+        )
+    except Exception:
+        pass
+
     st.caption(f"{len(df_display)} itens em risco de entrar em obsoleto")
     st.dataframe(df_display, use_container_width=True, hide_index=True)
