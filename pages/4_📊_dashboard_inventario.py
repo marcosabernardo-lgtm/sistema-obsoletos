@@ -379,7 +379,7 @@ with tab2:
                 font=dict(color="white"),
                 bgcolor="rgba(0,0,0,0)",
             ),
-            margin=dict(l=40, r=40, t=60, b=40),
+            margin=dict(l=60, r=80, t=60, b=40),
             height=450,
         )
 
