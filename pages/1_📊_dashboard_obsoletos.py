@@ -127,9 +127,9 @@ if empresas_ja_sel:
 contas_disponiveis = sorted(df_temp_conta["Conta"].dropna().unique())
 
 # Opções de Status do Movimento — ordem lógica fixa
-ORDEM_STATUS = ["Todas", "Até 1 ano", "+ 1 ano", "+ 2 anos", "> 1 ano", "Sem Movimento"]
+ORDEM_STATUS = ["Todas", "Até 6 meses", "Até 1 ano", "+ 1 ano", "+ 2 anos", "Sem Movimento"]
 status_existentes  = sorted(df_preview["Status do Movimento"].dropna().unique().tolist()) if "Status do Movimento" in df_preview.columns else []
-status_disponiveis = [s for s in ORDEM_STATUS if s == "Todas" or s == "> 1 ano" or s in status_existentes]
+status_disponiveis = ["Todas"] + [s for s in ORDEM_STATUS[1:] if s in status_existentes]
 
 extras = {}
 if contas_disponiveis:
