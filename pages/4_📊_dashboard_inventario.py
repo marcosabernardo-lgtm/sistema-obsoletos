@@ -366,7 +366,7 @@ with tab2:
                 showgrid=False,
                 tickfont=dict(color="white"),
                 title="",
-                range=[-0.5, len(x_labels) - 0.5],
+                type="category",
             ),
             yaxis=dict(
                 showgrid=True,
