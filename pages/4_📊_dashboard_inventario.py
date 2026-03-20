@@ -366,6 +366,7 @@ with tab2:
                 showgrid=False,
                 tickfont=dict(color="white"),
                 title="",
+                range=[-0.5, len(x_labels) - 0.5],
             ),
             yaxis=dict(
                 showgrid=True,
@@ -379,15 +380,10 @@ with tab2:
                 font=dict(color="white"),
                 bgcolor="rgba(0,0,0,0)",
             ),
-            margin=dict(l=60, r=80, t=60, b=40),
+            margin=dict(l=60, r=60, t=60, b=40),
             height=450,
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
-        # Mini tabela resumo abaixo do gráfico
-        df_resumo = df_evolucao[["Data", col_y]].copy()
-        df_resumo["Data"] = df_resumo["Data"].dt.strftime("%d/%m/%Y")
-        df_resumo = df_resumo.rename(columns={col_y: titulo_graf + " (%)"})
-        df_resumo[titulo_graf + " (%)"] = df_resumo[titulo_graf + " (%)"].apply(lambda x: f"{x:.2f}%")
-        st.dataframe(df_resumo, use_container_width=False, hide_index=True)
+
