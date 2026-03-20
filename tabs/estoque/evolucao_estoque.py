@@ -33,27 +33,6 @@ def render(df_hist, df_obsoleto, moeda_br, df_kpi=None, data_selecionada=None, v
         else:
             total_estoque = base["Custo Total"].sum()
 
-            # Cards
-            c1, c2, c3, _ = st.columns([1, 1, 1, 3])
-            c1.markdown(
-                f'<div style="display:inline-block;border:2px solid #EC6E21;border-radius:10px;padding:12px 20px;text-align:center;margin-bottom:16px;width:100%">'
-                f'<div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;text-transform:uppercase">Valor Total</div>'
-                f'<div style="font-size:20px;font-weight:700;color:white;margin-top:4px">{moeda_br(total_estoque)}</div>'
-                f'</div>', unsafe_allow_html=True
-            )
-            c2.markdown(
-                f'<div style="display:inline-block;border:2px solid #EC6E21;border-radius:10px;padding:12px 20px;text-align:center;margin-bottom:16px;width:100%">'
-                f'<div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;text-transform:uppercase">Produtos</div>'
-                f'<div style="font-size:20px;font-weight:700;color:white;margin-top:4px">{base["Produto"].nunique():,}</div>'
-                f'</div>', unsafe_allow_html=True
-            )
-            c3.markdown(
-                f'<div style="display:inline-block;border:2px solid #EC6E21;border-radius:10px;padding:12px 20px;text-align:center;margin-bottom:16px;width:100%">'
-                f'<div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;text-transform:uppercase">Registros</div>'
-                f'<div style="font-size:20px;font-weight:700;color:white;margin-top:4px">{len(base):,}</div>'
-                f'</div>', unsafe_allow_html=True
-            )
-
             # Ordenar por Custo Total
             base = base.sort_values("Custo Total", ascending=False)
 
