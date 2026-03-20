@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import plotly.graph_objects as go
 
 from utils.navbar import render_navbar
 
@@ -30,7 +31,6 @@ section[data-testid="stSidebar"] { display: none !important; }
 .kpi-value{ font-size:26px; font-weight:700; color:white; }
 .kpi-value-green{ font-size:26px; font-weight:700; color:#51cf66; }
 
-/* Estilo do radio como botões */
 div[data-testid="stRadio"] > div {
     display: flex;
     gap: 10px;
@@ -60,10 +60,6 @@ div[data-testid="stRadio"] > label { display: none; }
 st.title("📋 Dashboard de Inventário")
 st.markdown("---")
 
-# -------------------------------------------------
-# FUNÇÕES
-# -------------------------------------------------
-
 def moeda_br(valor):
     try:
         return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -75,10 +71,6 @@ def fmt_qtd(valor):
         return f"{float(valor):,.0f}".replace(",", ".")
     except:
         return "—"
-
-# -------------------------------------------------
-# CARREGAR BASE
-# -------------------------------------------------
 
 CAMINHO = "data/inventario/inventario_historico.parquet"
 
@@ -98,10 +90,6 @@ if df.empty:
     st.stop()
 
 df["Data_Inventario"] = pd.to_datetime(df["Data_Inventario"])
-
-# -------------------------------------------------
-# FILTROS NO TOPO
-# -------------------------------------------------
 
 datas_disponiveis = sorted(df["Data_Inventario"].dt.date.unique(), reverse=True)
 datas_fmt_list    = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
@@ -150,73 +138,29 @@ with col_empresa:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# -------------------------------------------------
-# FILTRAR BASE KPI
-# -------------------------------------------------
-
 df_kpi = df[df["Data_Inventario"] == data_selecionada].copy()
-
 if empresa_sel != "Todas":
     df_kpi = df_kpi[df_kpi["Nome_Empresa"] == empresa_sel]
 
-# -------------------------------------------------
-# CALCULAR KPIs
-# -------------------------------------------------
+df_hist_filtrado = df.copy()
+if empresa_sel != "Todas":
+    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Nome_Empresa"] == empresa_sel]
 
-qtd_inventariada   = df_kpi["Qtd_Itens_Inventariados"].sum() if "Qtd_Itens_Inventariados" in df_kpi.columns else len(df_kpi)
-qtd_divergentes    = int(df_kpi["Qtd_Itens_Divergentes"].sum()) if "Qtd_Itens_Divergentes" in df_kpi.columns else 0
-acuracidade_itens  = (qtd_inventariada - qtd_divergentes) / qtd_inventariada if qtd_inventariada > 0 else 0
+qtd_inventariada  = df_kpi["Qtd_Itens_Inventariados"].sum() if "Qtd_Itens_Inventariados" in df_kpi.columns else len(df_kpi)
+qtd_divergentes   = int(df_kpi["Qtd_Itens_Divergentes"].sum()) if "Qtd_Itens_Divergentes" in df_kpi.columns else 0
+acuracidade_itens = (qtd_inventariada - qtd_divergentes) / qtd_inventariada if qtd_inventariada > 0 else 0
 
 valor_inventariado = df_kpi["Valor_Inventariado"].sum() if "Valor_Inventariado" in df_kpi.columns else 0
 valor_divergente   = df_kpi["Valor_Divergente"].sum()   if "Valor_Divergente"   in df_kpi.columns else 0
 
-# -------------------------------------------------
-# CARDS — 1 linha com 6 colunas
-# -------------------------------------------------
-
 col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-col1.markdown(f"""
-<div class="kpi-card">
-<div class="kpi-title">Qtd Inventariada</div>
-<div class="kpi-value">{fmt_qtd(qtd_inventariada)}</div>
-</div>
-""", unsafe_allow_html=True)
-
-col2.markdown(f"""
-<div class="kpi-card">
-<div class="kpi-title">Qtd Divergentes</div>
-<div class="kpi-value">{fmt_qtd(qtd_divergentes)}</div>
-</div>
-""", unsafe_allow_html=True)
-
-col3.markdown(f"""
-<div class="kpi-card-green">
-<div class="kpi-title">Acuracidade %</div>
-<div class="kpi-value-green">{acuracidade_itens*100:.2f}%</div>
-</div>
-""", unsafe_allow_html=True)
-
-col4.markdown(f"""
-<div class="kpi-card">
-<div class="kpi-title">Valor Inventariado</div>
-<div class="kpi-value">{moeda_br(valor_inventariado)}</div>
-</div>
-""", unsafe_allow_html=True)
-
-col5.markdown(f"""
-<div class="kpi-card">
-<div class="kpi-title">Valor Divergente</div>
-<div class="kpi-value">{moeda_br(valor_divergente)}</div>
-</div>
-""", unsafe_allow_html=True)
-
-col6.markdown(f"""
-<div class="kpi-card-green">
-<div class="kpi-title">Acuracidade %</div>
-<div class="kpi-value-green">{acuracidade_itens*100:.2f}%</div>
-</div>
-""", unsafe_allow_html=True)
+col1.markdown(f"""<div class="kpi-card"><div class="kpi-title">Qtd Inventariada</div><div class="kpi-value">{fmt_qtd(qtd_inventariada)}</div></div>""", unsafe_allow_html=True)
+col2.markdown(f"""<div class="kpi-card"><div class="kpi-title">Qtd Divergentes</div><div class="kpi-value">{fmt_qtd(qtd_divergentes)}</div></div>""", unsafe_allow_html=True)
+col3.markdown(f"""<div class="kpi-card-green"><div class="kpi-title">Acuracidade %</div><div class="kpi-value-green">{acuracidade_itens*100:.2f}%</div></div>""", unsafe_allow_html=True)
+col4.markdown(f"""<div class="kpi-card"><div class="kpi-title">Valor Inventariado</div><div class="kpi-value">{moeda_br(valor_inventariado)}</div></div>""", unsafe_allow_html=True)
+col5.markdown(f"""<div class="kpi-card"><div class="kpi-title">Valor Divergente</div><div class="kpi-value">{moeda_br(valor_divergente)}</div></div>""", unsafe_allow_html=True)
+col6.markdown(f"""<div class="kpi-card-green"><div class="kpi-title">Acuracidade %</div><div class="kpi-value-green">{acuracidade_itens*100:.2f}%</div></div>""", unsafe_allow_html=True)
 
 st.markdown("---")
 
@@ -224,11 +168,11 @@ st.markdown("---")
 # ABAS
 # -------------------------------------------------
 
-tab1, = st.tabs(["📚 Base Histórica"])
+tab1, tab2 = st.tabs(["📚 Base Histórica", "📊 Análise de Inventário"])
 
+# ── ABA 1: Base Histórica ────────────────────────────────────────────────────
 with tab1:
 
-    # Filtro Geral / Divergente
     visao = st.radio(
         "Visualização",
         options=["Geral", "Divergente"],
@@ -242,7 +186,6 @@ with tab1:
 
     df_tab = df_kpi.copy()
 
-    # Aplica filtro de visão
     if visao == "Divergente":
         df_tab = df_tab[df_tab["Qtd_Divergente"] != 0] if "Qtd_Divergente" in df_tab.columns else df_tab
 
@@ -268,13 +211,11 @@ with tab1:
 
     colunas_ordem = [
         "Data Inventario", "Empresa / Filial", "Produto", "Descricao", "Valor Unit",
-        "Qtd Invent", "Valor Invent",
-        "Qtd Protheus", "Valor Protheus",
+        "Qtd Invent", "Valor Invent", "Qtd Protheus", "Valor Protheus",
         "Qtd Divergente", "Valor Divergente",
     ]
     df_tab = df_tab[[c for c in colunas_ordem if c in df_tab.columns]]
 
-    # Paginação
     LINHAS_POR_PAGINA = 50
     total_linhas  = len(df_tab)
     total_paginas = max(1, -(-total_linhas // LINHAS_POR_PAGINA))
@@ -337,3 +278,114 @@ with tab1:
         </table>
     </div>
     """, unsafe_allow_html=True)
+
+# ── ABA 2: Análise de Inventário ─────────────────────────────────────────────
+with tab2:
+
+    # Filtro Por Qtd / Por Valor
+    metrica = st.radio(
+        "Análise",
+        options=["Acuracidade Quantidade", "Acuracidade Valor"],
+        index=0,
+        key="inv_metrica",
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+    # Calcular acuracidade por data
+    datas_hist = sorted(df_hist_filtrado["Data_Inventario"].unique())
+
+    registros = []
+    for data in datas_hist:
+        df_d = df_hist_filtrado[df_hist_filtrado["Data_Inventario"] == data]
+
+        qtd_inv  = df_d["Qtd_Itens_Inventariados"].sum() if "Qtd_Itens_Inventariados" in df_d.columns else len(df_d)
+        qtd_div  = df_d["Qtd_Itens_Divergentes"].sum()   if "Qtd_Itens_Divergentes"   in df_d.columns else 0
+        acu_qtd  = (qtd_inv - qtd_div) / qtd_inv * 100   if qtd_inv > 0 else 0
+
+        val_inv  = df_d["Valor_Inventariado"].sum() if "Valor_Inventariado" in df_d.columns else 0
+        val_div  = df_d["Valor_Divergente"].sum()   if "Valor_Divergente"   in df_d.columns else 0
+        acu_val  = (val_inv - abs(val_div)) / val_inv * 100 if val_inv > 0 else 0
+
+        registros.append({
+            "Data":             pd.Timestamp(data),
+            "Acuracidade Qtd":  round(acu_qtd, 2),
+            "Acuracidade Valor": round(acu_val, 2),
+        })
+
+    df_evolucao = pd.DataFrame(registros).sort_values("Data")
+
+    if df_evolucao.empty:
+        st.info("Dados insuficientes para gerar o gráfico de evolução.")
+    else:
+        col_y      = "Acuracidade Qtd" if metrica == "Acuracidade Quantidade" else "Acuracidade Valor"
+        titulo_graf = "Acuracidade Quantidade" if metrica == "Acuracidade Quantidade" else "Acuracidade Valor"
+
+        x_labels = df_evolucao["Data"].dt.strftime("%Y-%m")
+        y_vals   = df_evolucao[col_y]
+
+        fig = go.Figure()
+
+        # Área preenchida
+        fig.add_trace(go.Scatter(
+            x=x_labels,
+            y=y_vals,
+            mode="lines+markers+text",
+            name=titulo_graf,
+            line=dict(color="#EC6E21", width=3),
+            marker=dict(size=8, color="#EC6E21"),
+            fill="tozeroy",
+            fillcolor="rgba(101,116,43,0.5)",
+            text=[f"{v:.2f}%" for v in y_vals],
+            textposition="top center",
+            textfont=dict(color="white", size=12),
+        ))
+
+        # Linha de meta 95%
+        fig.add_trace(go.Scatter(
+            x=x_labels,
+            y=[95] * len(x_labels),
+            mode="lines",
+            name="Meta 95%",
+            line=dict(color="#ff6b6b", width=2, dash="dash"),
+        ))
+
+        fig.update_layout(
+            title=dict(text=titulo_graf, font=dict(color="white", size=16)),
+            plot_bgcolor="#005562",
+            paper_bgcolor="#005562",
+            font=dict(color="white"),
+            xaxis=dict(
+                showgrid=False,
+                tickfont=dict(color="white"),
+                title="",
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor="rgba(255,255,255,0.08)",
+                tickfont=dict(color="white"),
+                ticksuffix="%",
+                range=[
+                    max(0, min(y_vals) - 5),
+                    min(100, max(y_vals) + 3)
+                ],
+                title="",
+            ),
+            legend=dict(
+                font=dict(color="white"),
+                bgcolor="rgba(0,0,0,0)",
+            ),
+            margin=dict(l=40, r=40, t=50, b=40),
+            height=420,
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Mini tabela resumo abaixo do gráfico
+        df_resumo = df_evolucao[["Data", col_y]].copy()
+        df_resumo["Data"] = df_resumo["Data"].dt.strftime("%d/%m/%Y")
+        df_resumo = df_resumo.rename(columns={col_y: titulo_graf + " (%)"})
+        df_resumo[titulo_graf + " (%)"] = df_resumo[titulo_graf + " (%)"].apply(lambda x: f"{x:.2f}%")
+        st.dataframe(df_resumo, use_container_width=False, hide_index=True)
