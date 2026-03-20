@@ -168,7 +168,7 @@ st.markdown("---")
 # ABAS
 # -------------------------------------------------
 
-tab1, tab2 = st.tabs(["📚 Base Histórica", "📊 Análise de Inventário"])
+tab1, tab2, tab3 = st.tabs(["📚 Base Histórica", "📊 Análise de Inventário", "📋 Resumo"])
 
 # ── ABA 1: Base Histórica ────────────────────────────────────────────────────
 with tab1:
@@ -383,4 +383,122 @@ with tab2:
 
         st.plotly_chart(fig, use_container_width=True)
 
+# ── ABA 3: Resumo ─────────────────────────────────────────────────────────────
+with tab3:
 
+    import plotly.graph_objects as go
+
+    df_res = df_kpi.copy()
+
+    if df_res.empty:
+        st.info("Sem dados para o fechamento selecionado.")
+    else:
+
+        # --------------------------------------------------
+        # CALCULAR POR EMPRESA
+        # --------------------------------------------------
+
+        empresas_res = sorted(df_res["Nome_Empresa"].dropna().unique())
+        rows_qtd = []
+        rows_val = []
+
+        for emp in empresas_res:
+            df_e = df_res[df_res["Nome_Empresa"] == emp]
+
+            qtd_inv = df_e["Qtd_Itens_Inventariados"].sum() if "Qtd_Itens_Inventariados" in df_e.columns else len(df_e)
+            qtd_div = df_e["Qtd_Itens_Divergentes"].sum()   if "Qtd_Itens_Divergentes"   in df_e.columns else 0
+            acu_qtd = (qtd_inv - qtd_div) / qtd_inv * 100   if qtd_inv > 0 else 0
+            qtd_div_val = df_e["Qtd_Divergente"].sum()       if "Qtd_Divergente"          in df_e.columns else 0
+
+            val_inv = df_e["Valor_Inventariado"].sum() if "Valor_Inventariado" in df_e.columns else 0
+            val_div = df_e["Valor_Divergente"].sum()   if "Valor_Divergente"   in df_e.columns else 0
+            acu_val = (val_inv - abs(val_div)) / val_inv * 100 if val_inv > 0 else 0
+
+            rows_qtd.append({"Empresa / Filial": emp, "% Acuracidade": f"{acu_qtd:.2f}%", "Qtd Divergente": qtd_div_val})
+            rows_val.append({"Empresa / Filial": emp, "% Acuracidade": f"{acu_val:.2f}%", "Valor Divergente": moeda_br(val_div)})
+
+        # Totais
+        qtd_inv_t = df_res["Qtd_Itens_Inventariados"].sum() if "Qtd_Itens_Inventariados" in df_res.columns else len(df_res)
+        qtd_div_t = df_res["Qtd_Itens_Divergentes"].sum()   if "Qtd_Itens_Divergentes"   in df_res.columns else 0
+        acu_qtd_t = (qtd_inv_t - qtd_div_t) / qtd_inv_t * 100 if qtd_inv_t > 0 else 0
+
+        val_inv_t = df_res["Valor_Inventariado"].sum() if "Valor_Inventariado" in df_res.columns else 0
+        val_div_t = df_res["Valor_Divergente"].sum()   if "Valor_Divergente"   in df_res.columns else 0
+        acu_val_t = (val_inv_t - abs(val_div_t)) / val_inv_t * 100 if val_inv_t > 0 else 0
+
+        rows_qtd.append({"Empresa / Filial": "Total", "% Acuracidade": f"{acu_qtd_t:.2f}%", "Qtd Divergente": int(df_res["Qtd_Divergente"].sum() if "Qtd_Divergente" in df_res.columns else 0)})
+        rows_val.append({"Empresa / Filial": "Total", "% Acuracidade": f"{acu_val_t:.2f}%", "Valor Divergente": moeda_br(val_div_t)})
+
+        # --------------------------------------------------
+        # LAYOUT: tabela + gauge lado a lado
+        # --------------------------------------------------
+
+        def gauge(valor, titulo, meta=95):
+            fig = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=valor,
+                number={"suffix": "%", "font": {"color": "white", "size": 28}},
+                title={"text": titulo, "font": {"color": "white", "size": 14}},
+                gauge={
+                    "axis": {"range": [0, 100], "ticksuffix": "%", "tickfont": {"color": "white"}},
+                    "bar":  {"color": "#EC6E21"},
+                    "bgcolor": "rgba(255,255,255,0.05)",
+                    "borderwidth": 0,
+                    "threshold": {
+                        "line": {"color": "#ff6b6b", "width": 3},
+                        "thickness": 0.75,
+                        "value": meta,
+                    },
+                    "steps": [
+                        {"range": [0, meta],   "color": "rgba(255,107,107,0.15)"},
+                        {"range": [meta, 100], "color": "rgba(81,207,102,0.15)"},
+                    ],
+                },
+            ))
+            fig.update_layout(
+                paper_bgcolor="#005562",
+                font=dict(color="white"),
+                margin=dict(l=20, r=20, t=40, b=20),
+                height=260,
+            )
+            return fig
+
+        def html_tabela(rows, col_valor):
+            header = f"<tr><th>Empresa / Filial</th><th>% Acuracidade</th><th>{col_valor}</th></tr>"
+            linhas = ""
+            for r in rows:
+                peso = "font-weight:700;" if r["Empresa / Filial"] == "Total" else ""
+                linhas += (
+                    f'<tr style="{peso}">'
+                    f'<td>{r["Empresa / Filial"]}</td>'
+                    f'<td style="text-align:right">{r["% Acuracidade"]}</td>'
+                    f'<td style="text-align:right">{r[col_valor]}</td>'
+                    f'</tr>'
+                )
+            return f"""
+            <style>
+            .res-tb{{width:100%;border-collapse:collapse;font-size:13px;color:white}}
+            .res-tb th{{background:#0f5a60;padding:8px 12px;text-align:left;border-bottom:2px solid #EC6E21;font-weight:700}}
+            .res-tb td{{padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.06);background:#005562}}
+            .res-tb tr:last-child td{{background:#0a4a50;font-weight:700}}
+            </style>
+            <table class="res-tb"><thead>{header}</thead><tbody>{linhas}</tbody></table>
+            """
+
+        # Linha 1 — Quantidade
+        st.markdown("#### 📦 Acuracidade Quantidade")
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.markdown(html_tabela(rows_qtd, "Qtd Divergente"), unsafe_allow_html=True)
+        with c2:
+            st.plotly_chart(gauge(acu_qtd_t, "% Acuracidade Itens"), use_container_width=True)
+
+        st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+
+        # Linha 2 — Valor
+        st.markdown("#### 💰 Acuracidade Valor")
+        c3, c4 = st.columns([2, 1])
+        with c3:
+            st.markdown(html_tabela(rows_val, "Valor Divergente"), unsafe_allow_html=True)
+        with c4:
+            st.plotly_chart(gauge(acu_val_t, "% Acuracidade Valor"), use_container_width=True)
