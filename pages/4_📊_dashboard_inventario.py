@@ -323,30 +323,34 @@ with tab2:
         col_y      = "Acuracidade Qtd" if metrica == "Acuracidade Quantidade" else "Acuracidade Valor"
         titulo_graf = "Acuracidade Quantidade" if metrica == "Acuracidade Quantidade" else "Acuracidade Valor"
 
-        x_labels = df_evolucao["Data"].dt.strftime("%Y-%m")
-        y_vals   = df_evolucao[col_y]
+        x_labels = df_evolucao["Data"].dt.strftime("%Y-%m").tolist()
+        y_vals   = df_evolucao[col_y].tolist()
+
+        # Adiciona pontos vazios nas extremidades para os rótulos não serem cortados
+        x_plot = [""] + x_labels + [""]
+        y_plot = [None] + y_vals + [None]
 
         fig = go.Figure()
 
         # Área preenchida
         fig.add_trace(go.Scatter(
-            x=x_labels,
-            y=y_vals,
+            x=x_plot,
+            y=y_plot,
             mode="lines+markers+text",
             name=titulo_graf,
             line=dict(color="#EC6E21", width=3),
             marker=dict(size=8, color="#EC6E21"),
             fill="tozeroy",
             fillcolor="rgba(101,116,43,0.5)",
-            text=[f"{v:.2f}%" for v in y_vals],
+            text=[""] + [f"{v:.2f}%" for v in y_vals] + [""],
             textposition="top center",
             textfont=dict(color="white", size=11, family="Arial Black"),
         ))
 
         # Linha de meta 95%
         fig.add_trace(go.Scatter(
-            x=x_labels,
-            y=[95] * len(x_labels),
+            x=x_plot,
+            y=[95] * len(x_plot),
             mode="lines",
             name="Meta 95%",
             line=dict(color="#ff6b6b", width=2, dash="dash"),
