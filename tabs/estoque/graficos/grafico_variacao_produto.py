@@ -155,12 +155,12 @@ def render(df_hist, moeda_br, data_selecionada):
         # Busca e ordenação
         col_busca, col_ord, col_dir = st.columns([3, 2, 1])
         with col_busca:
-            busca = st.text_input("🔍 Buscar", placeholder="Código, descrição, empresa...", key=f"busca_{key_prefix}", label_visibility="collapsed")
+            busca = st.text_input("🔍 Pesquisar", placeholder="Código, descrição, empresa...", key=f"busca_{key_prefix}")
         with col_ord:
             colunas_ord = list(df_exib.columns)
-            ord_col = st.selectbox("Ordenar por", colunas_ord, key=f"ord_col_{key_prefix}", label_visibility="collapsed")
+            ord_col = st.selectbox("📊 Classificar por", colunas_ord, key=f"ord_col_{key_prefix}")
         with col_dir:
-            ord_dir = st.selectbox("↕", ["⬇ Desc", "⬆ Asc"], key=f"ord_dir_{key_prefix}", label_visibility="collapsed")
+            ord_dir = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key=f"ord_dir_{key_prefix}")
 
         # Aplica busca
         if busca:
