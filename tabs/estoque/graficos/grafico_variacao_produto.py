@@ -145,8 +145,6 @@ def render(df_hist, moeda_br, data_selecionada):
 
         tipo_tmp = "MoM" if key_prefix == "mom" else "YoY"
         atual_tmp = pd.Timestamp(data_selecionada).strftime('%y-%b').lower()
-        with col_export:
-            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
 
         # Labels dinâmicos
         tipo        = "MoM" if key_prefix == "mom" else "YoY"
@@ -201,18 +199,20 @@ def render(df_hist, moeda_br, data_selecionada):
         except Exception:
             pass
 
-        # Export com colunas e nomes iguais à tabela exibida
+        # Export no col_export (ao lado do radio), com df_exib já formatado
         buffer_exp = io.BytesIO()
         df_exib.to_excel(buffer_exp, index=False)
         buffer_exp.seek(0)
-        st.download_button(
-            label="📥 Exportar",
-            data=buffer_exp,
-            file_name=f"variacao_{tipo_tmp.lower()}_{atual_tmp}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key=f"export_top_{key_prefix}",
-            use_container_width=True
-        )
+        with col_export:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            st.download_button(
+                label="📥 Exportar",
+                data=buffer_exp,
+                file_name=f"variacao_{tipo_tmp.lower()}_{atual_tmp}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"export_top_{key_prefix}",
+                use_container_width=True
+            )
 
         st.caption(f"{len(df_exib)} produtos")
         st.dataframe(df_exib, use_container_width=True, hide_index=True)
