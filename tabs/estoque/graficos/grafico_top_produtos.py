@@ -36,9 +36,7 @@ def render(df_hist, moeda_br, data_selecionada):
 
     total_estoque = df_atual["Custo Total"].sum()
 
-    # Helper — descrição limpa
     def desc_limpa(df):
-        # Busca descrição real do produto em todo o histórico
         desc_map = (
             df_hist[df_hist["Descricao"].notna() & (df_hist["Descricao"].astype(str).str.strip() != "") & (df_hist["Descricao"].astype(str) != "0")]
             .groupby("Produto")["Descricao"]
@@ -56,6 +54,15 @@ def render(df_hist, moeda_br, data_selecionada):
         ".tb-top td{padding:8px 12px;border-bottom:1px solid #1a6e75;background:#005562}"
         ".tb-top tr:hover td{background:#0a6570}</style>"
     )
+
+    def mini_card(titulo, valor, cor="#EC6E21"):
+        return (
+            f'<div style="display:inline-block;border:2px solid {cor};border-radius:10px;'
+            f'padding:12px 24px;text-align:center;margin:0 8px 16px 0;">'
+            f'<div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;text-transform:uppercase">{titulo}</div>'
+            f'<div style="font-size:20px;font-weight:700;color:white;margin-top:4px">{valor}</div>'
+            f'</div>'
+        )
 
     def icone(v):
         if v > 0:   return f'<span style="color:#ff6b6b">⬆ +{moeda_br(abs(v))}</span>'
@@ -88,6 +95,23 @@ def render(df_hist, moeda_br, data_selecionada):
         delta_label = f"Δ {tipo} {label_comp}"
         perc_label  = f"% {tipo}"
 
+        # Cards de resumo
+        total_altas  = df_var[df_var["Variacao"] > 0]["Variacao"].sum()
+        total_quedas = df_var[df_var["Variacao"] < 0]["Variacao"].sum()
+        variacao_liq = df_var["Variacao"].sum()
+        cor_liq      = "#ff6b6b" if variacao_liq > 0 else ("#51cf66" if variacao_liq < 0 else "white")
+
+        st.markdown(
+            mini_card("⬆ Total Altas", moeda_br(total_altas), "#ff6b6b") +
+            mini_card("⬇ Total Quedas", moeda_br(abs(total_quedas)), "#51cf66") +
+            f'<div style="display:inline-block;border:2px solid #EC6E21;border-radius:10px;'
+            f'padding:12px 24px;text-align:center;margin:0 8px 16px 0;">'
+            f'<div style="font-size:11px;color:rgba(255,255,255,0.5);letter-spacing:1px;text-transform:uppercase">Δ Variação Líquida</div>'
+            f'<div style="font-size:20px;font-weight:700;color:{cor_liq};margin-top:4px">{moeda_br(variacao_liq)}</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+
         col1, col2 = st.columns(2)
 
         with col1:
@@ -104,8 +128,7 @@ def render(df_hist, moeda_br, data_selecionada):
                     f"<th>Produto</th><th>Descrição</th><th style='text-align:right'>{val_label}</th>"
                     f"<th style='text-align:right'>{delta_label}</th><th style='text-align:right'>{perc_label}</th>"
                     "</tr></thead><tbody>" + linhas + "</tbody></table>",
-            unsafe_allow_html=True
-        )
+            unsafe_allow_html=True)
 
         with col2:
             st.markdown("**⬇ Maiores Quedas**")
@@ -121,11 +144,16 @@ def render(df_hist, moeda_br, data_selecionada):
                     f"<th>Produto</th><th>Descrição</th><th style='text-align:right'>{val_label}</th>"
                     f"<th style='text-align:right'>{delta_label}</th><th style='text-align:right'>{perc_label}</th>"
                     "</tr></thead><tbody>" + linhas + "</tbody></table>",
-            unsafe_allow_html=True
-        )
+            unsafe_allow_html=True)
 
     # ── ABA 1: Maior Valor em Estoque ─────────────────────────────────────────
     with sub1:
+
+        st.markdown(
+            mini_card("Valor Total em Estoque", moeda_br(total_estoque)),
+            unsafe_allow_html=True
+        )
+
         df_valor = (
             df_atual.groupby(["Empresa / Filial", "Conta", "Produto"])
             .agg(Qtd=("Saldo Atual", "sum"), Valor=("Custo Total", "sum"))
