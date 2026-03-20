@@ -340,7 +340,7 @@ with tab2:
             fillcolor="rgba(101,116,43,0.5)",
             text=[f"{v:.2f}%" for v in y_vals],
             textposition="top center",
-            textfont=dict(color="white", size=12),
+            textfont=dict(color="white", size=11, family="Arial Black"),
         ))
 
         # Linha de meta 95%
@@ -351,6 +351,11 @@ with tab2:
             name="Meta 95%",
             line=dict(color="#ff6b6b", width=2, dash="dash"),
         ))
+
+        spread = max(y_vals) - min(y_vals)
+        padding = max(3, spread * 0.5)
+        y_min = max(0, min(y_vals) - padding)
+        y_max = min(101, max(y_vals) + padding * 2)
 
         fig.update_layout(
             title=dict(text=titulo_graf, font=dict(color="white", size=16)),
@@ -367,18 +372,15 @@ with tab2:
                 gridcolor="rgba(255,255,255,0.08)",
                 tickfont=dict(color="white"),
                 ticksuffix="%",
-                range=[
-                    max(0, min(y_vals) - 5),
-                    min(100, max(y_vals) + 3)
-                ],
+                range=[y_min, y_max],
                 title="",
             ),
             legend=dict(
                 font=dict(color="white"),
                 bgcolor="rgba(0,0,0,0)",
             ),
-            margin=dict(l=40, r=40, t=50, b=40),
-            height=420,
+            margin=dict(l=40, r=40, t=60, b=40),
+            height=450,
         )
 
         st.plotly_chart(fig, use_container_width=True)
