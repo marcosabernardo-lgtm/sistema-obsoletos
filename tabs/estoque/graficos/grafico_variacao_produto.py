@@ -87,13 +87,18 @@ def render(df_hist, moeda_br, data_selecionada):
         qtd_aument   = len(df[df["Status Mov"] == "Aumentou"])
         qtd_reduz    = len(df[df["Status Mov"] == "Reduziu"])
         qtd_zerado   = len(df[df["Status Mov"] == "Zerado"])
+        variacao_liq = total_atual - total_comp
+        perc_var     = (variacao_liq / total_comp * 100) if total_comp != 0 else 0
+        sinal_var    = "+" if variacao_liq >= 0 else ""
+        cor_var      = "#ff6b6b" if variacao_liq >= 0 else "#51cf66"
 
-        c1, c2, c3, c4, c5 = st.columns(5)
-        c1.markdown(f'<div class="card-mov"><div class="titulo">Estoque {label_comp}</div><div class="valor">{moeda_br(total_comp)}</div><div class="sub" style="color:#ccc">Período anterior</div></div>', unsafe_allow_html=True)
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        c1.markdown(f'<div class="card-mov"><div class="titulo">Estoque {label_atual}</div><div class="valor">{moeda_br(total_atual)}</div><div class="sub" style="color:#ccc">Período atual</div></div>', unsafe_allow_html=True)
         c2.markdown(f'<div class="card-mov"><div class="titulo">⬆ Aumentos ({qtd_aument})</div><div class="valor" style="color:#ff6b6b">+{moeda_br(total_aument)}</div><div class="sub" style="color:#ff6b6b">Entradas</div></div>', unsafe_allow_html=True)
         c3.markdown(f'<div class="card-mov"><div class="titulo">⬇ Reduções ({qtd_reduz})</div><div class="valor" style="color:#51cf66">-{moeda_br(total_reduz)}</div><div class="sub" style="color:#51cf66">Saídas parciais</div></div>', unsafe_allow_html=True)
         c4.markdown(f'<div class="card-mov"><div class="titulo">🚫 Zerados ({qtd_zerado})</div><div class="valor" style="color:#51cf66">-{moeda_br(total_zerado)}</div><div class="sub" style="color:#51cf66">Saídas totais</div></div>', unsafe_allow_html=True)
-        c5.markdown(f'<div class="card-mov"><div class="titulo">Estoque {label_atual}</div><div class="valor">{moeda_br(total_atual)}</div><div class="sub" style="color:#ccc">Período atual</div></div>', unsafe_allow_html=True)
+        c5.markdown(f'<div class="card-mov"><div class="titulo">Variação {label_comp}</div><div class="valor" style="color:{cor_var}">{sinal_var}{moeda_br(variacao_liq)}</div><div class="sub" style="color:{cor_var}">{sinal_var}{perc_var:.1f}%</div></div>', unsafe_allow_html=True)
+        c6.markdown(f'<div class="card-mov"><div class="titulo">Estoque {label_comp}</div><div class="valor">{moeda_br(total_comp)}</div><div class="sub" style="color:#ccc">Período anterior</div></div>', unsafe_allow_html=True)
 
     def render_tabela(df, label_comp, key_prefix):
         st.markdown("<br>", unsafe_allow_html=True)
