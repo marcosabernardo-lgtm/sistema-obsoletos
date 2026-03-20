@@ -170,34 +170,86 @@ def render(df_hist, moeda_br, data_selecionada=None):
         mov = pd.concat(frames, ignore_index=True)
         mov = mov.sort_values("Vlr Atual", ascending=False)
 
-        status_radio = st.radio(
-            "Visualizar",
-            options=["Todos", "🔴 Entrou", "🟢 Saiu", "🔽 Reduziu"],
-            horizontal=True,
-            key="filtro_status_mov"
-        )
+        st.markdown("""
+        <style>
+        div[data-testid="stRadio"] > div {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 10px 16px;
+        }
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stTextInput"] > div,
+        div[data-testid="stTextInput"] > div > div {
+            background-color: #005562 !important;
+        }
+        div[data-testid="stTextInput"] input {
+            border: 1px solid rgba(250,250,250,0.2) !important;
+            border-radius: 6px !important;
+            color: white !important;
+            padding: 8px 12px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        col_radio, col_export = st.columns([4, 1])
+        with col_radio:
+            status_radio = st.radio(
+                "Visualizar",
+                options=["Todos", "🔴 Entrou", "🟢 Saiu", "🔽 Reduziu"],
+                horizontal=True,
+                key="filtro_status_mov"
+            )
 
         if status_radio == "Todos":
             mov_filtrado = mov
         else:
             mov_filtrado = mov[mov["Status Mov"] == status_radio]
 
-        buffer = io.BytesIO()
-        mov_filtrado.to_excel(buffer, index=False)
-        buffer.seek(0)
-
-        st.download_button(
-            label="📥 Exportar movimentação para Excel",
-            data=buffer,
-            file_name="movimentacao_obsoleto.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        # Busca + ordenação
+        col_busca, col_ord, col_dir = st.columns([3, 2, 1])
 
         mov_display = mov_filtrado.copy()
         mov_display["Vlr Ant"]   = mov_display["Vlr Ant"].apply(moeda_br)
         mov_display["Vlr Atual"] = mov_display["Vlr Atual"].apply(moeda_br)
 
-        st.caption(f"{len(mov_filtrado)} itens")
+        with col_busca:
+            busca = st.text_input("🔍 PESQUISAR", placeholder="Produto, empresa, conta...", key="busca_mov_obs")
+        with col_ord:
+            ord_col = st.selectbox("📊 Classificar por", list(mov_display.columns), key="ord_col_mov_obs")
+        with col_dir:
+            ord_dir = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key="ord_dir_mov_obs")
+
+        if busca:
+            mask = mov_display.apply(lambda col: col.astype(str).str.contains(busca, case=False, na=False)).any(axis=1)
+            mov_display = mov_display[mask]
+
+        ascending = ord_dir == "⬆ Asc"
+        try:
+            mov_display = mov_display.sort_values(
+                ord_col, ascending=ascending,
+                key=lambda x: pd.to_numeric(
+                    x.astype(str).str.replace(r"[R$\s\.,%+]", "", regex=True).str.replace(",", "."),
+                    errors="coerce"
+                ).fillna(x.astype(str))
+            )
+        except Exception:
+            pass
+
+        with col_export:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            buffer = io.BytesIO()
+            mov_filtrado.to_excel(buffer, index=False)
+            buffer.seek(0)
+            st.download_button(
+                label="📥 Exportar",
+                data=buffer,
+                file_name="movimentacao_obsoleto.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+
+        st.caption(f"{len(mov_display)} itens")
         st.dataframe(mov_display, use_container_width=True, hide_index=True)
     else:
         st.info("Nenhuma movimentação encontrada para o período.")
