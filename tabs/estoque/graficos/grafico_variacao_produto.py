@@ -99,7 +99,7 @@ def render(df_hist, moeda_br, data_selecionada):
         }
         /* text_input igual ao selectbox */
         div[data-testid="stTextInput"] > div > div > input {
-            background-color: #0e1117 !important;
+            background-color: #005562 !important;
             border: 1px solid rgba(250,250,250,0.2) !important;
             border-radius: 6px !important;
             color: white !important;
