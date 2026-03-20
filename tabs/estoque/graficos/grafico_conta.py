@@ -68,4 +68,39 @@ def render(df_hist, moeda_br, data_selecionada, valor_mom_total=None):
         if col in df_exib.columns:
             df_exib[col] = df_exib[col].apply(lambda v: f"{v:.1f}%")
 
+    st.markdown("""
+    <style>
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stTextInput"] > div,
+    div[data-testid="stTextInput"] > div > div {
+        background-color: #005562 !important;
+    }
+    div[data-testid="stTextInput"] input {
+        border: 1px solid rgba(250,250,250,0.2) !important;
+        border-radius: 6px !important;
+        color: white !important;
+        padding: 8px 12px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    col_busca, col_ord, col_dir = st.columns([3, 2, 1])
+    with col_busca:
+        busca = st.text_input("🔍 PESQUISAR", placeholder="Conta, valor...", key="busca_conta")
+    with col_ord:
+        ord_col = st.selectbox("📊 Classificar por", list(df_exib.columns), key="ord_col_conta")
+    with col_dir:
+        ord_dir = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key="ord_dir_conta")
+
+    if busca:
+        mask = df_exib.apply(lambda col: col.astype(str).str.contains(busca, case=False, na=False)).any(axis=1)
+        df_exib = df_exib[mask]
+
+    ascending = ord_dir == "⬆ Asc"
+    try:
+        df_exib = df_exib.sort_values(ord_col, ascending=ascending, key=lambda x: pd.to_numeric(x.astype(str).str.replace(r"[R$\s\.,%+]", "", regex=True).str.replace(",", "."), errors="coerce").fillna(x.astype(str)))
+    except Exception:
+        pass
+
+    st.caption(f"{len(df_exib)} contas")
     st.dataframe(df_exib, use_container_width=True, hide_index=True)

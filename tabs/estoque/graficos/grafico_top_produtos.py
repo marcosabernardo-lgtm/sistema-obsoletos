@@ -9,6 +9,22 @@ def render(df_hist, moeda_br, data_selecionada):
         st.warning("Selecione uma data de fechamento.")
         return
 
+    st.markdown("""
+    <style>
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stTextInput"] > div,
+    div[data-testid="stTextInput"] > div > div {
+        background-color: #005562 !important;
+    }
+    div[data-testid="stTextInput"] input {
+        border: 1px solid rgba(250,250,250,0.2) !important;
+        border-radius: 6px !important;
+        color: white !important;
+        padding: 8px 12px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     df_atual = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
     datas_sorted = sorted(df_hist["Data Fechamento"].unique())
     idx = list(datas_sorted).index(data_selecionada) if data_selecionada in datas_sorted else -1
@@ -70,6 +86,11 @@ def render(df_hist, moeda_br, data_selecionada):
                     df_alta[col] = df_alta[col].apply(moeda_br)
             if perc_label in df_alta.columns:
                 df_alta[perc_label] = df_alta[perc_label].apply(lambda v: f"{v:.1f}%" if isinstance(v, (int,float)) else v)
+            busca_alta = st.text_input("🔍 PESQUISAR", placeholder="Produto, descrição...", key=f"busca_alta_{tipo}")
+            if busca_alta:
+                mask = df_alta.apply(lambda c: c.astype(str).str.contains(busca_alta, case=False, na=False)).any(axis=1)
+                df_alta = df_alta[mask]
+            st.caption(f"{len(df_alta)} produtos")
             st.dataframe(df_alta, use_container_width=True, hide_index=True)
 
         with col2:
@@ -81,6 +102,11 @@ def render(df_hist, moeda_br, data_selecionada):
                     df_queda[col] = df_queda[col].apply(moeda_br)
             if perc_label in df_queda.columns:
                 df_queda[perc_label] = df_queda[perc_label].apply(lambda v: f"{v:.1f}%" if isinstance(v, (int,float)) else v)
+            busca_queda = st.text_input("🔍 PESQUISAR", placeholder="Produto, descrição...", key=f"busca_queda_{tipo}")
+            if busca_queda:
+                mask = df_queda.apply(lambda c: c.astype(str).str.contains(busca_queda, case=False, na=False)).any(axis=1)
+                df_queda = df_queda[mask]
+            st.caption(f"{len(df_queda)} produtos")
             st.dataframe(df_queda, use_container_width=True, hide_index=True)
 
     # ABA 1
@@ -106,6 +132,25 @@ def render(df_hist, moeda_br, data_selecionada):
         if "% Estoque" in df_exib.columns:
             df_exib["% Estoque"] = df_exib["% Estoque"].apply(lambda v: f"{v:.1f}%")
 
+        col_busca, col_ord, col_dir = st.columns([3, 2, 1])
+        with col_busca:
+            busca_v = st.text_input("🔍 PESQUISAR", placeholder="Produto, conta, empresa...", key="busca_top_valor")
+        with col_ord:
+            ord_col_v = st.selectbox("📊 Classificar por", list(df_exib.columns), key="ord_col_top_valor")
+        with col_dir:
+            ord_dir_v = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key="ord_dir_top_valor")
+
+        if busca_v:
+            mask = df_exib.apply(lambda col: col.astype(str).str.contains(busca_v, case=False, na=False)).any(axis=1)
+            df_exib = df_exib[mask]
+
+        ascending_v = ord_dir_v == "⬆ Asc"
+        try:
+            df_exib = df_exib.sort_values(ord_col_v, ascending=ascending_v, key=lambda x: pd.to_numeric(x.astype(str).str.replace(r"[R$\s\.,%+]", "", regex=True).str.replace(",", "."), errors="coerce").fillna(x.astype(str)))
+        except Exception:
+            pass
+
+        st.caption(f"{len(df_exib)} produtos")
         st.dataframe(df_exib, use_container_width=True, hide_index=True)
 
         buffer = io.BytesIO()
