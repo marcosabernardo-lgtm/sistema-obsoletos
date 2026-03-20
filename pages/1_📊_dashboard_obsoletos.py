@@ -57,6 +57,20 @@ div[data-testid="stDataFrame"] div[role="gridcell"]{
 """, unsafe_allow_html=True)
 
 st.title("📊 Dashboard de Estoque Obsoleto")
+st.markdown("""
+<p style="
+    color: rgba(255,255,255,0.45);
+    font-size: 14px;
+    font-style: italic;
+    letter-spacing: 0.5px;
+    margin-top: -12px;
+    margin-bottom: 8px;
+    border-left: 3px solid #EC6E21;
+    padding-left: 10px;
+">
+    Itens que estão no estoque sem movimentação há mais de 180 dias.
+</p>
+""", unsafe_allow_html=True)
 st.markdown("---")
 
 # -------------------------------------------------
