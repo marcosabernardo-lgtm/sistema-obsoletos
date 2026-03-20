@@ -152,7 +152,29 @@ def render(df_hist, moeda_br, data_selecionada):
         if perc_label in df_exib.columns:
             df_exib[perc_label] = df_exib[perc_label].apply(lambda v: f"{v:.1f}%" if isinstance(v, (int,float)) else v)
 
-        st.caption(f"{len(df_filtrado)} produtos")
+        # Busca e ordenação
+        col_busca, col_ord, col_dir = st.columns([3, 2, 1])
+        with col_busca:
+            busca = st.text_input("🔍 Buscar", placeholder="Código, descrição, empresa...", key=f"busca_{key_prefix}", label_visibility="collapsed")
+        with col_ord:
+            colunas_ord = list(df_exib.columns)
+            ord_col = st.selectbox("Ordenar por", colunas_ord, key=f"ord_col_{key_prefix}", label_visibility="collapsed")
+        with col_dir:
+            ord_dir = st.selectbox("↕", ["⬇ Desc", "⬆ Asc"], key=f"ord_dir_{key_prefix}", label_visibility="collapsed")
+
+        # Aplica busca
+        if busca:
+            mask = df_exib.apply(lambda col: col.astype(str).str.contains(busca, case=False, na=False)).any(axis=1)
+            df_exib = df_exib[mask]
+
+        # Aplica ordenação
+        ascending = ord_dir == "⬆ Asc"
+        try:
+            df_exib = df_exib.sort_values(ord_col, ascending=ascending, key=lambda x: pd.to_numeric(x.str.replace(r"[R$\s\.,%+]", "", regex=True).str.replace(",", "."), errors="coerce").fillna(x.astype(str)))
+        except Exception:
+            pass
+
+        st.caption(f"{len(df_exib)} produtos")
         st.dataframe(df_exib, use_container_width=True, hide_index=True)
 
 
