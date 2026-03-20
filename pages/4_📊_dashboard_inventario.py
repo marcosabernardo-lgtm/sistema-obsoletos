@@ -497,15 +497,19 @@ with tab3:
             <table class="res-tb"><thead>{header}</thead><tbody>{linhas}</tbody></table>
             """
 
+        # Extrair valor numérico do total para o gauge
+        acu_qtd_gauge = float(rows_qtd[-1]["% Acuracidade"].replace("%", ""))
+        acu_val_gauge = float(rows_val[-1]["% Acuracidade"].replace("%", ""))
+
         if metrica_res == "Acuracidade Quantidade":
             c1, c2 = st.columns([2, 1])
             with c1:
                 st.markdown(html_tabela(rows_qtd, "SKUs Divergentes"), unsafe_allow_html=True)
             with c2:
-                st.plotly_chart(gauge(acu_qtd_t, "% Acuracidade Itens"), use_container_width=True)
+                st.plotly_chart(gauge(acu_qtd_gauge, "% Acuracidade Itens"), use_container_width=True)
         else:
             c1, c2 = st.columns([2, 1])
             with c1:
                 st.markdown(html_tabela(rows_val, "Valor Divergente"), unsafe_allow_html=True)
             with c2:
-                st.plotly_chart(gauge(acu_val_t, "% Acuracidade Valor"), use_container_width=True)
+                st.plotly_chart(gauge(acu_val_gauge, "% Acuracidade Valor"), use_container_width=True)
