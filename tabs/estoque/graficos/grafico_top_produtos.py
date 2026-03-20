@@ -86,10 +86,20 @@ def render(df_hist, moeda_br, data_selecionada):
                     df_alta[col] = df_alta[col].apply(moeda_br)
             if perc_label in df_alta.columns:
                 df_alta[perc_label] = df_alta[perc_label].apply(lambda v: f"{v:.1f}%" if isinstance(v, (int,float)) else v)
-            busca_alta = st.text_input("🔍 PESQUISAR", placeholder="Produto, descrição...", key=f"busca_alta_{tipo}")
+            cb1, co1, cd1 = st.columns([3, 2, 1])
+            with cb1:
+                busca_alta = st.text_input("🔍 PESQUISAR", placeholder="Produto, descrição...", key=f"busca_alta_{tipo}")
+            with co1:
+                ord_col_alta = st.selectbox("📊 Classificar por", list(df_alta.columns), key=f"ord_col_alta_{tipo}")
+            with cd1:
+                ord_dir_alta = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key=f"ord_dir_alta_{tipo}")
             if busca_alta:
                 mask = df_alta.apply(lambda c: c.astype(str).str.contains(busca_alta, case=False, na=False)).any(axis=1)
                 df_alta = df_alta[mask]
+            try:
+                df_alta = df_alta.sort_values(ord_col_alta, ascending=(ord_dir_alta == "⬆ Asc"), key=lambda x: pd.to_numeric(x.astype(str).str.replace(r"[R$\s\.,%+]", "", regex=True).str.replace(",", "."), errors="coerce").fillna(x.astype(str)))
+            except Exception:
+                pass
             st.caption(f"{len(df_alta)} produtos")
             st.dataframe(df_alta, use_container_width=True, hide_index=True)
 
@@ -102,10 +112,20 @@ def render(df_hist, moeda_br, data_selecionada):
                     df_queda[col] = df_queda[col].apply(moeda_br)
             if perc_label in df_queda.columns:
                 df_queda[perc_label] = df_queda[perc_label].apply(lambda v: f"{v:.1f}%" if isinstance(v, (int,float)) else v)
-            busca_queda = st.text_input("🔍 PESQUISAR", placeholder="Produto, descrição...", key=f"busca_queda_{tipo}")
+            cb2, co2, cd2 = st.columns([3, 2, 1])
+            with cb2:
+                busca_queda = st.text_input("🔍 PESQUISAR", placeholder="Produto, descrição...", key=f"busca_queda_{tipo}")
+            with co2:
+                ord_col_queda = st.selectbox("📊 Classificar por", list(df_queda.columns), key=f"ord_col_queda_{tipo}")
+            with cd2:
+                ord_dir_queda = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key=f"ord_dir_queda_{tipo}")
             if busca_queda:
                 mask = df_queda.apply(lambda c: c.astype(str).str.contains(busca_queda, case=False, na=False)).any(axis=1)
                 df_queda = df_queda[mask]
+            try:
+                df_queda = df_queda.sort_values(ord_col_queda, ascending=(ord_dir_queda == "⬆ Asc"), key=lambda x: pd.to_numeric(x.astype(str).str.replace(r"[R$\s\.,%+]", "", regex=True).str.replace(",", "."), errors="coerce").fillna(x.astype(str)))
+            except Exception:
+                pass
             st.caption(f"{len(df_queda)} produtos")
             st.dataframe(df_queda, use_container_width=True, hide_index=True)
 
