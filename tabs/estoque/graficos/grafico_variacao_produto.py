@@ -59,10 +59,10 @@ def render(df_hist, moeda_br, data_selecionada):
         grp_atual = df_atual.groupby(["Empresa / Filial", "Conta", "Produto"]).agg(
             Valor_Atual=("Custo Total", "sum")
         ).reset_index()
-        grp_comp = df_comp.groupby("Produto").agg(
+        grp_comp = df_comp.groupby(["Empresa / Filial", "Conta", "Produto"]).agg(
             Valor_Comp=("Custo Total", "sum")
         ).reset_index()
-        df = grp_atual.merge(grp_comp, on="Produto", how="left").fillna(0)
+        df = grp_atual.merge(grp_comp, on=["Empresa / Filial", "Conta", "Produto"], how="outer").fillna(0)
         df["Descricao"]  = df["Produto"].map(desc_map).fillna("—").astype(str)
         df["Variacao"]   = df["Valor_Atual"] - df["Valor_Comp"]
         df["Perc"]       = df.apply(lambda r: (r["Variacao"] / r["Valor_Comp"] * 100) if r["Valor_Comp"] != 0 else 0, axis=1)
