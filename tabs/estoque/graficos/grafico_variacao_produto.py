@@ -136,59 +136,18 @@ def render(df_hist, moeda_br, data_selecionada):
         delta_label = f"Δ {tipo} {label_comp}"
         perc_label  = f"% {tipo}"
 
-        def cor_status(s):
-            if s == "Aumentou": return "color:#ff6b6b;font-weight:700"
-            if s in ("Reduziu", "Zerado"): return "color:#51cf66;font-weight:700"
-            return "color:#f0a500;font-weight:700"
-
-        def icone_delta(v):
-            if v > 0:   return f'<span style="color:#ff6b6b">+{moeda_br(abs(v))}</span>'
-            elif v < 0: return f'<span style="color:#51cf66">-{moeda_br(abs(v))}</span>'
-            return f'<span style="color:#aaa">{moeda_br(0)}</span>'
-
-        def icone_perc(perc, s):
-            if s == "Aumentou":            return f'<span style="color:#ff6b6b;font-weight:700">⬆ {abs(perc):.1f}%</span>'
-            if s in ("Reduziu", "Zerado"): return f'<span style="color:#51cf66;font-weight:700">⬇ {abs(perc):.1f}%</span>'
-            return '<span style="color:#f0a500;font-weight:700">● 0%</span>'
-
-        css_tb = (
-            "<style>.tb-var{width:100%;border-collapse:collapse;font-size:13px;color:white}"
-            ".tb-var th{background:#0f5a60;padding:10px 12px;text-align:left;border-bottom:2px solid #EC6E21;font-weight:700;white-space:nowrap}"
-            ".tb-var th:nth-child(n+6){text-align:right}"
-            ".tb-var td{padding:7px 12px;border-bottom:1px solid #1a6e75;background:#005562;color:white}"
-            ".tb-var td:nth-child(n+6){text-align:right}"
-            ".tb-var tr:hover td{background:#0a6570}</style>"
-        )
-
-        linhas = ""
-        for _, row in df_filtrado.iterrows():
-            cs = cor_status(row["Status Mov"])
-            linhas += (
-                "<tr>"
-                f"<td style='{cs}'>{row['Status Mov']}</td>"
-                f"<td>{row.get('Empresa / Filial','')}</td>"
-                f"<td>{row.get('Conta','')}</td>"
-                f"<td>{row['Produto']}</td>"
-                f"<td>{row['Descricao'][:40]}</td>"
-                f"<td style='text-align:right'>{moeda_br(row['Valor_Atual'])}</td>"
-                f"<td style='text-align:right'>{moeda_br(row['Valor_Comp'])}</td>"
-                f"<td style='text-align:right'>{icone_delta(row['Variacao'])}</td>"
-                f"<td style='text-align:right'>{icone_perc(row['Perc'], row['Status Mov'])}</td>"
-                "</tr>"
-            )
+        df_exib = df_filtrado[["Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao", "Valor_Atual", "Valor_Comp", "Variacao", "Perc"]].copy()
+        df_exib = df_exib.rename(columns={
+            "Status Mov":  "Status Movimento",
+            "Descricao":   "Descrição",
+            "Valor_Atual": val_label,
+            "Valor_Comp":  comp_label,
+            "Variacao":    delta_label,
+            "Perc":        perc_label,
+        })
 
         st.caption(f"{len(df_filtrado)} produtos")
-        st.markdown(
-            css_tb +
-            f"<table class='tb-var'><thead><tr>"
-            "<th>Status Movimento</th><th>Empresa / Filial</th><th>Conta</th><th>Produto</th><th>Descrição</th>"
-            f"<th style='text-align:right'>{val_label}</th>"
-            f"<th style='text-align:right'>{comp_label}</th>"
-            f"<th style='text-align:right'>{delta_label}</th>"
-            f"<th style='text-align:right'>{perc_label}</th>"
-            "</tr></thead><tbody>" + linhas + "</tbody></table>",
-            unsafe_allow_html=True
-        )
+        st.dataframe(df_exib, use_container_width=True, hide_index=True)
 
 
 

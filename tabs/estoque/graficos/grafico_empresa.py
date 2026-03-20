@@ -15,7 +15,6 @@ def render(df, moeda_br, data_selecionada=None):
     datas_sorted = sorted(df["Data Fechamento"].unique())
     idx = list(datas_sorted).index(data_ref) if data_ref in datas_sorted else -1
 
-    # MoM
     if idx > 0:
         data_mom = datas_sorted[idx - 1]
         df_mom = df[df["Data Fechamento"] == data_mom].copy()
@@ -23,7 +22,6 @@ def render(df, moeda_br, data_selecionada=None):
         df_mom = pd.DataFrame(columns=df.columns)
         data_mom = None
 
-    # YoY
     data_yoy_alvo = data_ref - pd.DateOffset(years=1)
     datas_yoy = [d for d in datas_sorted if abs((pd.Timestamp(d) - data_yoy_alvo).days) <= 31]
     if datas_yoy:
@@ -41,70 +39,30 @@ def render(df, moeda_br, data_selecionada=None):
     df_tabela = df_tabela.merge(grp_yoy, on="Empresa / Filial", how="left")
     df_tabela["Valor MoM"] = df_tabela["Valor MoM"].fillna(0)
     df_tabela["Valor YoY"] = df_tabela["Valor YoY"].fillna(0)
-
-    df_tabela["Perc MoM"] = df_tabela.apply(lambda r: ((r["Valor Estoque"] - r["Valor MoM"]) / r["Valor MoM"] * 100) if r["Valor MoM"] != 0 else 0, axis=1)
-    df_tabela["Perc YoY"] = df_tabela.apply(lambda r: ((r["Valor Estoque"] - r["Valor YoY"]) / r["Valor YoY"] * 100) if r["Valor YoY"] != 0 else 0, axis=1)
+    df_tabela["% MoM"] = df_tabela.apply(lambda r: ((r["Valor Estoque"] - r["Valor MoM"]) / r["Valor MoM"] * 100) if r["Valor MoM"] != 0 else 0, axis=1)
+    df_tabela["% YoY"] = df_tabela.apply(lambda r: ((r["Valor Estoque"] - r["Valor YoY"]) / r["Valor YoY"] * 100) if r["Valor YoY"] != 0 else 0, axis=1)
     df_tabela = df_tabela.sort_values("Valor Estoque", ascending=False).reset_index(drop=True)
 
-    total_atual    = df_tabela["Valor Estoque"].sum()
-    total_mom      = df_tabela["Valor MoM"].sum()
-    total_yoy      = df_tabela["Valor YoY"].sum()
-    total_perc_mom = ((total_atual - total_mom) / total_mom * 100) if total_mom != 0 else 0
-    total_perc_yoy = ((total_atual - total_yoy) / total_yoy * 100) if total_yoy != 0 else 0
+    atual_col = f"Valor Estoque {data_ref.strftime('%y-%b').lower()}"
+    mom_label = f"MoM {pd.Timestamp(data_mom).strftime('%y-%b').lower()}" if data_mom else "MoM"
+    yoy_label = f"YoY {pd.Timestamp(data_yoy).strftime('%y-%b').lower()}" if data_yoy else "YoY"
 
-    def icone_perc(perc):
-        if perc > 1:    return f'<span style="color:#ff6b6b;font-weight:700">&#11014; {abs(perc):.0f}%</span>'
-        elif perc < -1: return f'<span style="color:#51cf66;font-weight:700">&#11015; {abs(perc):.0f}%</span>'
-        else:           return f'<span style="color:#f0a500;font-weight:700">&#9679; {abs(perc):.0f}%</span>'
+    df_exib = df_tabela.rename(columns={
+        "Valor Estoque": atual_col,
+        "Valor MoM": mom_label,
+        "Valor YoY": yoy_label,
+    })
 
-    atual_label = data_ref.strftime('%y-%b').lower()
-    mom_label   = f"MoM {pd.Timestamp(data_mom).strftime('%y-%b').lower()}" if data_mom else "MoM"
-    yoy_label   = f"YoY {pd.Timestamp(data_yoy).strftime('%y-%b').lower()}" if data_yoy else "YoY"
-    atual_col   = f"Valor Estoque {atual_label}"
+    # Linha de total
+    total = pd.DataFrame([{
+        "Empresa / Filial": "Total",
+        atual_col: df_tabela["Valor Estoque"].sum(),
+        mom_label: df_tabela["Valor MoM"].sum(),
+        "% MoM": ((df_tabela["Valor Estoque"].sum() - df_tabela["Valor MoM"].sum()) / df_tabela["Valor MoM"].sum() * 100) if df_tabela["Valor MoM"].sum() != 0 else 0,
+        yoy_label: df_tabela["Valor YoY"].sum(),
+        "% YoY": ((df_tabela["Valor Estoque"].sum() - df_tabela["Valor YoY"].sum()) / df_tabela["Valor YoY"].sum() * 100) if df_tabela["Valor YoY"].sum() != 0 else 0,
+    }])
 
-    linhas = ""
-    for _, row in df_tabela.iterrows():
-        linhas += (
-            "<tr>"
-            f"<td>{row['Empresa / Filial']}</td>"
-            f"<td>{moeda_br(row['Valor Estoque'])}</td>"
-            f"<td>{moeda_br(row['Valor MoM'])}</td>"
-            f"<td>{icone_perc(row['Perc MoM'])}</td>"
-            f"<td>{moeda_br(row['Valor YoY']) if row['Valor YoY'] != 0 else '—'}</td>"
-            f"<td>{icone_perc(row['Perc YoY']) if row['Valor YoY'] != 0 else '—'}</td>"
-            "</tr>"
-        )
+    df_exib = pd.concat([df_exib, total], ignore_index=True)
 
-    total_html = (
-        "<tr style='font-weight:700;border-top:2px solid #EC6E21'>"
-        f"<td>Total</td>"
-        f"<td>{moeda_br(total_atual)}</td>"
-        f"<td>{moeda_br(total_mom)}</td>"
-        f"<td>{icone_perc(total_perc_mom)}</td>"
-        f"<td>{moeda_br(total_yoy) if total_yoy != 0 else '—'}</td>"
-        f"<td>{icone_perc(total_perc_yoy) if total_yoy != 0 else '—'}</td>"
-        "</tr>"
-    )
-
-    css = (
-        "<style>"
-        ".tb-emp{width:100%;border-collapse:collapse;font-size:14px;color:white;}"
-        ".tb-emp th{background-color:#0f5a60;color:white;padding:10px 14px;text-align:left;"
-        "border-bottom:2px solid #EC6E21;font-weight:700;}"
-        ".tb-emp th:not(:first-child){text-align:right;}"
-        ".tb-emp td{padding:8px 14px;border-bottom:1px solid #1a6e75;background-color:#005562;color:white;}"
-        ".tb-emp td:not(:first-child){text-align:right;}"
-        ".tb-emp tr:hover td{background-color:#0a6570;}"
-        "</style>"
-    )
-
-    tabela = (
-        css
-        + "<table class='tb-emp'><thead><tr>"
-        + f"<th>Empresa / Filial</th><th>{atual_col}</th><th>{mom_label}</th><th>% MoM</th><th>{yoy_label}</th><th>% YoY</th>"
-        + "</tr></thead><tbody>"
-        + linhas + total_html
-        + "</tbody></table>"
-    )
-
-    st.markdown(tabela, unsafe_allow_html=True)
+    st.dataframe(df_exib, use_container_width=True, hide_index=True)
