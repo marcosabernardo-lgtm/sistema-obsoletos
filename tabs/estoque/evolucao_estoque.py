@@ -54,11 +54,31 @@ def render(df_hist, df_obsoleto, moeda_br, df_kpi=None, data_selecionada=None, v
                 lambda x: f"{(x / total_estoque * 100):.1f}%" if total_estoque > 0 else "—"
             )
 
-            # Exportar + contagem
-            col_info, col_export = st.columns([4, 1])
-            with col_info:
-                st.caption(f"{len(base):,} registros")
+            st.markdown("""
+            <style>
+            div[data-testid="stTextInput"] input,
+            div[data-testid="stTextInput"] > div,
+            div[data-testid="stTextInput"] > div > div {
+                background-color: #005562 !important;
+            }
+            div[data-testid="stTextInput"] input {
+                border: 1px solid rgba(250,250,250,0.2) !important;
+                border-radius: 6px !important;
+                color: white !important;
+                padding: 8px 12px !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
+            col_busca, col_ord, col_dir, col_export = st.columns([3, 2, 1, 1])
+            with col_busca:
+                busca = st.text_input("🔍 PESQUISAR", placeholder="Produto, empresa, conta...", key="busca_base_hist")
+            with col_ord:
+                ord_col = st.selectbox("📊 Classificar por", list(base_display.columns), key="ord_col_base_hist")
+            with col_dir:
+                ord_dir = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key="ord_dir_base_hist")
             with col_export:
+                st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
                 buffer = io.BytesIO()
                 base.to_excel(buffer, index=False)
                 buffer.seek(0)
@@ -70,6 +90,23 @@ def render(df_hist, df_obsoleto, moeda_br, df_kpi=None, data_selecionada=None, v
                     use_container_width=True
                 )
 
+            if busca:
+                mask = base_display.apply(lambda col: col.astype(str).str.contains(busca, case=False, na=False)).any(axis=1)
+                base_display = base_display[mask]
+
+            ascending = ord_dir == "⬆ Asc"
+            try:
+                base_display = base_display.sort_values(
+                    ord_col, ascending=ascending,
+                    key=lambda x: pd.to_numeric(
+                        x.astype(str).str.replace(r"[R$\s\.,%+]", "", regex=True).str.replace(",", "."),
+                        errors="coerce"
+                    ).fillna(x.astype(str))
+                )
+            except Exception:
+                pass
+
+            st.caption(f"{len(base_display):,} registros")
             st.dataframe(base_display, use_container_width=True, hide_index=True)
 
     with tab1:
