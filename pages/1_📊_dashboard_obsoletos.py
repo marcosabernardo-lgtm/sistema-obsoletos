@@ -148,8 +148,7 @@ filtros = render_filtros_topo(
     datas=datas_fmt_list,
     empresas=empresas_disponiveis,
     extras=extras if extras else None,
-    key_prefix="obsoletos",
-    df_preview=df_preview
+    key_prefix="obsoletos"
 )
 
 data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
