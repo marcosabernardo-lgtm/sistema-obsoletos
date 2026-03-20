@@ -98,8 +98,12 @@ def render(df_hist, moeda_br, data_selecionada):
             padding: 10px 16px;
         }
         /* text_input igual ao selectbox */
-        div[data-testid="stTextInput"] > div > div > input {
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stTextInput"] > div,
+        div[data-testid="stTextInput"] > div > div {
             background-color: #005562 !important;
+        }
+        div[data-testid="stTextInput"] input {
             border: 1px solid rgba(250,250,250,0.2) !important;
             border-radius: 6px !important;
             color: white !important;
