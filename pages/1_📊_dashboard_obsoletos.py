@@ -140,9 +140,18 @@ ORDEM_STATUS = ["Todas", "Até 6 meses", "Até 1 ano", "+ 1 ano", "+ 2 anos", "S
 status_existentes  = sorted(df_preview["Status do Movimento"].dropna().unique().tolist()) if "Status do Movimento" in df_preview.columns else []
 status_disponiveis = ["Todas"] + [s for s in ORDEM_STATUS[1:] if s in status_existentes]
 
+# Tipo de Estoque: filtrado pelos EF ativos e conta
+tipos_ja_sel   = st.session_state.get("obsoletos_tipo_de_estoque", [])
+df_tipo_filtro = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
+if contas_ja_sel:
+    df_tipo_filtro = df_tipo_filtro[df_tipo_filtro["Conta"].isin(contas_ja_sel)]
+tipos_estoque_disp = sorted(df_tipo_filtro["Tipo de Estoque"].dropna().unique().tolist()) if "Tipo de Estoque" in df_tipo_filtro.columns else []
+
 extras = {}
 if contas_disponiveis:
     extras["Conta"] = contas_disponiveis
+if tipos_estoque_disp:
+    extras["Tipo de Estoque"] = tipos_estoque_disp
 
 filtros = render_filtros_topo(
     datas=datas_fmt_list,
@@ -154,6 +163,7 @@ filtros = render_filtros_topo(
 data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
 empresas_sel     = filtros["empresas"]
 contas_sel       = filtros.get("conta", [])
+tipos_sel        = filtros.get("tipo_de_estoque", [])
 
 # Status do Movimento — radio buttons
 st.markdown("""
@@ -202,6 +212,8 @@ if empresas_sel:
     df_kpi = df_kpi[df_kpi["Empresa / Filial"].isin(empresas_sel)]
 if contas_sel:
     df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
+if tipos_sel:
+    df_kpi = df_kpi[df_kpi["Tipo de Estoque"].isin(tipos_sel)]
 
 # Disponibiliza o df completo para a aba Base Histórica
 st.session_state["df_kpi_completo"] = df_kpi
@@ -283,6 +295,8 @@ if empresas_sel:
     df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Empresa / Filial"].isin(empresas_sel)]
 if contas_sel:
     df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Conta"].isin(contas_sel)]
+if tipos_sel:
+    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Tipo de Estoque"].isin(tipos_sel)]
 
 # -------------------------------------------------
 # ABAS

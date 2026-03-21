@@ -133,30 +133,16 @@ ef_ativos = [
 df_conta_filtro = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
 contas_disponiveis = sorted(df_conta_filtro["Conta"].dropna().unique()) if "Conta" in df_conta_filtro.columns else []
 
-# Tipos de estoque: filtrados pelos EF ativos e conta selecionada
-tipos_ja_sel = st.session_state.get("estoque_tipo_de_estoque", [])
-df_tipo_filtro = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
-if contas_ja_sel:
-    df_tipo_filtro = df_tipo_filtro[df_tipo_filtro["Conta"].isin(contas_ja_sel)]
-tipos_estoque_disp = sorted(df_tipo_filtro["Tipo de Estoque"].dropna().unique().tolist()) if "Tipo de Estoque" in df_tipo_filtro.columns else []
-
-extras_filtros = {}
-if contas_disponiveis:
-    extras_filtros["Conta"] = contas_disponiveis
-if tipos_estoque_disp:
-    extras_filtros["Tipo de Estoque"] = tipos_estoque_disp
-
 filtros = render_filtros_topo(
     datas=datas_fmt_list,
     empresas=empresas_disponiveis,
-    extras=extras_filtros if extras_filtros else None,
+    extras={"Conta": contas_disponiveis} if contas_disponiveis else None,
     key_prefix="estoque"
 )
 
 data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
 empresas_sel     = filtros["empresas"]
 contas_sel       = filtros.get("conta", [])
-tipos_sel        = filtros.get("tipo_de_estoque", [])
 
 # -------------------------------------------------
 # FILTRAR BASE KPI
@@ -167,8 +153,7 @@ if empresas_sel:
     df_kpi = df_kpi[df_kpi["Empresa / Filial"].isin(empresas_sel)]
 if contas_sel:
     df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
-if tipos_sel:
-    df_kpi = df_kpi[df_kpi["Tipo de Estoque"].isin(tipos_sel)]
+
 
 # -------------------------------------------------
 # CALCULAR MoM e YoY
@@ -273,8 +258,7 @@ if empresas_sel:
     df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Empresa / Filial"].isin(empresas_sel)]
 if contas_sel:
     df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Conta"].isin(contas_sel)]
-if tipos_sel:
-    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Tipo de Estoque"].isin(tipos_sel)]
+
 
 # -------------------------------------------------
 # RENDER ABAS
