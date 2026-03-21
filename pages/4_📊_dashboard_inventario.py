@@ -262,8 +262,12 @@ with tab1:
     try:
         df_display = df_display.sort_values(ord_col, ascending=ascending,
             key=lambda x: pd.to_numeric(
-                x.astype(str).str.replace(r"[R$\s\.,%+]", "", regex=True).str.replace(",", "."),
-                errors="coerce").fillna(x.astype(str)))
+                x.astype(str)
+                 .str.replace("R$", "", regex=False)
+                 .str.replace(".", "", regex=False)
+                 .str.replace(",", ".", regex=False)
+                 .str.strip(),
+                errors="coerce").fillna(float("inf") if not ascending else float("-inf")))
     except Exception:
         pass
 
