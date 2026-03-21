@@ -133,8 +133,12 @@ ef_ativos = [
 df_conta_filtro = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
 contas_disponiveis = sorted(df_conta_filtro["Conta"].dropna().unique()) if "Conta" in df_conta_filtro.columns else []
 
-# Tipos de estoque disponíveis
-tipos_estoque_disp = sorted(df_preview["Tipo de Estoque"].dropna().unique().tolist()) if "Tipo de Estoque" in df_preview.columns else []
+# Tipos de estoque: filtrados pelos EF ativos e conta selecionada
+tipos_ja_sel = st.session_state.get("estoque_tipo_de_estoque", [])
+df_tipo_filtro = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
+if contas_ja_sel:
+    df_tipo_filtro = df_tipo_filtro[df_tipo_filtro["Conta"].isin(contas_ja_sel)]
+tipos_estoque_disp = sorted(df_tipo_filtro["Tipo de Estoque"].dropna().unique().tolist()) if "Tipo de Estoque" in df_tipo_filtro.columns else []
 
 extras_filtros = {}
 if contas_disponiveis:
