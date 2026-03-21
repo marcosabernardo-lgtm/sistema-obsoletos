@@ -25,8 +25,8 @@ section[data-testid="stSidebar"] { display: none !important; }
     justify-content:center;
 }
 .kpi-title{ font-size:13px; color:#ccc; }
-.kpi-value{ font-size:24px; font-weight:700; color:white; }
-.kpi-value-green{ font-size:24px; font-weight:700; color:#51cf66; }
+.kpi-value{ font-size:20px; font-weight:700; color:white; }
+.kpi-value-green{ font-size:20px; font-weight:700; color:#51cf66; }
 
 div[data-testid="stRadio"] > div {
     display: flex;
@@ -215,68 +215,60 @@ with tab1:
     ]
     df_tab = df_tab[[c for c in colunas_ordem if c in df_tab.columns]]
 
-    LINHAS_POR_PAGINA = 50
-    total_linhas  = len(df_tab)
-    total_paginas = max(1, -(-total_linhas // LINHAS_POR_PAGINA))
+    import io as _io
 
-    col_info, col_nav = st.columns([3, 1])
-    with col_info:
-        st.write(f"**{total_linhas:,}** registros".replace(",", "."))
-    with col_nav:
-        pagina = st.number_input("Página", min_value=1, max_value=total_paginas, value=1, step=1, label_visibility="collapsed")
-        st.caption(f"Página {pagina} de {total_paginas}")
-
-    inicio  = (pagina - 1) * LINHAS_POR_PAGINA
-    fim     = inicio + LINHAS_POR_PAGINA
-    df_page = df_tab.iloc[inicio:fim].copy()
-    df_raw  = df_page.copy()
-
-    colunas_moeda = ["Valor Invent", "Valor Protheus", "Valor Divergente", "Valor Unit"]
-    colunas_qtd   = ["Qtd Invent", "Qtd Protheus", "Qtd Divergente"]
-
-    for c in colunas_moeda:
-        if c in df_page.columns:
-            df_page[c] = df_page[c].apply(moeda_br)
-    for c in colunas_qtd:
-        if c in df_page.columns:
-            df_page[c] = df_page[c].apply(fmt_qtd)
-
-    colunas = list(df_page.columns)
-    header  = "".join(f"<th>{c}</th>" for c in colunas)
-    rows    = ""
-    for i, (_, row) in enumerate(df_page.iterrows()):
-        cells = ""
-        for c in colunas:
-            style = ""
-            if c in ["Qtd Divergente", "Valor Divergente"]:
-                try:
-                    v = float(df_raw.iloc[i][c])
-                    if v > 0:
-                        style = "color:#EC6E21;font-weight:600"
-                    elif v < 0:
-                        style = "color:#51cf66;font-weight:600"
-                except:
-                    pass
-            cells += f'<td style="{style}">{row[c]}</td>'
-        rows += f"<tr>{cells}</tr>"
-
-    st.markdown(f"""
+    st.markdown("""
     <style>
-    .inv-table-wrap {{ overflow-x:auto; border-radius:10px; border:1px solid rgba(255,255,255,0.08); }}
-    .inv-table {{ width:100%; border-collapse:collapse; font-size:13px; font-family:sans-serif; }}
-    .inv-table thead th {{ background-color:#0f5a60; color:white; font-weight:600; padding:10px 14px; text-align:left; border-bottom:2px solid #EC6E21; white-space:nowrap; }}
-    .inv-table tbody tr {{ border-bottom:1px solid rgba(255,255,255,0.06); }}
-    .inv-table tbody tr:hover {{ background-color:rgba(236,110,33,0.08); }}
-    .inv-table tbody td {{ padding:9px 14px; color:white; background-color:#0f5a60; white-space:nowrap; }}
-    .inv-table tbody tr:nth-child(even) td {{ background-color:#0d4f55; }}
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stTextInput"] > div,
+    div[data-testid="stTextInput"] > div > div { background-color: #005562 !important; }
+    div[data-testid="stTextInput"] input {
+        border: 1px solid rgba(250,250,250,0.2) !important;
+        border-radius: 6px !important; color: white !important; padding: 8px 12px !important;
+    }
     </style>
-    <div class="inv-table-wrap">
-        <table class="inv-table">
-            <thead><tr>{header}</tr></thead>
-            <tbody>{rows}</tbody>
-        </table>
-    </div>
     """, unsafe_allow_html=True)
+
+    # Formata para exibição
+    df_display = df_tab.copy()
+    for c in ["Valor Invent", "Valor Protheus", "Valor Divergente", "Valor Unit"]:
+        if c in df_display.columns:
+            df_display[c] = df_display[c].apply(moeda_br)
+    for c in ["Qtd Invent", "Qtd Protheus", "Qtd Divergente"]:
+        if c in df_display.columns:
+            df_display[c] = df_display[c].apply(fmt_qtd)
+
+    col_busca, col_ord, col_dir, col_export = st.columns([3, 2, 1, 1])
+    with col_busca:
+        busca = st.text_input("🔍 PESQUISAR", placeholder="Produto, empresa, descrição...", key="busca_inv_base")
+    with col_ord:
+        ord_col = st.selectbox("📊 Classificar por", list(df_display.columns), key="ord_col_inv_base")
+    with col_dir:
+        ord_dir = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key="ord_dir_inv_base")
+    with col_export:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        buf = _io.BytesIO()
+        df_tab.to_excel(buf, index=False)
+        buf.seek(0)
+        st.download_button("📥 Exportar", data=buf, file_name="base_inventario.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True)
+
+    if busca:
+        mask = df_display.apply(lambda col: col.astype(str).str.contains(busca, case=False, na=False)).any(axis=1)
+        df_display = df_display[mask]
+
+    ascending = ord_dir == "⬆ Asc"
+    try:
+        df_display = df_display.sort_values(ord_col, ascending=ascending,
+            key=lambda x: pd.to_numeric(
+                x.astype(str).str.replace(r"[R$\s\.,%+]", "", regex=True).str.replace(",", "."),
+                errors="coerce").fillna(x.astype(str)))
+    except Exception:
+        pass
+
+    st.caption(f"{len(df_display):,} registros")
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
 
 # ── ABA 2: Análise de Inventário ─────────────────────────────────────────────
 with tab2:
