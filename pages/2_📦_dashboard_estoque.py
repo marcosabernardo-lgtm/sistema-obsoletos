@@ -137,8 +137,7 @@ filtros = render_filtros_topo(
     datas=datas_fmt_list,
     empresas=empresas_disponiveis,
     extras={"Conta": contas_disponiveis} if contas_disponiveis else None,
-    key_prefix="estoque",
-    df_preview=df_preview
+    key_prefix="estoque"
 )
 
 data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
