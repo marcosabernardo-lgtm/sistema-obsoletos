@@ -233,10 +233,10 @@ with tab1:
     df_display = df_tab.copy()
     for c in ["Valor Invent", "Valor Protheus", "Valor Divergente", "Valor Unit"]:
         if c in df_display.columns:
-            df_display[c] = df_display[c].apply(moeda_br)
+            df_display[c] = pd.to_numeric(df_display[c], errors="coerce").fillna(0).apply(moeda_br)
     for c in ["Qtd Invent", "Qtd Protheus", "Qtd Divergente"]:
         if c in df_display.columns:
-            df_display[c] = df_display[c].apply(fmt_qtd)
+            df_display[c] = pd.to_numeric(df_display[c], errors="coerce").fillna(0).apply(fmt_qtd)
 
     col_busca, col_ord, col_dir, col_export = st.columns([3, 2, 1, 1])
     with col_busca:
