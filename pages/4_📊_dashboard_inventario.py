@@ -19,17 +19,14 @@ section[data-testid="stSidebar"] { display: none !important; }
     padding:16px;
     border-radius:10px;
     text-align:center;
+    min-height:100px;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
 }
-.kpi-card-green{
-    background-color:#005562;
-    border:2px solid #51cf66;
-    padding:16px;
-    border-radius:10px;
-    text-align:center;
-}
-.kpi-title{ font-size:14px; color:white; }
-.kpi-value{ font-size:26px; font-weight:700; color:white; }
-.kpi-value-green{ font-size:26px; font-weight:700; color:#51cf66; }
+.kpi-title{ font-size:13px; color:#ccc; }
+.kpi-value{ font-size:24px; font-weight:700; color:white; }
+.kpi-value-green{ font-size:24px; font-weight:700; color:#51cf66; }
 
 div[data-testid="stRadio"] > div {
     display: flex;
@@ -123,28 +120,30 @@ div[data-testid="stSelectbox"] label {
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="filtros-container">', unsafe_allow_html=True)
-col_data, col_empresa = st.columns([1, 2])
+from utils.navbar import render_filtros_topo as _render_filtros_topo
 
-with col_data:
-    data_sel = st.selectbox("Fechamento", options=datas_fmt_list, index=0, key="inventario_data")
+# Preview para montar opções
+data_preview_str = st.session_state.get("inventario_data", datas_fmt_list[0])
+data_preview     = pd.Timestamp(datas_map.get(data_preview_str, datas_disponiveis[0]))
+df_preview       = df[df["Data_Inventario"] == data_preview]
+empresas_ef_disp = sorted(df_preview["Nome_Empresa"].dropna().unique()) if "Nome_Empresa" in df_preview.columns else []
 
-data_selecionada = pd.Timestamp(datas_map[data_sel])
-df_data          = df[df["Data_Inventario"] == data_selecionada]
-empresas_disp    = ["Todas"] + sorted(df_data["Nome_Empresa"].dropna().unique().tolist()) if "Nome_Empresa" in df_data.columns else ["Todas"]
+filtros = _render_filtros_topo(
+    datas=datas_fmt_list,
+    empresas=empresas_ef_disp,
+    key_prefix="inventario"
+)
 
-with col_empresa:
-    empresa_sel = st.selectbox("Empresa / Filial", options=empresas_disp, index=0, key="inventario_empresa")
-
-st.markdown('</div>', unsafe_allow_html=True)
+data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
+ef_sel           = filtros["empresas"]  # lista de Nome_Empresa filtrada por Empresa+Filial
 
 df_kpi = df[df["Data_Inventario"] == data_selecionada].copy()
-if empresa_sel != "Todas":
-    df_kpi = df_kpi[df_kpi["Nome_Empresa"] == empresa_sel]
+if ef_sel:
+    df_kpi = df_kpi[df_kpi["Nome_Empresa"].isin(ef_sel)]
 
 df_hist_filtrado = df.copy()
-if empresa_sel != "Todas":
-    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Nome_Empresa"] == empresa_sel]
+if ef_sel:
+    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Nome_Empresa"].isin(ef_sel)]
 
 qtd_inventariada  = df_kpi["Qtd_Itens_Inventariados"].sum() if "Qtd_Itens_Inventariados" in df_kpi.columns else len(df_kpi)
 qtd_divergentes   = int(df_kpi["Qtd_Itens_Divergentes"].sum()) if "Qtd_Itens_Divergentes" in df_kpi.columns else 0
@@ -157,10 +156,10 @@ col1, col2, col3, col4, col5, col6 = st.columns(6)
 
 col1.markdown(f"""<div class="kpi-card"><div class="kpi-title">Qtd Inventariada</div><div class="kpi-value">{fmt_qtd(qtd_inventariada)}</div></div>""", unsafe_allow_html=True)
 col2.markdown(f"""<div class="kpi-card"><div class="kpi-title">Qtd Divergentes</div><div class="kpi-value">{fmt_qtd(qtd_divergentes)}</div></div>""", unsafe_allow_html=True)
-col3.markdown(f"""<div class="kpi-card-green"><div class="kpi-title">Acuracidade %</div><div class="kpi-value-green">{acuracidade_itens*100:.2f}%</div></div>""", unsafe_allow_html=True)
+col3.markdown(f"""<div class="kpi-card"><div class="kpi-title">Acuracidade Qtd</div><div class="kpi-value kpi-value-green">{acuracidade_itens*100:.2f}%</div></div>""", unsafe_allow_html=True)
 col4.markdown(f"""<div class="kpi-card"><div class="kpi-title">Valor Inventariado</div><div class="kpi-value">{moeda_br(valor_inventariado)}</div></div>""", unsafe_allow_html=True)
 col5.markdown(f"""<div class="kpi-card"><div class="kpi-title">Valor Divergente</div><div class="kpi-value">{moeda_br(valor_divergente)}</div></div>""", unsafe_allow_html=True)
-col6.markdown(f"""<div class="kpi-card-green"><div class="kpi-title">Acuracidade %</div><div class="kpi-value-green">{acuracidade_itens*100:.2f}%</div></div>""", unsafe_allow_html=True)
+col6.markdown(f"""<div class="kpi-card"><div class="kpi-title">Acuracidade Valor</div><div class="kpi-value kpi-value-green">{acuracidade_itens*100:.2f}%</div></div>""", unsafe_allow_html=True)
 
 st.markdown("---")
 
