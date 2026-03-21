@@ -136,7 +136,7 @@ df_conta_filtro = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
 contas_disponiveis = sorted(df_conta_filtro["Conta"].dropna().unique())
 
 # Opções de Status do Movimento — ordem lógica fixa
-ORDEM_STATUS = ["Todas", "Até 6 meses", "Até 1 ano", "+ 1 ano", "+ 2 anos", "Sem Movimento"]
+ORDEM_STATUS = ["Todas", "Até 6 meses", "Até 1 ano", "Até 2 anos", "+ 2 anos", "Sem Movimento"]
 status_existentes  = sorted(df_preview["Status do Movimento"].dropna().unique().tolist()) if "Status do Movimento" in df_preview.columns else []
 status_disponiveis = ["Todas"] + [s for s in ORDEM_STATUS[1:] if s in status_existentes]
 
@@ -223,10 +223,10 @@ st.session_state["df_kpi_completo"] = df_kpi
 # -------------------------------------------------
 
 MAPA_STATUS = {
+    "Até 6 meses":   ["Até 6 meses"],
     "Até 1 ano":     ["Até 6 meses", "Até 1 ano"],
-    "+ 1 ano":       ["+ 1 ano"],
+    "Até 2 anos":    ["Até 2 anos"],
     "+ 2 anos":      ["+ 2 anos"],
-    "> 1 ano":       ["+ 1 ano", "+ 2 anos", "Sem Movimento"],
     "Sem Movimento": ["Sem Movimento"],
 }
 
