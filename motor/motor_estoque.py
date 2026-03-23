@@ -113,8 +113,15 @@ def executar_motor_estoque(caminho_zip):
         "Valor Total": "Custo Total",
         "Código": "Produto",
         "Descrição": "Descricao",
-        "Quantidade": "Saldo Atual"
+        "Quantidade": "Saldo Atual",
+        "Tipo de Estoque": "Tipo de Estoque"
     })
+
+    # Normaliza Tipo de Estoque
+    if "Tipo de Estoque" in df.columns:
+        df["Tipo de Estoque"] = df["Tipo de Estoque"].astype(str).str.strip().str.upper()
+    else:
+        df["Tipo de Estoque"] = "EM ESTOQUE"
 
     df["Conta"] = df["Conta"].astype(str).str.strip().str.title()
     df["Empresa"] = df["Empresa"].apply(normalizar_empresa)
@@ -155,6 +162,7 @@ def executar_motor_estoque(caminho_zip):
     colunas = [
         "Data Fechamento",
         "Empresa / Filial",
+        "Tipo de Estoque",
         "Conta",
         "Produto",
         "Descricao",
