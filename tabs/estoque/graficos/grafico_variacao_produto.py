@@ -9,6 +9,13 @@ def render(df_hist, moeda_br, data_selecionada):
         st.warning("Selecione uma data de fechamento.")
         return
 
+    # --- PROTEÇÃO: Garante que as novas colunas existam na base histórica ---
+    if "Conta" not in df_hist.columns:
+        df_hist["Conta"] = "Não Definido"
+    if "Tipo de Estoque" not in df_hist.columns:
+        df_hist["Tipo de Estoque"] = "EM ESTOQUE"
+    # -----------------------------------------------------------------------
+
     df_atual = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
     datas_sorted = sorted(df_hist["Data Fechamento"].unique())
     idx = list(datas_sorted).index(data_selecionada) if data_selecionada in datas_sorted else -1
@@ -48,7 +55,7 @@ def render(df_hist, moeda_br, data_selecionada):
         return "Manteve"
 
     def montar_df(df_comp):
-        # Mapeamento de descrição considerando as novas chaves
+        # Mapeamento considerando as novas colunas
         desc_map = (
             df_hist[df_hist["Descricao"].notna() &
                     (df_hist["Descricao"].astype(str).str.strip() != "") &
@@ -57,7 +64,6 @@ def render(df_hist, moeda_br, data_selecionada):
             .to_dict()
         )
 
-        # Agrupamento incluindo Conta e Tipo de Estoque
         grp_atual = df_atual.groupby(["Empresa / Filial", "Conta", "Tipo de Estoque", "Produto"]).agg(
             Valor_Atual=("Custo Total", "sum"),
             Qtd_Atual=("Saldo Atual", "sum")
@@ -116,8 +122,8 @@ def render(df_hist, moeda_br, data_selecionada):
         div[data-testid="stTextInput"] label { color: rgba(250,250,250,0.6) !important; font-size: 0.75rem !important; font-weight: 400 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; }
         </style>
         """, unsafe_allow_html=True)
+        
         col_filtro, col_export = st.columns([4, 1])
-
         with col_filtro:
             status_sel = st.radio("Filtrar por Status Movimento", ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"], horizontal=True, key=f"radio_{key_prefix}")
 
@@ -132,7 +138,7 @@ def render(df_hist, moeda_br, data_selecionada):
         delta_label = f"Δ {tipo} {label_comp}"
         perc_label  = f"% {tipo}"
 
-        # Seleção das colunas com Conta e Tipo de Estoque após Empresa / Filial
+        # COLUNAS ADICIONADAS AQUI
         cols_ordem = [
             "Status Mov", "Empresa / Filial", "Conta", "Tipo de Estoque", 
             "Produto", "Descricao", "Qtd_Atual", "Qtd_Comp", 
