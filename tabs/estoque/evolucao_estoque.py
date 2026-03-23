@@ -44,6 +44,8 @@ def render(df_hist, df_obsoleto, moeda_br, df_kpi=None, data_selecionada=None, v
                 ).dt.strftime("%d/%m/%Y")
             if "Custo Total" in base_display.columns:
                 base_display["Custo Total"] = base_display["Custo Total"].apply(moeda_br)
+            if "Tipo de Estoque" not in base_display.columns and "Tipo de Estoque" in base.columns:
+                base_display["Tipo de Estoque"] = base["Tipo de Estoque"]
             if "Vlr Unit" in base_display.columns:
                 base_display["Vlr Unit"] = pd.to_numeric(
                     base_display["Vlr Unit"], errors="coerce"

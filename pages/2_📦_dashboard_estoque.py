@@ -8,12 +8,8 @@ from utils.navbar import render_navbar, render_filtros_topo
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 render_navbar("Dashboard Evolução de Estoque")
 
-# -------------------------------------------------
-# CSS
-# -------------------------------------------------
 st.markdown("""
 <style>
-/* Esconde sidebar completamente neste dashboard */
 section[data-testid="stSidebar"] { display: none !important; }
 [data-testid="collapsedControl"]  { display: none !important; }
 
@@ -47,9 +43,6 @@ div[data-testid="stDataFrame"] div[role="gridcell"]{
 st.title("📦 Dashboard Evolução de Estoque")
 st.markdown("---")
 
-# -------------------------------------------------
-# MOEDA
-# -------------------------------------------------
 def moeda_br(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
@@ -105,24 +98,22 @@ else:
     df_obsoleto = pd.DataFrame()
 
 # -------------------------------------------------
-# FILTROS NO TOPO — bidirecional
+# FILTROS NO TOPO
 # -------------------------------------------------
 datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=True)
-datas_fmt_list = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
-datas_map = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
+datas_fmt_list    = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
+datas_map         = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
-# Base do fechamento selecionado (usa session_state para saber data atual)
-data_preview_str = st.session_state.get("estoque_data", datas_fmt_list[0])
-data_preview = pd.Timestamp(datas_map.get(data_preview_str, datas_disponiveis[0]))
-df_preview = df_hist[df_hist["Data Fechamento"] == data_preview]
+data_preview_str  = st.session_state.get("estoque_data", datas_fmt_list[0])
+data_preview      = pd.Timestamp(datas_map.get(data_preview_str, datas_disponiveis[0]))
+df_preview        = df_hist[df_hist["Data Fechamento"] == data_preview]
 
-# Lista completa de EF para o navbar (split feito internamente)
 empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique()) if "Empresa / Filial" in df_preview.columns else []
 
-# Conta: filtrada pelos EF ativos (Empresa + Filial já selecionados)
 ef_ja_sel     = st.session_state.get("estoque_empresa_sel", [])
 filial_ja_sel = st.session_state.get("estoque_filial_sel", [])
 contas_ja_sel = st.session_state.get("estoque_conta", [])
+tipo_ja_sel   = st.session_state.get("estoque_tipo_de_estoque", [])
 
 ef_ativos = [
     ef for ef in empresas_disponiveis
@@ -133,16 +124,29 @@ ef_ativos = [
 df_conta_filtro = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
 contas_disponiveis = sorted(df_conta_filtro["Conta"].dropna().unique()) if "Conta" in df_conta_filtro.columns else []
 
+# Tipo de Estoque — filtrado pelas empresas e contas já selecionadas
+df_tipo_filtro = df_conta_filtro.copy()
+if contas_ja_sel:
+    df_tipo_filtro = df_tipo_filtro[df_tipo_filtro["Conta"].isin(contas_ja_sel)]
+tipos_disponiveis = sorted(df_tipo_filtro["Tipo de Estoque"].dropna().unique()) if "Tipo de Estoque" in df_tipo_filtro.columns else []
+
+extras = {}
+if contas_disponiveis:
+    extras["Conta"] = contas_disponiveis
+if tipos_disponiveis:
+    extras["Tipo de Estoque"] = tipos_disponiveis
+
 filtros = render_filtros_topo(
     datas=datas_fmt_list,
     empresas=empresas_disponiveis,
-    extras={"Conta": contas_disponiveis} if contas_disponiveis else None,
+    extras=extras if extras else None,
     key_prefix="estoque"
 )
 
 data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
 empresas_sel     = filtros["empresas"]
 contas_sel       = filtros.get("conta", [])
+tipos_sel        = filtros.get("tipo_de_estoque", [])
 
 # -------------------------------------------------
 # FILTRAR BASE KPI
@@ -153,17 +157,16 @@ if empresas_sel:
     df_kpi = df_kpi[df_kpi["Empresa / Filial"].isin(empresas_sel)]
 if contas_sel:
     df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
-
+if tipos_sel:
+    df_kpi = df_kpi[df_kpi["Tipo de Estoque"].isin(tipos_sel)]
 
 # -------------------------------------------------
 # CALCULAR MoM e YoY
 # -------------------------------------------------
 datas_sorted = sorted(df_hist["Data Fechamento"].unique())
-idx_atual = list(datas_sorted).index(data_selecionada) if data_selecionada in datas_sorted else -1
+idx_atual    = list(datas_sorted).index(data_selecionada) if data_selecionada in datas_sorted else -1
+valor_atual  = df_kpi["Custo Total"].sum()
 
-valor_atual = df_kpi["Custo Total"].sum()
-
-# MoM — mês anterior
 if idx_atual > 0:
     data_mom = datas_sorted[idx_atual - 1]
     df_mom = df_hist[df_hist["Data Fechamento"] == data_mom].copy()
@@ -171,36 +174,36 @@ if idx_atual > 0:
         df_mom = df_mom[df_mom["Empresa / Filial"].isin(empresas_sel)]
     if contas_sel:
         df_mom = df_mom[df_mom["Conta"].isin(contas_sel)]
+    if tipos_sel:
+        df_mom = df_mom[df_mom["Tipo de Estoque"].isin(tipos_sel)]
     valor_mom = df_mom["Custo Total"].sum()
-    perc_mom = ((valor_atual - valor_mom) / valor_mom * 100) if valor_mom > 0 else 0
+    perc_mom  = ((valor_atual - valor_mom) / valor_mom * 100) if valor_mom > 0 else 0
 else:
     valor_mom = None
-    perc_mom = None
+    perc_mom  = None
 
-# YoY — mesmo mês ano anterior
 data_yoy_alvo = data_selecionada - pd.DateOffset(years=1)
-datas_yoy = [d for d in datas_sorted if abs((pd.Timestamp(d) - data_yoy_alvo).days) <= 31]
+datas_yoy     = [d for d in datas_sorted if abs((pd.Timestamp(d) - data_yoy_alvo).days) <= 31]
 if datas_yoy:
     data_yoy = min(datas_yoy, key=lambda d: abs((pd.Timestamp(d) - data_yoy_alvo).days))
-    df_yoy = df_hist[df_hist["Data Fechamento"] == data_yoy].copy()
+    df_yoy   = df_hist[df_hist["Data Fechamento"] == data_yoy].copy()
     if empresas_sel:
         df_yoy = df_yoy[df_yoy["Empresa / Filial"].isin(empresas_sel)]
     if contas_sel:
         df_yoy = df_yoy[df_yoy["Conta"].isin(contas_sel)]
+    if tipos_sel:
+        df_yoy = df_yoy[df_yoy["Tipo de Estoque"].isin(tipos_sel)]
     valor_yoy = df_yoy["Custo Total"].sum()
-    perc_yoy = ((valor_atual - valor_yoy) / valor_yoy * 100) if valor_yoy > 0 else 0
+    perc_yoy  = ((valor_atual - valor_yoy) / valor_yoy * 100) if valor_yoy > 0 else 0
 else:
     valor_yoy = None
-    perc_yoy = None
+    perc_yoy  = None
 
 # -------------------------------------------------
-# CARDS KPI — tabela única
+# CARDS KPI
 # -------------------------------------------------
 def seta(v):
     return "⬆" if v >= 0 else "⬇"
-
-def cor_var(v):
-    return "#EC6E21" if v >= 0 else "#51cf66"
 
 label_atual = data_selecionada.strftime("%y-%b").lower()
 label_mom   = pd.Timestamp(data_mom).strftime("%y-%b").lower() if valor_mom is not None else "—"
@@ -220,7 +223,7 @@ def linha_tabela(label, valor, var_val, var_perc, is_header=False):
             f'<td style="padding:10px 16px;text-align:right;color:rgba(255,255,255,0.3)">—</td></tr>'
         )
     bolinha = "🟢" if var_val < 0 else "🔴"
-    sinal = "+" if var_val >= 0 else "-"
+    sinal   = "+" if var_val >= 0 else "-"
     return (
         f'<tr><td style="padding:10px 16px;font-weight:{peso};font-size:{tam};color:white">{label}</td>'
         f'<td style="padding:10px 16px;font-weight:{peso};font-size:{tam};color:white;text-align:right">{moeda_br(valor)}</td>'
@@ -258,7 +261,8 @@ if empresas_sel:
     df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Empresa / Filial"].isin(empresas_sel)]
 if contas_sel:
     df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Conta"].isin(contas_sel)]
-
+if tipos_sel:
+    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Tipo de Estoque"].isin(tipos_sel)]
 
 # -------------------------------------------------
 # RENDER ABAS
