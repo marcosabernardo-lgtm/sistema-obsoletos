@@ -26,6 +26,11 @@ def render(df_hist, moeda_br, data_selecionada):
     """, unsafe_allow_html=True)
 
     df_atual = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
+    
+    # Proteção para coluna Tipo de Estoque
+    if "Tipo de Estoque" not in df_atual.columns:
+        df_atual["Tipo de Estoque"] = "—"
+
     datas_sorted = sorted(df_hist["Data Fechamento"].unique())
     idx = list(datas_sorted).index(data_selecionada) if data_selecionada in datas_sorted else -1
 
@@ -45,7 +50,7 @@ def render(df_hist, moeda_br, data_selecionada):
 
     top_n = st.slider("Quantidade de produtos", min_value=5, max_value=50, value=10, step=5)
 
-    sub1, sub2, sub3 = st.tabs(["💰 Maior Valor em Estoque", "📈 Maior Variação MoM", "📅 Maior Variação YoY"])
+    sub1, sub2, sub3 = st.tabs(["💰 Maior Valor em Estoque", "📈 Maior Variação MoM", "📅 Variação YoY"])
 
     total_estoque = df_atual["Custo Total"].sum()
 
@@ -129,10 +134,11 @@ def render(df_hist, moeda_br, data_selecionada):
             st.caption(f"{len(df_queda)} produtos")
             st.dataframe(df_queda, use_container_width=True, hide_index=True)
 
-    # ABA 1
+    # ABA 1 - FOI ALTERADA AQUI
     with sub1:
+        # Adicionado "Tipo de Estoque" no agrupamento
         df_valor = (
-            df_atual.groupby(["Empresa / Filial", "Conta", "Produto"])
+            df_atual.groupby(["Empresa / Filial", "Tipo de Estoque", "Conta", "Produto"])
             .agg(Qtd=("Saldo Atual", "sum"), Valor=("Custo Total", "sum"))
             .reset_index()
             .sort_values("Valor", ascending=False)
@@ -143,7 +149,9 @@ def render(df_hist, moeda_br, data_selecionada):
         df_valor["% Estoque"] = df_valor["Valor"].apply(lambda x: round(x / total_estoque * 100, 1) if total_estoque > 0 else 0)
 
         atual_label = pd.Timestamp(data_selecionada).strftime('%y-%b').lower()
-        df_exib = df_valor[["Empresa / Filial", "Conta", "Produto", "Descrição", "Qtd", "Valor", "% Estoque"]].copy()
+        
+        # Adicionado "Tipo de Estoque" na seleção de colunas para exibição
+        df_exib = df_valor[["Empresa / Filial", "Tipo de Estoque", "Conta", "Produto", "Descrição", "Qtd", "Valor", "% Estoque"]].copy()
         df_exib = df_exib.rename(columns={"Valor": f"Valor Estoque {atual_label}"})
 
         val_col = f"Valor Estoque {atual_label}"
@@ -154,7 +162,7 @@ def render(df_hist, moeda_br, data_selecionada):
 
         col_busca, col_ord, col_dir = st.columns([3, 2, 1])
         with col_busca:
-            busca_v = st.text_input("🔍 PESQUISAR", placeholder="Produto, conta, empresa...", key="busca_top_valor")
+            busca_v = st.text_input("🔍 PESQUISAR", placeholder="Produto, tipo, conta, empresa...", key="busca_top_valor")
         with col_ord:
             ord_col_v = st.selectbox("📊 Classificar por", list(df_exib.columns), key="ord_col_top_valor")
         with col_dir:
