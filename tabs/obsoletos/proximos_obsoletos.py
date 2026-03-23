@@ -19,6 +19,10 @@ def render(df_kpi, moeda_br):
         st.info("Nenhum item próximo de entrar em obsoleto.")
         return
 
+    # Proteção caso a coluna não exista em arquivos históricos antigos
+    if "Tipo de Estoque" not in df.columns:
+        df["Tipo de Estoque"] = "—"
+
     # --------------------------------------------------
     # CALCULAR DIAS RESTANTES ATÉ COMPLETAR 6 MESES
     # --------------------------------------------------
@@ -151,8 +155,9 @@ def render(df_kpi, moeda_br):
     # FORMATAR E EXIBIR TABELA
     # --------------------------------------------------
 
+    # Coluna "Tipo de Estoque" adicionada logo após Empresa / Filial
     colunas_exibir = [
-        "Risco", "Dias Restantes", "Empresa / Filial", "Conta",
+        "Risco", "Dias Restantes", "Empresa / Filial", "Tipo de Estoque", "Conta",
         "Produto", "Descricao", "Saldo Atual", "Custo Total",
     ]
 
