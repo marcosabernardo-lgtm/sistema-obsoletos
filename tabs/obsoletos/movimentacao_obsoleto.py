@@ -3,7 +3,7 @@ import pandas as pd
 import io
 
 # -------------------------------------------------------
-# 1. FUNÇÃO DE ESTILO (CARD)
+# 1. FUNÇÃO DE ESTILO (CARD) - MANTIDA IGUAL
 # -------------------------------------------------------
 def card(titulo, valor, cor_borda="#EC6E21", cor_valor=None, subtitulo=None):
     cor_val = cor_valor if cor_valor else "white"
@@ -36,9 +36,14 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     df = df_hist.copy()
 
+    # Proteção caso a coluna não exista em arquivos antigos
+    if "Tipo de Estoque" not in df.columns:
+        df["Tipo de Estoque"] = "—"
+
+    # ADD: "Tipo de Estoque" no groupby
     df = (
         df.groupby(
-            ["Data Fechamento", "Empresa / Filial", "Produto", "Descricao", "Conta", "Status Estoque"],
+            ["Data Fechamento", "Empresa / Filial", "Tipo de Estoque", "Produto", "Descricao", "Conta", "Status Estoque"],
             as_index=False
         ).agg({"Saldo Atual": "sum", "Custo Total": "sum"})
     )
@@ -79,16 +84,17 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     chave = ["Empresa / Filial", "Produto"]
 
-    df_ant_sel = df_ant[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta"]].copy()
+    # ADD: "Tipo de Estoque" na seleção e renomeio
+    df_ant_sel = df_ant[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Tipo de Estoque"]].copy()
     df_ant_sel = df_ant_sel.rename(columns={
         "Custo Total": "Vlr Ant", "Saldo Atual": "Qtd Ant",
-        "Descricao": "Descricao_ant", "Conta": "Conta_ant",
+        "Descricao": "Descricao_ant", "Conta": "Conta_ant", "Tipo de Estoque": "Tipo_ant"
     })
 
-    df_atual_sel = df_atual[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta"]].copy()
+    df_atual_sel = df_atual[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Tipo de Estoque"]].copy()
     df_atual_sel = df_atual_sel.rename(columns={
         "Custo Total": "Vlr Atual", "Saldo Atual": "Qtd Atual",
-        "Descricao": "Descricao_atual", "Conta": "Conta_atual",
+        "Descricao": "Descricao_atual", "Conta": "Conta_atual", "Tipo de Estoque": "Tipo_atual"
     })
 
     base = df_atual_sel.merge(df_ant_sel, on=chave, how="outer")
@@ -98,6 +104,8 @@ def render(df_hist, moeda_br, data_selecionada=None):
     base["Qtd Atual"] = base["Qtd Atual"].fillna(0)
     base["Descricao"] = base["Descricao_atual"].fillna(base["Descricao_ant"])
     base["Conta"]     = base["Conta_atual"].fillna(base["Conta_ant"])
+    # Consolida o Tipo de Estoque
+    base["Tipo de Estoque"] = base["Tipo_atual"].fillna(base["Tipo_ant"])
 
     entrou  = base[(base["Vlr Ant"] == 0) & (base["Vlr Atual"] > 0)].copy()
     entrou["Status Mov"] = "🔴 Entrou"
@@ -157,7 +165,8 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # -------------------------------------------------------
     # TABELA COM FILTRO DE STATUS MOV
     # -------------------------------------------------------
-    colunas_tabela = ["Status Mov", "Empresa / Filial", "Conta", "Produto", "Descricao",
+    # ADD: "Tipo de Estoque" na lista de colunas
+    colunas_tabela = ["Status Mov", "Empresa / Filial", "Tipo de Estoque", "Conta", "Produto", "Descricao",
                       "Qtd Ant", "Vlr Ant", "Qtd Atual", "Vlr Atual"]
 
     frames = []
