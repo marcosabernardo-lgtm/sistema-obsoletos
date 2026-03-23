@@ -73,6 +73,12 @@ if df_hist.empty:
     st.warning("⚠️ Base de dados vazia.")
     st.stop()
 
+# --- PROTEÇÃO E PADRONIZAÇÃO DE COLUNAS ---
+if "Tipo de Estoque" not in df_hist.columns:
+    df_hist["Tipo de Estoque"] = "EM ESTOQUE"
+if "Conta" not in df_hist.columns:
+    df_hist["Conta"] = "Outros"
+
 df_hist["Custo Total"] = pd.to_numeric(df_hist["Custo Total"], errors="coerce").fillna(0)
 df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"], errors="coerce")
 df_hist = df_hist.sort_values("Data Fechamento")
@@ -81,6 +87,7 @@ df_hist = df_hist.sort_values("Data Fechamento")
 # CARREGAR BASE OBSOLETOS
 # -------------------------------------------------
 CAMINHO_OBSOLETOS_DIR = "data/obsoletos"
+df_obsoleto = pd.DataFrame()
 
 if os.path.exists(CAMINHO_OBSOLETOS_DIR):
     arquivos_obs = [f for f in os.listdir(CAMINHO_OBSOLETOS_DIR) if f.endswith(".parquet")]
@@ -90,12 +97,12 @@ if os.path.exists(CAMINHO_OBSOLETOS_DIR):
                 pd.read_parquet(os.path.join(CAMINHO_OBSOLETOS_DIR, f))
                 for f in arquivos_obs
             ], ignore_index=True)
+            # Proteção para o obsoleto também
+            if not df_obsoleto.empty:
+                if "Tipo de Estoque" not in df_obsoleto.columns: df_obsoleto["Tipo de Estoque"] = "EM ESTOQUE"
+                if "Conta" not in df_obsoleto.columns: df_obsoleto["Conta"] = "Outros"
         except Exception:
             df_obsoleto = pd.DataFrame()
-    else:
-        df_obsoleto = pd.DataFrame()
-else:
-    df_obsoleto = pd.DataFrame()
 
 # -------------------------------------------------
 # FILTROS NO TOPO
@@ -108,12 +115,12 @@ data_preview_str  = st.session_state.get("estoque_data", datas_fmt_list[0])
 data_preview      = pd.Timestamp(datas_map.get(data_preview_str, datas_disponiveis[0]))
 df_preview        = df_hist[df_hist["Data Fechamento"] == data_preview]
 
-empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique()) if "Empresa / Filial" in df_preview.columns else []
+empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique())
 
+# Captura seleções atuais para filtros dependentes
 ef_ja_sel     = st.session_state.get("estoque_empresa_sel", [])
 filial_ja_sel = st.session_state.get("estoque_filial_sel", [])
 contas_ja_sel = st.session_state.get("estoque_conta", [])
-tipo_ja_sel   = st.session_state.get("estoque_tipo_de_estoque", [])
 
 ef_ativos = [
     ef for ef in empresas_disponiveis
@@ -121,14 +128,15 @@ ef_ativos = [
     and (not filial_ja_sel or ef.split(" / ")[1].strip() in filial_ja_sel)
 ] if (ef_ja_sel or filial_ja_sel) else list(empresas_disponiveis)
 
-df_conta_filtro = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
-contas_disponiveis = sorted(df_conta_filtro["Conta"].dropna().unique()) if "Conta" in df_conta_filtro.columns else []
+df_filtrado_opcoes = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
 
-# Tipo de Estoque — filtrado pelas empresas e contas já selecionadas
-df_tipo_filtro = df_conta_filtro.copy()
+contas_disponiveis = sorted(df_filtrado_opcoes["Conta"].dropna().unique())
+
+# Filtra opções de "Tipo de Estoque" baseada na conta selecionada (cascata)
+df_tipo_opcoes = df_filtrado_opcoes.copy()
 if contas_ja_sel:
-    df_tipo_filtro = df_tipo_filtro[df_tipo_filtro["Conta"].isin(contas_ja_sel)]
-tipos_disponiveis = sorted(df_tipo_filtro["Tipo de Estoque"].dropna().unique()) if "Tipo de Estoque" in df_tipo_filtro.columns else []
+    df_tipo_opcoes = df_tipo_opcoes[df_tipo_opcoes["Conta"].isin(contas_ja_sel)]
+tipos_disponiveis = sorted(df_tipo_opcoes["Tipo de Estoque"].dropna().unique())
 
 extras = {}
 if contas_disponiveis:
@@ -149,16 +157,21 @@ contas_sel       = filtros.get("conta", [])
 tipos_sel        = filtros.get("tipo_de_estoque", [])
 
 # -------------------------------------------------
-# FILTRAR BASE KPI
+# FILTRAR BASE KPI E HISTÓRICO
 # -------------------------------------------------
-df_kpi = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
+def aplicar_filtros(df_alvo):
+    if df_alvo.empty: return df_alvo
+    temp = df_alvo.copy()
+    if empresas_sel:
+        temp = temp[temp["Empresa / Filial"].isin(empresas_sel)]
+    if contas_sel:
+        temp = temp[temp["Conta"].isin(contas_sel)]
+    if tipos_sel:
+        temp = temp[temp["Tipo de Estoque"].isin(tipos_sel)]
+    return temp
 
-if empresas_sel:
-    df_kpi = df_kpi[df_kpi["Empresa / Filial"].isin(empresas_sel)]
-if contas_sel:
-    df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
-if tipos_sel:
-    df_kpi = df_kpi[df_kpi["Tipo de Estoque"].isin(tipos_sel)]
+df_kpi = aplicar_filtros(df_hist[df_hist["Data Fechamento"] == data_selecionada])
+df_hist_filtrado = aplicar_filtros(df_hist)
 
 # -------------------------------------------------
 # CALCULAR MoM e YoY
@@ -167,50 +180,39 @@ datas_sorted = sorted(df_hist["Data Fechamento"].unique())
 idx_atual    = list(datas_sorted).index(data_selecionada) if data_selecionada in datas_sorted else -1
 valor_atual  = df_kpi["Custo Total"].sum()
 
+# Cálculo MoM
+valor_mom = 0
+perc_mom = 0
+data_mom = None
 if idx_atual > 0:
     data_mom = datas_sorted[idx_atual - 1]
-    df_mom = df_hist[df_hist["Data Fechamento"] == data_mom].copy()
-    if empresas_sel:
-        df_mom = df_mom[df_mom["Empresa / Filial"].isin(empresas_sel)]
-    if contas_sel:
-        df_mom = df_mom[df_mom["Conta"].isin(contas_sel)]
-    if tipos_sel:
-        df_mom = df_mom[df_mom["Tipo de Estoque"].isin(tipos_sel)]
+    df_mom = aplicar_filtros(df_hist[df_hist["Data Fechamento"] == data_mom])
     valor_mom = df_mom["Custo Total"].sum()
     perc_mom  = ((valor_atual - valor_mom) / valor_mom * 100) if valor_mom > 0 else 0
-else:
-    valor_mom = None
-    perc_mom  = None
 
+# Cálculo YoY
+valor_yoy = 0
+perc_yoy = 0
+data_yoy = None
 data_yoy_alvo = data_selecionada - pd.DateOffset(years=1)
-datas_yoy     = [d for d in datas_sorted if abs((pd.Timestamp(d) - data_yoy_alvo).days) <= 31]
-if datas_yoy:
-    data_yoy = min(datas_yoy, key=lambda d: abs((pd.Timestamp(d) - data_yoy_alvo).days))
-    df_yoy   = df_hist[df_hist["Data Fechamento"] == data_yoy].copy()
-    if empresas_sel:
-        df_yoy = df_yoy[df_yoy["Empresa / Filial"].isin(empresas_sel)]
-    if contas_sel:
-        df_yoy = df_yoy[df_yoy["Conta"].isin(contas_sel)]
-    if tipos_sel:
-        df_yoy = df_yoy[df_yoy["Tipo de Estoque"].isin(tipos_sel)]
+datas_yoy_match = [d for d in datas_sorted if abs((pd.Timestamp(d) - data_yoy_alvo).days) <= 31]
+if datas_yoy_match:
+    data_yoy = min(datas_yoy_match, key=lambda d: abs((pd.Timestamp(d) - data_yoy_alvo).days))
+    df_yoy   = aplicar_filtros(df_hist[df_hist["Data Fechamento"] == data_yoy])
     valor_yoy = df_yoy["Custo Total"].sum()
     perc_yoy  = ((valor_atual - valor_yoy) / valor_yoy * 100) if valor_yoy > 0 else 0
-else:
-    valor_yoy = None
-    perc_yoy  = None
 
 # -------------------------------------------------
-# CARDS KPI
+# CARDS KPI (TABELA)
 # -------------------------------------------------
-def seta(v):
-    return "⬆" if v >= 0 else "⬇"
+def seta(v): return "⬆" if v >= 0 else "⬇"
 
 label_atual = data_selecionada.strftime("%y-%b").lower()
-label_mom   = pd.Timestamp(data_mom).strftime("%y-%b").lower() if valor_mom is not None else "—"
-label_yoy   = pd.Timestamp(data_yoy).strftime("%y-%b").lower() if valor_yoy is not None else "—"
+label_mom   = pd.Timestamp(data_mom).strftime("%y-%b").lower() if data_mom else "—"
+label_yoy   = pd.Timestamp(data_yoy).strftime("%y-%b").lower() if data_yoy else "—"
 
-var_mom_val = valor_atual - valor_mom if valor_mom is not None else None
-var_yoy_val = valor_atual - valor_yoy if valor_yoy is not None else None
+var_mom_val = valor_atual - valor_mom if data_mom else None
+var_yoy_val = valor_atual - valor_yoy if data_yoy else None
 
 def linha_tabela(label, valor, var_val, var_perc, is_header=False):
     peso = "700" if is_header else "400"
@@ -222,8 +224,8 @@ def linha_tabela(label, valor, var_val, var_perc, is_header=False):
             f'<td style="padding:10px 16px;text-align:right;color:rgba(255,255,255,0.3)">—</td>'
             f'<td style="padding:10px 16px;text-align:right;color:rgba(255,255,255,0.3)">—</td></tr>'
         )
-    bolinha = "🟢" if var_val < 0 else "🔴"
-    sinal   = "+" if var_val >= 0 else "-"
+    bolinha = "🟢" if var_val <= 0 else "🔴"
+    sinal   = "+" if var_val >= 0 else ""
     return (
         f'<tr><td style="padding:10px 16px;font-weight:{peso};font-size:{tam};color:white">{label}</td>'
         f'<td style="padding:10px 16px;font-weight:{peso};font-size:{tam};color:white;text-align:right">{moeda_br(valor)}</td>'
@@ -233,20 +235,18 @@ def linha_tabela(label, valor, var_val, var_perc, is_header=False):
 
 linhas = (
     linha_tabela(label_atual, valor_atual, None, None, is_header=True) +
-    linha_tabela(f"MoM {label_mom}", valor_mom if valor_mom else 0, var_mom_val, perc_mom if perc_mom else 0) +
-    linha_tabela(f"YoY {label_yoy}", valor_yoy if valor_yoy else 0, var_yoy_val, perc_yoy if perc_yoy else 0)
+    linha_tabela(f"MoM {label_mom}", valor_mom, var_mom_val, perc_mom) +
+    linha_tabela(f"YoY {label_yoy}", valor_yoy, var_yoy_val, perc_yoy)
 )
 
 st.markdown(
-    "<style>.tb-kpi{width:100%;border-collapse:collapse}"
-    ".tb-kpi th{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;"
-    "color:rgba(255,255,255,0.35);padding:6px 16px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08)}"
-    ".tb-kpi th:not(:first-child){text-align:right}"
-    ".tb-kpi tr{border-bottom:1px solid rgba(255,255,255,0.06)}"
-    ".tb-kpi tr:last-child{border-bottom:none}</style>"
     '<div class="kpi-card" style="padding:0;text-align:left;max-width:600px">' +
-    '<table class="tb-kpi"><thead><tr>' +
-    '<th>Período</th><th>Valor Estoque</th><th>Variação (R$)</th><th>Variação (%)</th>' +
+    '<table style="width:100%;border-collapse:collapse">' +
+    '<thead style="border-bottom:1px solid rgba(255,255,255,0.08)"><tr>' +
+    '<th style="font-size:10px;color:rgba(255,255,255,0.35);padding:6px 16px;text-align:left">Período</th>' +
+    '<th style="font-size:10px;color:rgba(255,255,255,0.35);padding:6px 16px;text-align:right">Valor Estoque</th>' +
+    '<th style="font-size:10px;color:rgba(255,255,255,0.35);padding:6px 16px;text-align:right">Variação (R$)</th>' +
+    '<th style="font-size:10px;color:rgba(255,255,255,0.35);padding:6px 16px;text-align:right">Variação (%)</th>' +
     '</tr></thead><tbody>' + linhas + '</tbody></table></div>',
     unsafe_allow_html=True
 )
@@ -254,20 +254,10 @@ st.markdown(
 st.markdown("---")
 
 # -------------------------------------------------
-# BASE HISTÓRICA FILTRADA
-# -------------------------------------------------
-df_hist_filtrado = df_hist.copy()
-if empresas_sel:
-    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Empresa / Filial"].isin(empresas_sel)]
-if contas_sel:
-    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Conta"].isin(contas_sel)]
-if tipos_sel:
-    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Tipo de Estoque"].isin(tipos_sel)]
-
-# -------------------------------------------------
 # RENDER ABAS
 # -------------------------------------------------
 try:
+    # Passando os dados filtrados para a tab de evolução
     render_evolucao_estoque(df_hist_filtrado, df_obsoleto, moeda_br, df_kpi, data_selecionada, valor_mom, valor_yoy)
 except Exception as e:
     st.error("Erro ao renderizar o dashboard.")
