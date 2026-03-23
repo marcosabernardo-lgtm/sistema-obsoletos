@@ -54,31 +54,31 @@ def render(df_hist, moeda_br, data_selecionada):
         return "Manteve"
 
     def montar_df(df_comp):
-        # Mapeamento expandido para incluir Conta e Tipo de Estoque na chave única
+        # Mapeamento expandido (Invertido: Tipo antes de Conta)
         desc_map = (
             df_hist[df_hist["Descricao"].notna() &
                     (df_hist["Descricao"].astype(str).str.strip() != "") &
                     (df_hist["Descricao"].astype(str) != "0")]
-            .groupby(["Empresa / Filial", "Conta", "Tipo de Estoque", "Produto"])["Descricao"].first()
+            .groupby(["Empresa / Filial", "Tipo de Estoque", "Conta", "Produto"])["Descricao"].first()
             .to_dict()
         )
 
-        # Agrupamento incluindo as novas colunas
-        grp_atual = df_atual.groupby(["Empresa / Filial", "Conta", "Tipo de Estoque", "Produto"]).agg(
+        # Agrupamento (Invertido: Tipo antes de Conta)
+        grp_atual = df_atual.groupby(["Empresa / Filial", "Tipo de Estoque", "Conta", "Produto"]).agg(
             Valor_Atual=("Custo Total", "sum"),
             Qtd_Atual=("Saldo Atual", "sum")
         ).reset_index()
         
-        grp_comp = df_comp.groupby(["Empresa / Filial", "Conta", "Tipo de Estoque", "Produto"]).agg(
+        grp_comp = df_comp.groupby(["Empresa / Filial", "Tipo de Estoque", "Conta", "Produto"]).agg(
             Valor_Comp=("Custo Total", "sum"),
             Qtd_Comp=("Saldo Atual", "sum")
         ).reset_index()
         
-        df = grp_atual.merge(grp_comp, on=["Empresa / Filial", "Conta", "Tipo de Estoque", "Produto"], how="outer")
+        df = grp_atual.merge(grp_comp, on=["Empresa / Filial", "Tipo de Estoque", "Conta", "Produto"], how="outer")
         df[["Valor_Atual","Qtd_Atual","Valor_Comp","Qtd_Comp"]] = df[["Valor_Atual","Qtd_Atual","Valor_Comp","Qtd_Comp"]].fillna(0)
         
         df["Descricao"] = df.apply(
-            lambda r: desc_map.get((r["Empresa / Filial"], r["Conta"], r["Tipo de Estoque"], r["Produto"]), "—"), axis=1
+            lambda r: desc_map.get((r["Empresa / Filial"], r["Tipo de Estoque"], r["Conta"], r["Produto"]), "—"), axis=1
         ).astype(str)
         
         df["Variacao"]   = df["Valor_Atual"] - df["Valor_Comp"]
@@ -138,9 +138,9 @@ def render(df_hist, moeda_br, data_selecionada):
         delta_label = f"Δ {tipo} {label_comp}"
         perc_label  = f"% {tipo}"
 
-        # Seleção das colunas incluindo as novas solicitadas logo após Empresa / Filial
+        # AJUSTE DE SEQUÊNCIA: Tipo de Estoque antes de Conta
         cols_final = [
-            "Status Mov", "Empresa / Filial", "Conta", "Tipo de Estoque", 
+            "Status Mov", "Empresa / Filial", "Tipo de Estoque", "Conta", 
             "Produto", "Descricao", "Qtd_Atual", "Qtd_Comp", 
             "Valor_Atual", "Valor_Comp", "Variacao", "Perc"
         ]
@@ -168,7 +168,7 @@ def render(df_hist, moeda_br, data_selecionada):
 
         col_busca, col_ord, col_dir = st.columns([3, 2, 1])
         with col_busca:
-            busca = st.text_input("🔍 PESQUISAR", placeholder="Código, descrição, conta, empresa...", key=f"busca_{key_prefix}")
+            busca = st.text_input("🔍 PESQUISAR", placeholder="Código, descrição, tipo...", key=f"busca_{key_prefix}")
         with col_ord:
             colunas_ord = list(df_exib.columns)
             ord_col = st.selectbox("📊 Classificar por", colunas_ord, key=f"ord_col_{key_prefix}")
