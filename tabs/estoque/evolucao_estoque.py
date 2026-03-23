@@ -31,6 +31,10 @@ def render(df_hist, df_obsoleto, moeda_br, df_kpi=None, data_selecionada=None, v
         if base.empty:
             st.info("Selecione um fechamento para visualizar a base histórica.")
         else:
+            # Trava de segurança para colunas novas
+            if "Tipo de Estoque" not in base.columns:
+                base["Tipo de Estoque"] = "EM ESTOQUE"
+
             total_estoque = base["Custo Total"].sum()
 
             # Ordenar por Custo Total
@@ -38,14 +42,15 @@ def render(df_hist, df_obsoleto, moeda_br, df_kpi=None, data_selecionada=None, v
 
             # Formatar para exibição
             base_display = base.copy()
+            
             if "Data Fechamento" in base_display.columns:
                 base_display["Data Fechamento"] = pd.to_datetime(
                     base_display["Data Fechamento"], errors="coerce"
                 ).dt.strftime("%d/%m/%Y")
+            
             if "Custo Total" in base_display.columns:
                 base_display["Custo Total"] = base_display["Custo Total"].apply(moeda_br)
-            if "Tipo de Estoque" not in base_display.columns and "Tipo de Estoque" in base.columns:
-                base_display["Tipo de Estoque"] = base["Tipo de Estoque"]
+            
             if "Vlr Unit" in base_display.columns:
                 base_display["Vlr Unit"] = pd.to_numeric(
                     base_display["Vlr Unit"], errors="coerce"
@@ -55,6 +60,16 @@ def render(df_hist, df_obsoleto, moeda_br, df_kpi=None, data_selecionada=None, v
             base_display["% Estoque"] = base["Custo Total"].apply(
                 lambda x: f"{(x / total_estoque * 100):.1f}%" if total_estoque > 0 else "—"
             )
+
+            # Reorganizar colunas para garantir a ordem desejada
+            colunas_exibicao = [
+                "Data Fechamento", "Empresa / Filial", "Tipo de Estoque", "Conta", 
+                "Produto", "Descricao", "Saldo Atual", "Custo Total", "% Estoque"
+            ]
+            
+            # Filtra apenas as colunas que realmente existem para evitar erro
+            colunas_finais = [c for c in colunas_exibicao if c in base_display.columns]
+            base_display = base_display[colunas_finais]
 
             st.markdown("""
             <style>
@@ -74,7 +89,7 @@ def render(df_hist, df_obsoleto, moeda_br, df_kpi=None, data_selecionada=None, v
 
             col_busca, col_ord, col_dir, col_export = st.columns([3, 2, 1, 1])
             with col_busca:
-                busca = st.text_input("🔍 PESQUISAR", placeholder="Produto, empresa, conta...", key="busca_base_hist")
+                busca = st.text_input("🔍 PESQUISAR", placeholder="Produto, empresa, tipo...", key="busca_base_hist")
             with col_ord:
                 ord_col = st.selectbox("📊 Classificar por", list(base_display.columns), key="ord_col_base_hist")
             with col_dir:
@@ -82,6 +97,7 @@ def render(df_hist, df_obsoleto, moeda_br, df_kpi=None, data_selecionada=None, v
             with col_export:
                 st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
                 buffer = io.BytesIO()
+                # Exportamos o 'base' original (sem formatação de R$) para o Excel ser útil
                 base.to_excel(buffer, index=False)
                 buffer.seek(0)
                 st.download_button(
@@ -98,6 +114,7 @@ def render(df_hist, df_obsoleto, moeda_br, df_kpi=None, data_selecionada=None, v
 
             ascending = ord_dir == "⬆ Asc"
             try:
+                # Ordenação inteligente que remove R$ e pontos para ordenar números formatados
                 base_display = base_display.sort_values(
                     ord_col, ascending=ascending,
                     key=lambda x: pd.to_numeric(
