@@ -54,7 +54,7 @@ def render(df_hist, moeda_br, data_selecionada):
         return "Manteve"
 
     def montar_df(df_comp):
-        # Mapeamento expandido (Invertido: Tipo antes de Conta)
+        # Mapeamento com Sequência: Tipo de Estoque ANTES de Conta
         desc_map = (
             df_hist[df_hist["Descricao"].notna() &
                     (df_hist["Descricao"].astype(str).str.strip() != "") &
@@ -63,7 +63,7 @@ def render(df_hist, moeda_br, data_selecionada):
             .to_dict()
         )
 
-        # Agrupamento (Invertido: Tipo antes de Conta)
+        # Agrupamento com Sequência: Tipo de Estoque ANTES de Conta
         grp_atual = df_atual.groupby(["Empresa / Filial", "Tipo de Estoque", "Conta", "Produto"]).agg(
             Valor_Atual=("Custo Total", "sum"),
             Qtd_Atual=("Saldo Atual", "sum")
@@ -138,7 +138,7 @@ def render(df_hist, moeda_br, data_selecionada):
         delta_label = f"Δ {tipo} {label_comp}"
         perc_label  = f"% {tipo}"
 
-        # AJUSTE DE SEQUÊNCIA: Tipo de Estoque antes de Conta
+        # SEQUÊNCIA FINAL RIGOROSA: Tipo de Estoque | Conta
         cols_final = [
             "Status Mov", "Empresa / Filial", "Tipo de Estoque", "Conta", 
             "Produto", "Descricao", "Qtd_Atual", "Qtd_Comp", 
