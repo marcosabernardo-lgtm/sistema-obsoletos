@@ -26,15 +26,20 @@ def render(df_filtrado, moeda_br):
 
     ultima_data = df_filtrado["Data Fechamento"].max()
 
-    base = df_filtrado[df_filtrado["Data Fechamento"] == ultima_data]
+    base = df_filtrado[df_filtrado["Data Fechamento"] == ultima_data].copy()
+
+    # Proteção caso a coluna não exista em arquivos históricos antigos
+    if "Tipo de Estoque" not in base.columns:
+        base["Tipo de Estoque"] = "—"
 
     # Total geral do obsoleto (base para o %)
     total_geral = base["Custo Total"].sum()
 
+    # Adicionado "Tipo de Estoque" no agrupamento para não perder a informação
     top20 = (
         base
         .groupby(
-            ["Empresa / Filial", "Conta", "Produto", "Descricao"],
+            ["Empresa / Filial", "Tipo de Estoque", "Conta", "Produto", "Descricao"],
             as_index=False
         )
         .agg(
@@ -71,8 +76,9 @@ def render(df_filtrado, moeda_br):
     top20["Custo Total"] = top20["Custo Total"].apply(moeda_br)
     top20["%"] = top20["%"].apply(lambda x: f"{x:.2f}%")
 
+    # Adicionado "Tipo de Estoque" na visualização
     top20 = top20[[
-        "Ranking", "Empresa / Filial", "Conta", "Produto",
+        "Ranking", "Empresa / Filial", "Tipo de Estoque", "Conta", "Produto",
         "Descricao", "Quantidade", "Custo Total", "%"
     ]]
 
@@ -94,7 +100,7 @@ def render(df_filtrado, moeda_br):
 
     col_busca, col_ord, col_dir, col_export = st.columns([3, 2, 1, 1])
     with col_busca:
-        busca = st.text_input("🔍 PESQUISAR", placeholder="Produto, empresa, conta...", key="busca_top20")
+        busca = st.text_input("🔍 PESQUISAR", placeholder="Produto, empresa, tipo...", key="busca_top20")
     with col_ord:
         ord_col = st.selectbox("📊 Classificar por", list(top20.columns), key="ord_col_top20")
     with col_dir:
