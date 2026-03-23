@@ -48,28 +48,33 @@ def render(df_hist, moeda_br, data_selecionada):
         return "Manteve"
 
     def montar_df(df_comp):
-        # Descrição por Empresa+Conta+Produto para evitar conflito entre produtos com mesmo código
+        # Mapeamento de descrição considerando as novas chaves
         desc_map = (
             df_hist[df_hist["Descricao"].notna() &
                     (df_hist["Descricao"].astype(str).str.strip() != "") &
                     (df_hist["Descricao"].astype(str) != "0")]
-            .groupby(["Empresa / Filial", "Produto"])["Descricao"].first()
+            .groupby(["Empresa / Filial", "Conta", "Tipo de Estoque", "Produto"])["Descricao"].first()
             .to_dict()
         )
 
-        grp_atual = df_atual.groupby(["Empresa / Filial", "Produto"]).agg(
+        # Agrupamento incluindo Conta e Tipo de Estoque
+        grp_atual = df_atual.groupby(["Empresa / Filial", "Conta", "Tipo de Estoque", "Produto"]).agg(
             Valor_Atual=("Custo Total", "sum"),
             Qtd_Atual=("Saldo Atual", "sum")
         ).reset_index()
-        grp_comp = df_comp.groupby(["Empresa / Filial", "Produto"]).agg(
+        
+        grp_comp = df_comp.groupby(["Empresa / Filial", "Conta", "Tipo de Estoque", "Produto"]).agg(
             Valor_Comp=("Custo Total", "sum"),
             Qtd_Comp=("Saldo Atual", "sum")
         ).reset_index()
-        df = grp_atual.merge(grp_comp, on=["Empresa / Filial", "Produto"], how="outer")
+        
+        df = grp_atual.merge(grp_comp, on=["Empresa / Filial", "Conta", "Tipo de Estoque", "Produto"], how="outer")
         df[["Valor_Atual","Qtd_Atual","Valor_Comp","Qtd_Comp"]] = df[["Valor_Atual","Qtd_Atual","Valor_Comp","Qtd_Comp"]].fillna(0)
+        
         df["Descricao"] = df.apply(
-            lambda r: desc_map.get((r["Empresa / Filial"], r["Produto"]), "—"), axis=1
+            lambda r: desc_map.get((r["Empresa / Filial"], r["Conta"], r["Tipo de Estoque"], r["Produto"]), "—"), axis=1
         ).astype(str)
+        
         df["Variacao"]   = df["Valor_Atual"] - df["Valor_Comp"]
         df["Perc"] = df.apply(
             lambda r: (r["Variacao"] / r["Valor_Comp"] * 100) if r["Valor_Comp"] != 0
@@ -105,54 +110,20 @@ def render(df_hist, moeda_br, data_selecionada):
 
         st.markdown("""
         <style>
-        div[data-testid="stRadio"] > div {
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.15);
-            border-radius: 10px;
-            padding: 10px 16px;
-        }
-        /* text_input igual ao selectbox */
-        div[data-testid="stTextInput"] input,
-        div[data-testid="stTextInput"] > div,
-        div[data-testid="stTextInput"] > div > div {
-            background-color: #005562 !important;
-        }
-        div[data-testid="stTextInput"] input {
-            border: 1px solid rgba(250,250,250,0.2) !important;
-            border-radius: 6px !important;
-            color: white !important;
-            padding: 8px 12px !important;
-        }
-        div[data-testid="stTextInput"] > div > div > input:focus {
-            border-color: #EC6E21 !important;
-            box-shadow: none !important;
-        }
-        div[data-testid="stTextInput"] label {
-            color: rgba(250,250,250,0.6) !important;
-            font-size: 0.75rem !important;
-            font-weight: 400 !important;
-            text-transform: uppercase !important;
-            letter-spacing: 0.05em !important;
-        }
+        div[data-testid="stRadio"] > div { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 10px 16px; }
+        div[data-testid="stTextInput"] input, div[data-testid="stTextInput"] > div, div[data-testid="stTextInput"] > div > div { background-color: #005562 !important; }
+        div[data-testid="stTextInput"] input { border: 1px solid rgba(250,250,250,0.2) !important; border-radius: 6px !important; color: white !important; padding: 8px 12px !important; }
+        div[data-testid="stTextInput"] label { color: rgba(250,250,250,0.6) !important; font-size: 0.75rem !important; font-weight: 400 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; }
         </style>
         """, unsafe_allow_html=True)
         col_filtro, col_export = st.columns([4, 1])
 
         with col_filtro:
-            status_sel = st.radio(
-                "Filtrar por Status Movimento",
-                ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"],
-                horizontal=True,
-                key=f"radio_{key_prefix}"
-            )
+            status_sel = st.radio("Filtrar por Status Movimento", ["Todos", "Aumentou", "Reduziu", "Zerado", "Manteve"], horizontal=True, key=f"radio_{key_prefix}")
 
         df_filtrado = df.copy() if status_sel == "Todos" else df[df["Status Mov"] == status_sel].copy()
 
-        tipo_tmp = "MoM" if key_prefix == "mom" else "YoY"
-        atual_tmp = pd.Timestamp(data_selecionada).strftime('%y-%b').lower()
-
-        # Labels dinâmicos
-        tipo        = "MoM" if key_prefix == "mom" else "YoY"
+        tipo = "MoM" if key_prefix == "mom" else "YoY"
         atual_label = pd.Timestamp(data_selecionada).strftime('%y-%b').lower()
         val_label   = f"Valor Estoque {atual_label}"
         qtd_label   = f"Qtd Estoque {atual_label}"
@@ -161,7 +132,14 @@ def render(df_hist, moeda_br, data_selecionada):
         delta_label = f"Δ {tipo} {label_comp}"
         perc_label  = f"% {tipo}"
 
-        df_exib = df_filtrado[["Status Mov", "Empresa / Filial", "Produto", "Descricao", "Qtd_Atual", "Qtd_Comp", "Valor_Atual", "Valor_Comp", "Variacao", "Perc"]].copy()
+        # Seleção das colunas com Conta e Tipo de Estoque após Empresa / Filial
+        cols_ordem = [
+            "Status Mov", "Empresa / Filial", "Conta", "Tipo de Estoque", 
+            "Produto", "Descricao", "Qtd_Atual", "Qtd_Comp", 
+            "Valor_Atual", "Valor_Comp", "Variacao", "Perc"
+        ]
+        
+        df_exib = df_filtrado[cols_ordem].copy()
         df_exib = df_exib.rename(columns={
             "Status Mov":  "Status Movimento",
             "Descricao":   "Descrição",
@@ -182,29 +160,25 @@ def render(df_hist, moeda_br, data_selecionada):
         if perc_label in df_exib.columns:
             df_exib[perc_label] = df_exib[perc_label].apply(lambda v: f"{v:.1f}%" if isinstance(v, (int,float)) else v)
 
-        # Busca e ordenação
         col_busca, col_ord, col_dir = st.columns([3, 2, 1])
         with col_busca:
-            busca = st.text_input("🔍 PESQUISAR", placeholder="Código, descrição, empresa...", key=f"busca_{key_prefix}")
+            busca = st.text_input("🔍 PESQUISAR", placeholder="Código, descrição, conta, empresa...", key=f"busca_{key_prefix}")
         with col_ord:
             colunas_ord = list(df_exib.columns)
-            ord_col = st.selectbox("📊 Classificar por", colunas_ord, key=f"ord_col_{key_prefix}")
+            ord_col = st.selectbox("📊 Classificar por", colunas_ord, index=0, key=f"ord_col_{key_prefix}")
         with col_dir:
             ord_dir = st.selectbox("↕ Direção", ["⬇ Desc", "⬆ Asc"], key=f"ord_dir_{key_prefix}")
 
-        # Aplica busca
         if busca:
             mask = df_exib.apply(lambda col: col.astype(str).str.contains(busca, case=False, na=False)).any(axis=1)
             df_exib = df_exib[mask]
 
-        # Aplica ordenação
         ascending = ord_dir == "⬆ Asc"
         try:
             df_exib = df_exib.sort_values(ord_col, ascending=ascending, key=lambda x: pd.to_numeric(x.str.replace(r"[R$\s\.,%+]", "", regex=True).str.replace(",", "."), errors="coerce").fillna(x.astype(str)))
         except Exception:
             pass
 
-        # Export no col_export (ao lado do radio), com df_exib já formatado
         buffer_exp = io.BytesIO()
         df_exib.to_excel(buffer_exp, index=False)
         buffer_exp.seek(0)
@@ -213,7 +187,7 @@ def render(df_hist, moeda_br, data_selecionada):
             st.download_button(
                 label="📥 Exportar",
                 data=buffer_exp,
-                file_name=f"variacao_{tipo_tmp.lower()}_{atual_tmp}.xlsx",
+                file_name=f"variacao_{tipo.lower()}_{atual_label}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key=f"export_top_{key_prefix}",
                 use_container_width=True
@@ -221,7 +195,6 @@ def render(df_hist, moeda_br, data_selecionada):
 
         st.caption(f"{len(df_exib)} produtos")
         st.dataframe(df_exib, use_container_width=True, hide_index=True)
-
 
 
     # ── ABAS ──────────────────────────────────────────────
