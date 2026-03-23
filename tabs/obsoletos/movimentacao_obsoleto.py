@@ -3,7 +3,7 @@ import pandas as pd
 import io
 
 # -------------------------------------------------------
-# 1. FUNÇÃO DE ESTILO (CARD)
+# 1. FUNÇÃO DE ESTILO (CARD) - MANTIDA IGUAL
 # -------------------------------------------------------
 def card(titulo, valor, cor_borda="#EC6E21", cor_valor=None, subtitulo=None):
     cor_val = cor_valor if cor_valor else "white"
@@ -36,16 +36,14 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     df = df_hist.copy()
 
-    # --- PROTEÇÃO PARA DADOS ANTIGOS ---
+    # Proteção caso a coluna não exista em arquivos antigos
     if "Tipo de Estoque" not in df.columns:
-        df["Tipo de Estoque"] = "Não Informado"
-    if "Conta" not in df.columns:
-        df["Conta"] = "Não Informado"
+        df["Tipo de Estoque"] = "—"
 
-    # Adicionado "Tipo de Estoque" no agrupamento
+    # ADD: "Tipo de Estoque" no groupby
     df = (
         df.groupby(
-            ["Data Fechamento", "Empresa / Filial", "Tipo de Estoque", "Conta", "Produto", "Descricao", "Status Estoque"],
+            ["Data Fechamento", "Empresa / Filial", "Tipo de Estoque", "Produto", "Descricao", "Conta", "Status Estoque"],
             as_index=False
         ).agg({"Saldo Atual": "sum", "Custo Total": "sum"})
     )
@@ -86,7 +84,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     chave = ["Empresa / Filial", "Produto"]
 
-    # Selecionando colunas incluindo Tipo de Estoque
+    # ADD: "Tipo de Estoque" na seleção e renomeio
     df_ant_sel = df_ant[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Tipo de Estoque"]].copy()
     df_ant_sel = df_ant_sel.rename(columns={
         "Custo Total": "Vlr Ant", "Saldo Atual": "Qtd Ant",
@@ -106,6 +104,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
     base["Qtd Atual"] = base["Qtd Atual"].fillna(0)
     base["Descricao"] = base["Descricao_atual"].fillna(base["Descricao_ant"])
     base["Conta"]     = base["Conta_atual"].fillna(base["Conta_ant"])
+    # Consolida o Tipo de Estoque
     base["Tipo de Estoque"] = base["Tipo_atual"].fillna(base["Tipo_ant"])
 
     entrou  = base[(base["Vlr Ant"] == 0) & (base["Vlr Atual"] > 0)].copy()
@@ -166,7 +165,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # -------------------------------------------------------
     # TABELA COM FILTRO DE STATUS MOV
     # -------------------------------------------------------
-    # Adicionado "Tipo de Estoque" na ordem das colunas
+    # ADD: "Tipo de Estoque" na lista de colunas
     colunas_tabela = ["Status Mov", "Empresa / Filial", "Tipo de Estoque", "Conta", "Produto", "Descricao",
                       "Qtd Ant", "Vlr Ant", "Qtd Atual", "Vlr Atual"]
 
@@ -182,21 +181,41 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
         st.markdown("""
         <style>
-        div[data-testid="stRadio"] > div { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; padding: 10px 16px; }
-        div[data-testid="stTextInput"] input, div[data-testid="stTextInput"] > div, div[data-testid="stTextInput"] > div > div { background-color: #005562 !important; }
-        div[data-testid="stTextInput"] input { border: 1px solid rgba(250,250,250,0.2) !important; border-radius: 6px !important; color: white !important; padding: 8px 12px !important; }
+        div[data-testid="stRadio"] > div {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 10px 16px;
+        }
+        div[data-testid="stTextInput"] input,
+        div[data-testid="stTextInput"] > div,
+        div[data-testid="stTextInput"] > div > div {
+            background-color: #005562 !important;
+        }
+        div[data-testid="stTextInput"] input {
+            border: 1px solid rgba(250,250,250,0.2) !important;
+            border-radius: 6px !important;
+            color: white !important;
+            padding: 8px 12px !important;
+        }
         </style>
         """, unsafe_allow_html=True)
 
         col_radio, col_export = st.columns([4, 1])
         with col_radio:
-            status_radio = st.radio("Visualizar", options=["Todos", "🔴 Entrou", "🟢 Saiu", "🔽 Reduziu"], horizontal=True, key="filtro_status_mov")
+            status_radio = st.radio(
+                "Visualizar",
+                options=["Todos", "🔴 Entrou", "🟢 Saiu", "🔽 Reduziu"],
+                horizontal=True,
+                key="filtro_status_mov"
+            )
 
         if status_radio == "Todos":
             mov_filtrado = mov
         else:
             mov_filtrado = mov[mov["Status Mov"] == status_radio]
 
+        # Busca + ordenação
         col_busca, col_ord, col_dir = st.columns([3, 2, 1])
 
         mov_display = mov_filtrado.copy()
@@ -204,7 +223,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
         mov_display["Vlr Atual"] = mov_display["Vlr Atual"].apply(moeda_br)
 
         with col_busca:
-            busca = st.text_input("🔍 PESQUISAR", placeholder="Produto, empresa, tipo, conta...", key="busca_mov_obs")
+            busca = st.text_input("🔍 PESQUISAR", placeholder="Produto, empresa, conta...", key="busca_mov_obs")
         with col_ord:
             ord_col = st.selectbox("📊 Classificar por", list(mov_display.columns), key="ord_col_mov_obs")
         with col_dir:
