@@ -9,14 +9,10 @@ from collections import defaultdict
 
 def normalizar_empresa(nome):
     nome = str(nome).upper()
-    if "TOOLS" in nome:
-        return "Tools"
-    if "MAQUINAS" in nome:
-        return "Maquinas"
-    if "ALLSERVICE" in nome:
-        return "Service"
-    if "ROBOTICA" in nome:
-        return "Robotica"
+    if "TOOLS" in nome: return "Tools"
+    if "MAQUINAS" in nome: return "Maquinas"
+    if "ALLSERVICE" in nome: return "Service"
+    if "ROBOTICA" in nome: return "Robotica"
     return nome
 
 # ==========================================================
@@ -24,18 +20,13 @@ def normalizar_empresa(nome):
 # ==========================================================
 
 def executar_motor_estoque(caminho_zip):
-
     with zipfile.ZipFile(caminho_zip, "r") as z:
 
         # ------------------------------------------------------
-        # ESTOQUE ATUAL
+        # 1. LEITURA DA BASE PRINCIPAL (ESTOQUE ATUAL)
         # ------------------------------------------------------
-
         arquivo_estoque = next(
-            (
-                n for n in z.namelist()
-                if "02_Estoque_Atual" in n and n.endswith(".xlsx")
-            ),
+            (n for n in z.namelist() if "02_Estoque_Atual" in n and n.endswith(".xlsx")),
             None
         )
 
@@ -43,39 +34,41 @@ def executar_motor_estoque(caminho_zip):
             raise Exception("Arquivo 02_Estoque_Atual não encontrado no ZIP")
 
         with z.open(arquivo_estoque) as f:
-            df = pd.read_excel(
-                f,
-                sheet_name="Detalhado",
-                dtype={"Código": str},
-                engine="openpyxl"
-            )
+            df = pd.read_excel(f, sheet_name="Detalhado", dtype={"Código": str}, engine="openpyxl")
         
-        # Limpar espaços extras nos cabeçalhos
+        # Limpar espaços invisíveis nos nomes das colunas (Essencial)
         df.columns = df.columns.astype(str).str.strip()
 
         # ------------------------------------------------------
-        # MAQUINAS USADAS
+        # 2. DETECÇÃO ROBUSTA DO TIPO DE ESTOQUE
         # ------------------------------------------------------
+        # Procura por qualquer coluna que contenha "Tipo" e "Estoque" no nome
+        col_tipo_detectada = next(
+            (c for c in df.columns if "TIPO" in c.upper() and "ESTOQUE" in c.upper()), 
+            None
+        )
 
-        arquivos_usadas = [
-            n for n in z.namelist()
-            if "06_Usadas/" in n and n.lower().endswith(".xlsx")
-        ]
+        if col_tipo_detectada:
+            df = df.rename(columns={col_tipo_detectada: "Tipo de Estoque"})
+            # Normaliza para Title Case: "Em Estoque", "Em Processo", "Em Fabricação"
+            df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("Em Estoque").astype(str).str.strip().str.title()
+        else:
+            # Fallback caso a coluna não exista no Excel original
+            df["Tipo de Estoque"] = "Em Estoque"
 
+        # ------------------------------------------------------
+        # 3. TRATAMENTO DE MÁQUINAS USADAS (PASTA 06)
+        # ------------------------------------------------------
+        arquivos_usadas = [n for n in z.namelist() if "06_Usadas/" in n and n.lower().endswith(".xlsx")]
         usadas_tipo_por_empresa = {}
 
         for nome in arquivos_usadas:
             nome_upper = nome.upper()
-            if "TOOLS" in nome_upper:
-                empresa = "Tools"
-            elif "MAQUINAS" in nome_upper:
-                empresa = "Maquinas"
-            elif "ROBOTICA" in nome_upper:
-                empresa = "Robotica"
-            elif "SERVICE" in nome_upper:
-                empresa = "Service"
-            else:
-                continue
+            if "TOOLS" in nome_upper: empresa = "Tools"
+            elif "MAQUINAS" in nome_upper: empresa = "Maquinas"
+            elif "ROBOTICA" in nome_upper: empresa = "Robotica"
+            elif "SERVICE" in nome_upper: empresa = "Service"
+            else: continue
 
             with z.open(nome) as f:
                 df_u = pd.read_excel(f, dtype=str, engine="openpyxl")
@@ -85,7 +78,6 @@ def executar_motor_estoque(caminho_zip):
 
             if "Tipo" in df_u.columns:
                 df_u["Codigo"] = df_u["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
-                # Normaliza o Tipo das Usadas para Title Case também
                 df_u["Tipo"] = df_u["Tipo"].astype(str).str.strip().str.title()
                 for _, row in df_u.iterrows():
                     por_tipo[row["Tipo"]].add(row["Codigo"])
@@ -97,9 +89,8 @@ def executar_motor_estoque(caminho_zip):
             usadas_tipo_por_empresa[empresa] = por_tipo
 
     # ------------------------------------------------------
-    # TRATAMENTO BASE
+    # 4. TRATAMENTO DA BASE FINAL
     # ------------------------------------------------------
-
     df = df.rename(columns={
         "Valor Total": "Custo Total",
         "Código": "Produto",
@@ -107,35 +98,23 @@ def executar_motor_estoque(caminho_zip):
         "Quantidade": "Saldo Atual"
     })
 
-    # --- NORMALIZAÇÃO PARA "Em Estoque", "Em Fabricação", "Em Processo" ---
-    if "Tipo de Estoque" in df.columns:
-        # .str.title() transforma "EM ESTOQUE" em "Em Estoque"
-        df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("Não Informado").astype(str).str.strip().str.title()
-    else:
-        df["Tipo de Estoque"] = "Em Estoque"
-
-    # Garante que as outras colunas de texto também sigam o padrão Title Case
+    # Normalização de Conta e Localização
     df["Conta"] = df["Conta"].astype(str).str.strip().str.title()
-    
     df["Empresa_Nome"] = df["Empresa"].apply(normalizar_empresa)
     df["Filial_Nome"] = df["Filial"].astype(str).str.title()
     df["Empresa / Filial"] = df["Empresa_Nome"] + " / " + df["Filial_Nome"]
 
-    df["Produto"] = (
-        df["Produto"]
-        .astype(str)
-        .str.strip()
-        .str.replace(".0", "", regex=False)
-    )
+    # Limpeza de Códigos de Produto
+    df["Produto"] = df["Produto"].astype(str).str.strip().str.replace(".0", "", regex=False)
 
+    # Conversão Numérica
     df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce").fillna(0)
     df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce").fillna(0)
     df["Data Fechamento"] = pd.to_datetime(df["Data Fechamento"], errors="coerce")
 
     # ------------------------------------------------------
-    # MARCAR TIPO DA MAQUINA
+    # 5. MARCAR TIPO DA MAQUINA (CONTA)
     # ------------------------------------------------------
-
     if usadas_tipo_por_empresa:
         for empresa, por_tipo in usadas_tipo_por_empresa.items():
             for tipo, codigos in por_tipo.items():
@@ -146,29 +125,18 @@ def executar_motor_estoque(caminho_zip):
                 df.loc[mask, "Conta"] = tipo
 
     # ------------------------------------------------------
-    # ORGANIZA COLUNAS
+    # 6. ORGANIZA COLUNAS E EXPORTA
     # ------------------------------------------------------
-
-    colunas = [
-        "Data Fechamento",
-        "Empresa / Filial",
-        "Tipo de Estoque",
-        "Conta",
-        "Produto",
-        "Descricao",
-        "Saldo Atual",
-        "Custo Total"
+    colunas_finais = [
+        "Data Fechamento", "Empresa / Filial", "Tipo de Estoque", 
+        "Conta", "Produto", "Descricao", "Saldo Atual", "Custo Total"
     ]
 
-    for col in colunas:
-        if col not in df.columns:
-            df[col] = ""
+    # Garante que todas as colunas existam
+    for col in colunas_finais:
+        if col not in df.columns: df[col] = ""
 
-    df_final = df[colunas].copy()
-
-    # ------------------------------------------------------
-    # EXPORTAÇÃO
-    # ------------------------------------------------------
+    df_final = df[colunas_finais].copy()
 
     buffer = io.BytesIO()
     df_final.to_excel(buffer, index=False)
