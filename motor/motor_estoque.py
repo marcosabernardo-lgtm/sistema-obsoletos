@@ -50,11 +50,11 @@ def executar_motor_estoque(caminho_zip):
                 engine="openpyxl"
             )
         
-        # --- CORREÇÃO 1: Limpar espaços extras nos nomes das colunas logo na leitura ---
+        # Limpar espaços extras nos cabeçalhos
         df.columns = df.columns.astype(str).str.strip()
 
         # ------------------------------------------------------
-        # MAQUINAS USADAS — com suporte à coluna Tipo
+        # MAQUINAS USADAS
         # ------------------------------------------------------
 
         arquivos_usadas = [
@@ -85,7 +85,8 @@ def executar_motor_estoque(caminho_zip):
 
             if "Tipo" in df_u.columns:
                 df_u["Codigo"] = df_u["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
-                df_u["Tipo"] = df_u["Tipo"].astype(str).str.strip()
+                # Normaliza o Tipo das Usadas para Title Case também
+                df_u["Tipo"] = df_u["Tipo"].astype(str).str.strip().str.title()
                 for _, row in df_u.iterrows():
                     por_tipo[row["Tipo"]].add(row["Codigo"])
             else:
@@ -99,8 +100,6 @@ def executar_motor_estoque(caminho_zip):
     # TRATAMENTO BASE
     # ------------------------------------------------------
 
-    # --- CORREÇÃO 2: Renomeação robusta ---
-    # Usamos um dicionário para renomear apenas o que existir
     df = df.rename(columns={
         "Valor Total": "Custo Total",
         "Código": "Produto",
@@ -108,15 +107,16 @@ def executar_motor_estoque(caminho_zip):
         "Quantidade": "Saldo Atual"
     })
 
-    # --- CORREÇÃO 3: Lógica do Tipo de Estoque ---
-    # Se a coluna existir (já limpamos o nome com strip() lá em cima), apenas tratamos os dados.
-    # Se NÃO existir, criamos a coluna como "EM ESTOQUE".
+    # --- NORMALIZAÇÃO PARA "Em Estoque", "Em Fabricação", "Em Processo" ---
     if "Tipo de Estoque" in df.columns:
-        df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("NÃO INFORMADO").astype(str).str.strip().str.upper()
+        # .str.title() transforma "EM ESTOQUE" em "Em Estoque"
+        df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("Não Informado").astype(str).str.strip().str.title()
     else:
-        df["Tipo de Estoque"] = "EM ESTOQUE"
+        df["Tipo de Estoque"] = "Em Estoque"
 
+    # Garante que as outras colunas de texto também sigam o padrão Title Case
     df["Conta"] = df["Conta"].astype(str).str.strip().str.title()
+    
     df["Empresa_Nome"] = df["Empresa"].apply(normalizar_empresa)
     df["Filial_Nome"] = df["Filial"].astype(str).str.title()
     df["Empresa / Filial"] = df["Empresa_Nome"] + " / " + df["Filial_Nome"]
@@ -160,7 +160,6 @@ def executar_motor_estoque(caminho_zip):
         "Custo Total"
     ]
 
-    # Garante que todas as colunas necessárias existam antes de filtrar
     for col in colunas:
         if col not in df.columns:
             df[col] = ""
