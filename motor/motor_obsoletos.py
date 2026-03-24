@@ -42,6 +42,9 @@ def executar_estoque(caminho_zip):
                 engine="openpyxl"
             )
 
+        # --- CORREÇÃO: Limpa espaços nos cabeçalhos ---
+        df.columns = df.columns.astype(str).str.strip()
+
         arquivos_usadas = [
             n for n in z.namelist()
             if "06_Usadas/" in n and n.lower().endswith(".xlsx")
@@ -69,13 +72,15 @@ def executar_estoque(caminho_zip):
             df_u["Codigo"] = df_u["Codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
 
             if "Tipo" in df_u.columns:
-                df_u["Tipo"] = df_u["Tipo"].astype(str).str.strip()
+                # Normaliza o tipo das usadas para Title Case
+                df_u["Tipo"] = df_u["Tipo"].astype(str).str.strip().str.title()
                 tipo_map = dict(zip(df_u["Codigo"], df_u["Tipo"]))
             else:
                 tipo_map = {c: "Maquina Usada" for c in df_u["Codigo"]}
 
             usadas_tipo_por_empresa[empresa] = tipo_map
 
+    # --- CORREÇÃO: Tratamento do Tipo de Estoque ---
     df = df.rename(columns={
         "Valor Total": "Custo Total",
         "Código": "Produto",
@@ -83,14 +88,23 @@ def executar_estoque(caminho_zip):
         "Quantidade": "Saldo Atual"
     })
 
-    df["Vlr Unit"] = pd.to_numeric(df["Vlr Unit"], errors="coerce")
+    if "Tipo de Estoque" in df.columns:
+        df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("Não Informado").astype(str).str.strip().str.title()
+    else:
+        df["Tipo de Estoque"] = "Em Estoque"
+
+    df["Vlr Unit"] = pd.to_numeric(df["Vlr Unit"], errors="coerce").fillna(0)
     df["Empresa"] = df["Empresa"].apply(normalizar_empresa)
     df["Filial"] = df["Filial"].astype(str).str.title()
     df["Empresa / Filial"] = df["Empresa"] + " / " + df["Filial"]
     df["Produto"] = df["Produto"].astype(str).str.strip().str.replace(".0", "", regex=False)
     df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
-    df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce")
-    df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce")
+    df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce").fillna(0)
+    df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce").fillna(0)
+    
+    # Normaliza a Conta original para Title
+    if "Conta" in df.columns:
+        df["Conta"] = df["Conta"].astype(str).str.strip().str.title()
 
     if usadas_tipo_por_empresa:
         for empresa, tipo_map in usadas_tipo_por_empresa.items():
@@ -111,7 +125,7 @@ def executar_estoque(caminho_zip):
 
 
 # ==========================================================
-# MOVIMENTAÇÕES
+# MOVIMENTAÇÕES (Sem alterações necessárias aqui)
 # ==========================================================
 
 def executar_movimentacoes(caminho_zip):
@@ -177,7 +191,7 @@ def executar_movimentacoes(caminho_zip):
 
 
 # ==========================================================
-# ENTRADAS / SAÍDAS
+# ENTRADAS / SAÍDAS (Sem alterações necessárias aqui)
 # ==========================================================
 
 def executar_entradas_saidas(caminho_zip):
@@ -225,21 +239,25 @@ def executar_entradas_saidas(caminho_zip):
                 if aba in xl.sheet_names:
                     df = pd.read_excel(xl, sheet_name=aba, skiprows=1, dtype=str, engine="openpyxl")
                     df.columns = df.columns.str.strip().str.upper()
-                    df = df[["FILIAL", "PRODUTO", "DIGITACAO", "ESTOQUE"]].copy()
-                    df["DIGITACAO"] = pd.to_datetime(df["DIGITACAO"], errors="coerce")
-                    df = df[df["ESTOQUE"] == "S"]
-                    df["Produto"] = df["PRODUTO"].astype(str).str.strip()
-                    df["Mesclado"] = empresa + " " + df["FILIAL"].astype(str).str.strip()
-                    df = df.merge(df_empresas[["Mesclado", "Empresa / Filial"]], on="Mesclado", how="left")
-                    df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
-                    if tipo == "Entrada":
-                        df["DtEnt"] = df["DIGITACAO"]
-                        df["DtSai"] = pd.NaT
-                    else:
-                        df["DtEnt"] = pd.NaT
-                        df["DtSai"] = df["DIGITACAO"]
-                    lista.append(df[["ID_UNICO", "DtEnt", "DtSai"]])
+                    if all(col in df.columns for col in ["FILIAL", "PRODUTO", "DIGITACAO", "ESTOQUE"]):
+                        df = df[["FILIAL", "PRODUTO", "DIGITACAO", "ESTOQUE"]].copy()
+                        df["DIGITACAO"] = pd.to_datetime(df["DIGITACAO"], errors="coerce")
+                        df = df[df["ESTOQUE"] == "S"]
+                        df["Produto"] = df["PRODUTO"].astype(str).str.strip()
+                        df["Mesclado"] = empresa + " " + df["FILIAL"].astype(str).str.strip()
+                        df = df.merge(df_empresas[["Mesclado", "Empresa / Filial"]], on="Mesclado", how="left")
+                        df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
+                        if tipo == "Entrada":
+                            df["DtEnt"] = df["DIGITACAO"]
+                            df["DtSai"] = pd.NaT
+                        else:
+                            df["DtEnt"] = pd.NaT
+                            df["DtSai"] = df["DIGITACAO"]
+                        lista.append(df[["ID_UNICO", "DtEnt", "DtSai"]])
 
+        if not lista:
+            return pd.DataFrame(columns=["ID_UNICO", "Ult_Entrada", "Ult_Saida"])
+            
         df_all = pd.concat(lista, ignore_index=True)
 
         return df_all.groupby("ID_UNICO", as_index=False).agg(
@@ -276,18 +294,18 @@ def executar_motor(caminho_zip):
     df_final["Origem Mov"] = df_final.apply(origem, axis=1)
     df_final = df_final.drop(columns=["Ult_Mov", "Ult_Entrada", "Ult_Saida"])
 
-    df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].str.title()
-    # Normaliza abreviações antes do title()
+    # --- CORREÇÃO: Normalização Title Case ---
+    df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].astype(str).str.title()
+    
     CONTA_CORRECOES = {
         "MR":                  "Material Revenda",
-        "Mr":                  "Material Revenda",
         "MATERIAL REVENDA":    "Material Revenda",
         "MATERIAL DE REVENDA": "Material De Revenda",
     }
-    df_final["Conta"] = df_final["Conta"].astype(str).str.strip()
-    df_final["Conta"] = df_final["Conta"].str.upper().map(
+    df_final["Conta"] = df_final["Conta"].astype(str).str.strip().str.upper().map(
         lambda x: CONTA_CORRECOES.get(x, x)
     ).str.title()
+    
     df_final = df_final.drop(columns=["ID_UNICO"])
 
     DataBase = pd.to_datetime(df_final["Data Fechamento"].iloc[0])
@@ -301,8 +319,10 @@ def executar_motor(caminho_zip):
         np.nan
     )
 
+    # --- CORREÇÃO: Ajuste do Status para bater com o Title Case ---
+    # Agora verificamos "Em Fabricacao" ou "Em Fabricação" (depende de como está no Excel)
     df_final["Status Estoque"] = np.where(
-        df_final["Tipo de Estoque"] == "Em Fabricacao",
+        df_final["Tipo de Estoque"].str.contains("Fabric", case=False), 
         "Até 6 meses",
         np.where(
             df_final["Ult_Movimentacao"].isna() | (df_final["Meses Ult Mov"] > 6),
@@ -312,7 +332,8 @@ def executar_motor(caminho_zip):
     )
 
     def status_mov(row):
-        if row["Tipo de Estoque"] == "Em Fabricacao":
+        # Busca flexível por Fabricação
+        if "Fabric" in str(row["Tipo de Estoque"]):
             return "Até 6 meses"
         if pd.isna(row["Meses Ult Mov"]):
             return "Sem Movimento"
@@ -327,7 +348,7 @@ def executar_motor(caminho_zip):
     df_final["Status do Movimento"] = df_final.apply(status_mov, axis=1)
 
     def formatar(row):
-        if row["Tipo de Estoque"] == "Em Fabricacao":
+        if "Fabric" in str(row["Tipo de Estoque"]):
             return "Em fabricação"
         if pd.isna(row["Ult_Movimentacao"]):
             return "Sem movimento"
