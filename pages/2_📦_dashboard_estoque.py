@@ -111,6 +111,7 @@ EMPRESA_FILIAL_MAP_NORM = {
 def mapear_empresa_filial_norm(empresa: str, filial: str) -> str:
     key = (str(empresa).strip().upper(), str(filial).strip().zfill(2))
     return EMPRESA_FILIAL_MAP_NORM.get(key, f"{empresa} / {filial}")
+EMPRESA_FILIAL_MAP = {
     ("ALLTECH TOOLS DO BRASIL LTDA",         "MATRIZ"):         "Tools / Matriz",
     ("ALLTECH TOOLS DO BRASIL LTDA",         "FILIAL"):         "Tools / Filial",
     ("ALLTECH MAQUINAS E EQUIPAMENTOS LTDA", "MATRIZ"):         "Maquinas / Matriz",
