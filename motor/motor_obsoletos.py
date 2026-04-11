@@ -16,27 +16,23 @@ def get_supabase():
 
 
 # ==========================================================
-# HELPER: busca todos os registros com paginacao
+# HELPER: paginacao com filtro gte
 # ==========================================================
 
-def buscar_tudo(sb, tabela, colunas, filtros=None):
-    """Pagina a query ate buscar todos os registros."""
+def buscar_com_gte(sb, tabela, colunas, col_data, data_inicio):
     LIMIT = 1000
     offset = 0
     todos = []
-
     while True:
-        query = sb.table(tabela).select(colunas).limit(LIMIT).offset(offset)
-        if filtros:
-            for col, val in filtros.items():
-                query = query.eq(col, val)
-        resp = query.execute()
-        dados = resp.data
-        todos.extend(dados)
-        if len(dados) < LIMIT:
+        resp = sb.table(tabela) \
+            .select(colunas) \
+            .gte(col_data, data_inicio) \
+            .limit(LIMIT).offset(offset) \
+            .execute()
+        todos.extend(resp.data)
+        if len(resp.data) < LIMIT:
             break
         offset += LIMIT
-
     return todos
 
 
@@ -60,29 +56,14 @@ def normalizar_empresa(nome):
 def executar_estoque():
     sb = get_supabase()
 
-    # --- Ultimo fechamento ---
-    resp_data = sb.table("estoque_fechamentos") \
-        .select("data_fechamento") \
-        .order("data_fechamento", desc=True) \
-        .limit(1) \
-        .execute()
-
-    if not resp_data.data:
-        raise Exception("Nenhum fechamento encontrado em estoque_fechamentos")
-
-    ultima_data = resp_data.data[0]["data_fechamento"]
-
-    # --- Carrega com paginacao ---
-    dados = buscar_tudo(
-        sb,
-        "estoque_fechamentos",
+    dados = buscar_com_gte(
+        sb, "estoque_fechamentos",
         "data_fechamento, empresa, filial, tipo_de_estoque, conta, produto, descricao, unid, saldo_atual, vlr_unit, custo_total",
-        {"data_fechamento": ultima_data}
+        "data_fechamento", "2025-12-31"
     )
 
     df = pd.DataFrame(dados)
 
-    # --- Renomeia colunas ---
     df = df.rename(columns={
         "data_fechamento": "Data Fechamento",
         "empresa":         "Empresa",
@@ -97,25 +78,18 @@ def executar_estoque():
         "custo_total":     "Custo Total",
     })
 
-    # --- Normaliza empresa e filial ---
-    df["Empresa"] = df["Empresa"].apply(normalizar_empresa)
-    df["Filial"]  = df["Filial"].astype(str).str.strip().str.title()
+    df["Empresa"]          = df["Empresa"].apply(normalizar_empresa)
+    df["Filial"]           = df["Filial"].astype(str).str.strip().str.title()
     df["Empresa / Filial"] = df["Empresa"] + " / " + df["Filial"]
-    df["Produto"]  = df["Produto"].astype(str).str.strip().str.replace(".0", "", regex=False)
-    df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
+    df["Produto"]          = df["Produto"].astype(str).str.strip().str.replace(".0", "", regex=False)
+    df["ID_UNICO"]         = df["Empresa / Filial"] + "|" + df["Produto"]
+    df["Tipo de Estoque"]  = df["Tipo de Estoque"].fillna("Nao Informado").astype(str).str.strip().str.title()
+    df["Conta"]            = df["Conta"].astype(str).str.strip().str.title()
+    df["Vlr Unit"]         = pd.to_numeric(df["Vlr Unit"],    errors="coerce").fillna(0)
+    df["Saldo Atual"]      = pd.to_numeric(df["Saldo Atual"], errors="coerce").fillna(0)
+    df["Custo Total"]      = pd.to_numeric(df["Custo Total"], errors="coerce").fillna(0)
 
-    # --- Tipo de Estoque ---
-    df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("Nao Informado").astype(str).str.strip().str.title()
-
-    # --- Conta ---
-    df["Conta"] = df["Conta"].astype(str).str.strip().str.title()
-
-    # --- Numericos ---
-    df["Vlr Unit"]    = pd.to_numeric(df["Vlr Unit"],    errors="coerce").fillna(0)
-    df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce").fillna(0)
-    df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce").fillna(0)
-
-    # --- estoque_usadas: sobrescreve Conta com tipo da usada ---
+    # --- estoque_usadas: sobrescreve Conta ---
     resp_usadas = sb.table("estoque_usadas").select("codigo, tipo, empresa").execute()
     df_usadas = pd.DataFrame(resp_usadas.data)
 
@@ -140,20 +114,25 @@ def executar_estoque():
 
 
 # ==========================================================
-# RESUMO MOVIMENTACOES (view no Supabase)
+# RESUMO MOVIMENTACOES (cache por data de fechamento)
 # ==========================================================
 
 def executar_resumo():
     sb = get_supabase()
 
-    dados = buscar_tudo(sb, "resumo_movimentacoes_cache", "id_unico, ult_movimentacao, origem_mov")
+    dados = buscar_com_gte(
+        sb, "resumo_movimentacoes_cache",
+        "data_fechamento, id_unico, ult_movimentacao, origem_mov",
+        "data_fechamento", "2025-12-31"
+    )
 
     df = pd.DataFrame(dados)
 
     if df.empty:
-        return pd.DataFrame(columns=["ID_UNICO", "Ult_Movimentacao", "Origem Mov"])
+        return pd.DataFrame(columns=["Data Fechamento", "ID_UNICO", "Ult_Movimentacao", "Origem Mov"])
 
     df = df.rename(columns={
+        "data_fechamento":  "Data Fechamento",
         "id_unico":         "ID_UNICO",
         "ult_movimentacao": "Ult_Movimentacao",
         "origem_mov":       "Origem Mov",
@@ -173,9 +152,11 @@ def executar_motor():
     df_estoque = executar_estoque()
     df_resumo  = executar_resumo()
 
-    # --- Merge estoque x resumo (left: itens sem mov ficam com NaT) ---
-    df_final = df_estoque.merge(df_resumo, on="ID_UNICO", how="left")
+    # --- Merge por Data Fechamento + ID_UNICO ---
+    df_estoque["Data Fechamento"] = pd.to_datetime(df_estoque["Data Fechamento"])
+    df_resumo["Data Fechamento"]  = pd.to_datetime(df_resumo["Data Fechamento"])
 
+    df_final = df_estoque.merge(df_resumo, on=["Data Fechamento", "ID_UNICO"], how="left")
     df_final = df_final.drop(columns=["ID_UNICO"])
 
     # --- Normalizacao ---
@@ -190,54 +171,60 @@ def executar_motor():
         lambda x: CONTA_CORRECOES.get(x, x)
     ).str.title()
 
-    DataBase = pd.to_datetime(df_final["Data Fechamento"].iloc[0])
+    # --- Calculos por fechamento ---
+    def calcular_por_fechamento(df):
+        DataBase = pd.to_datetime(df["Data Fechamento"].iloc[0])
 
-    df_final["Dias Sem Mov"] = (DataBase - df_final["Ult_Movimentacao"]).dt.days.fillna(9999)
+        df["Dias Sem Mov"] = (DataBase - df["Ult_Movimentacao"]).dt.days.fillna(9999)
 
-    df_final["Meses Ult Mov"] = np.where(
-        df_final["Ult_Movimentacao"].notna(),
-        (DataBase.year  - df_final["Ult_Movimentacao"].dt.year)  * 12 +
-        (DataBase.month - df_final["Ult_Movimentacao"].dt.month),
-        np.nan
-    )
-
-    df_final["Status Estoque"] = np.where(
-        df_final["Tipo de Estoque"].str.contains("Fabric", case=False),
-        "Até 6 meses",
-        np.where(
-            df_final["Ult_Movimentacao"].isna() | (df_final["Meses Ult Mov"] > 6),
-            "Obsoleto",
-            "Até 6 meses"
+        df["Meses Ult Mov"] = np.where(
+            df["Ult_Movimentacao"].notna(),
+            (DataBase.year  - df["Ult_Movimentacao"].dt.year)  * 12 +
+            (DataBase.month - df["Ult_Movimentacao"].dt.month),
+            np.nan
         )
-    )
 
-    def status_mov(row):
-        if "Fabric" in str(row["Tipo de Estoque"]):
-            return "Até 6 meses"
-        if pd.isna(row["Meses Ult Mov"]):
-            return "Sem Movimento"
-        if row["Meses Ult Mov"] <= 6:
-            return "Até 6 meses"
-        if row["Meses Ult Mov"] <= 12:
-            return "Até 1 ano"
-        if row["Meses Ult Mov"] <= 24:
-            return "Até 2 anos"
-        return "+ 2 anos"
+        df["Status Estoque"] = np.where(
+            df["Tipo de Estoque"].str.contains("Fabric", case=False),
+            "Até 6 meses",
+            np.where(
+                df["Ult_Movimentacao"].isna() | (df["Meses Ult Mov"] > 6),
+                "Obsoleto",
+                "Até 6 meses"
+            )
+        )
 
-    df_final["Status do Movimento"] = df_final.apply(status_mov, axis=1)
+        def status_mov(row):
+            if "Fabric" in str(row["Tipo de Estoque"]):
+                return "Até 6 meses"
+            if pd.isna(row["Meses Ult Mov"]):
+                return "Sem Movimento"
+            if row["Meses Ult Mov"] <= 6:
+                return "Até 6 meses"
+            if row["Meses Ult Mov"] <= 12:
+                return "Até 1 ano"
+            if row["Meses Ult Mov"] <= 24:
+                return "Até 2 anos"
+            return "+ 2 anos"
 
-    def formatar(row):
-        if "Fabric" in str(row["Tipo de Estoque"]):
-            return "Em fabricacao"
-        if pd.isna(row["Ult_Movimentacao"]):
-            return "Sem movimento"
-        dias      = (DataBase - row["Ult_Movimentacao"]).days
-        anos      = dias // 365
-        meses     = (dias % 365) // 30
-        dias_rest = (dias % 365) % 30
-        return f"{anos} anos {meses} meses {dias_rest} dias"
+        df["Status do Movimento"] = df.apply(status_mov, axis=1)
 
-    df_final["Ano Meses Dias"] = df_final.apply(formatar, axis=1)
+        def formatar(row):
+            if "Fabric" in str(row["Tipo de Estoque"]):
+                return "Em fabricacao"
+            if pd.isna(row["Ult_Movimentacao"]):
+                return "Sem movimento"
+            dias      = (DataBase - row["Ult_Movimentacao"]).days
+            anos      = dias // 365
+            meses     = (dias % 365) // 30
+            dias_rest = (dias % 365) % 30
+            return f"{anos} anos {meses} meses {dias_rest} dias"
+
+        df["Ano Meses Dias"] = df.apply(formatar, axis=1)
+
+        return df
+
+    df_final = df_final.groupby("Data Fechamento", group_keys=False).apply(calcular_por_fechamento)
 
     buffer = io.BytesIO()
     df_final.to_excel(buffer, index=False)
