@@ -203,23 +203,23 @@ def executar_motor():
 
     df_final["Status Estoque"] = np.where(
         df_final["Tipo de Estoque"].str.contains("Fabric", case=False),
-        "Ate 6 meses",
+        "Até 6 meses",
         np.where(
             df_final["Ult_Movimentacao"].isna() | (df_final["Meses Ult Mov"] > 6),
             "Obsoleto",
-            "Ate 6 meses"
+            "Até 6 meses"
         )
     )
 
     def status_mov(row):
         if "Fabric" in str(row["Tipo de Estoque"]):
-            return "Ate 6 meses"
+            return "Até 6 meses"
         if pd.isna(row["Meses Ult Mov"]):
             return "Sem Movimento"
         if row["Meses Ult Mov"] <= 6:
-            return "Ate 6 meses"
+            return "Até 6 meses"
         if row["Meses Ult Mov"] <= 12:
-            return "Ate 1 ano"
+            return "Até 1 ano"
         if row["Meses Ult Mov"] <= 24:
             return "+ 1 ano"
         return "+ 2 anos"
