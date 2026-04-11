@@ -221,7 +221,7 @@ def executar_motor():
         if row["Meses Ult Mov"] <= 12:
             return "Até 1 ano"
         if row["Meses Ult Mov"] <= 24:
-            return "+ 1 ano"
+            return "Até 2 anos"
         return "+ 2 anos"
 
     df_final["Status do Movimento"] = df_final.apply(status_mov, axis=1)
