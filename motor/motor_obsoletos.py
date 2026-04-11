@@ -104,7 +104,7 @@ def executar_motor():
 
     # --- Calculos por fechamento ---
     def calcular(grp):
-        DataBase = grp.name
+        DataBase = pd.Timestamp(grp["_DataBase"].iloc[0])
 
         grp["Dias Sem Mov"] = (DataBase - grp["Ult_Movimentacao"]).dt.days.fillna(9999)
 
@@ -155,9 +155,15 @@ def executar_motor():
 
         return grp
 
-    df = df.groupby("Data Fechamento", group_keys=True).apply(calcular, include_groups=False).reset_index(level="Data Fechamento")
+    # Aplica calculos por fechamento preservando a coluna Data Fechamento
+    resultados = []
+    for data, grp in df.groupby("Data Fechamento"):
+        grp = grp.copy()
+        grp["_DataBase"] = data
+        resultados.append(calcular(grp))
+    df = pd.concat(resultados, ignore_index=True)
 
-    df = df.sort_values("Data Fechamento").reset_index(drop=True)
+    df = df.drop(columns=["_DataBase"]).sort_values("Data Fechamento").reset_index(drop=True)
 
     buffer = io.BytesIO()
     df.to_excel(buffer, index=False)
