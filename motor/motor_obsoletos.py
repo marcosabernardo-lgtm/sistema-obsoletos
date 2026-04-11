@@ -185,7 +185,8 @@ def executar_entradas_saidas():
     sb = get_supabase()
 
     resp = sb.table("entradas_saidas") \
-        .select("empresa, filial, produto, dt_entrada, dt_saida") \
+        .select("empresa, filial, produto, tipo, digitacao") \
+        .eq("estoque", "S") \
         .execute()
 
     df = pd.DataFrame(resp.data)
@@ -197,9 +198,11 @@ def executar_entradas_saidas():
     df["Empresa / Filial"] = df["empresa"].astype(str).str.strip() + " / " + df["filial"].astype(str).str.strip().str.title()
     df["Produto"]          = df["produto"].astype(str).str.strip()
     df["ID_UNICO"]         = df["Empresa / Filial"] + "|" + df["Produto"]
+    df["digitacao"]        = pd.to_datetime(df["digitacao"], errors="coerce")
 
-    df["DtEnt"] = pd.to_datetime(df["dt_entrada"], errors="coerce")
-    df["DtSai"] = pd.to_datetime(df["dt_saida"],   errors="coerce")
+    # --- Separa entrada e saída pelo campo tipo ---
+    df["DtEnt"] = df["digitacao"].where(df["tipo"].str.upper() == "ENTRADA", pd.NaT)
+    df["DtSai"] = df["digitacao"].where(df["tipo"].str.upper() == "SAIDA",   pd.NaT)
 
     return df.groupby("ID_UNICO", as_index=False).agg(
         Ult_Entrada=("DtEnt", "max"),
