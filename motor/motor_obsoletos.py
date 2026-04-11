@@ -18,18 +18,25 @@ def get_supabase():
 # ==========================================================
 # ESTOQUE
 # ==========================================================
-# Substitui: executar_estoque(caminho_zip)
-#   - ZIP lia 02_Estoque_Atual (sheet "Detalhado") → filtrando apenas o último fechamento
-#   - ZIP lia 06_Usadas/*.xlsx por empresa → para sobrescrever a Conta com o tipo da usada
-# Supabase:
-#   - estoque_fechamentos → equivale ao 02_Estoque_Atual, já tem data_fechamento
-#   - estoque_usadas      → equivale ao 06_Usadas, tem codigo, tipo, empresa
-# ==========================================================
+
+def normalizar_empresa(nome):
+    nome = str(nome).upper()
+    if "TOOLS" in nome:
+        return "Tools"
+    if "MAQUINAS" in nome:
+        return "Maquinas"
+    if "ALLSERVICE" in nome:
+        return "Service"
+    if "ROBOTICA" in nome:
+        return "Robotica"
+    return nome
+
 
 def executar_estoque():
+
     sb = get_supabase()
 
-    # --- Pega a data do último fechamento ---
+    # --- Último fechamento ---
     resp_data = sb.table("estoque_fechamentos") \
         .select("data_fechamento") \
         .order("data_fechamento", desc=True) \
@@ -41,7 +48,7 @@ def executar_estoque():
 
     ultima_data = resp_data.data[0]["data_fechamento"]
 
-    # --- Carrega apenas o último fechamento ---
+    # --- Carrega o fechamento ---
     resp = sb.table("estoque_fechamentos") \
         .select("data_fechamento, empresa, filial, tipo_de_estoque, conta, produto, descricao, unid, saldo_atual, vlr_unit, custo_total") \
         .eq("data_fechamento", ultima_data) \
@@ -49,7 +56,7 @@ def executar_estoque():
 
     df = pd.DataFrame(resp.data)
 
-    # --- Renomeia para os mesmos nomes do backup ---
+    # --- Renomeia colunas ---
     df = df.rename(columns={
         "data_fechamento": "Data Fechamento",
         "empresa":         "Empresa",
@@ -64,59 +71,29 @@ def executar_estoque():
         "custo_total":     "Custo Total",
     })
 
-    # --- Normaliza empresa (vem bruto do Protheus) ---
-    def normalizar_empresa(nome):
-        nome = str(nome).upper()
-        if "TOOLS" in nome:
-            return "Tools"
-        if "MAQUINAS" in nome:
-            return "Maquinas"
-        if "ALLSERVICE" in nome:
-            return "Service"
-        if "ROBOTICA" in nome:
-            return "Robotica"
-        return nome
-
+    # --- Normaliza empresa e filial (mesmo padrão do backup) ---
     df["Empresa"] = df["Empresa"].apply(normalizar_empresa)
-    df["Filial"]  = df["Filial"].astype(str).str.title()
-    df["Empresa / Filial_label"] = df["Empresa"] + " / " + df["Filial"]
+    df["Filial"]  = df["Filial"].astype(str).str.strip().str.title()
 
-    # --- De/para via estoque_empresas: "Service / Filial" → id "Service 02" ---
-    # movimentos e entradas_saidas usam empresa+filial normalizado (ex: "Service", "02")
-    # o ID_UNICO precisa ser "Service 02|produto" para os joins baterem
-    resp_emp = sb.table("estoque_empresas") \
-        .select("id, empresa_filial") \
-        .execute()
-
-    df_emp = pd.DataFrame(resp_emp.data)
-    df_emp["empresa_filial"] = df_emp["empresa_filial"].astype(str).str.strip()
-    df_emp["id"]             = df_emp["id"].astype(str).str.strip()
-    mapa_ef = dict(zip(df_emp["empresa_filial"], df_emp["id"]))
-
-    # ID usado nos joins = id da estoque_empresas (ex: "Service 02")
-    df["ID_EF"]    = df["Empresa / Filial_label"].map(mapa_ef)
-    # Empresa / Filial legível para o dashboard = empresa_filial completo (ex: "Service / Filial")
-    df["Empresa / Filial"] = df["Empresa / Filial_label"]
-
-    df["Produto"]  = df["Produto"].astype(str).str.strip().str.replace(".0", "", regex=False)
-    df["ID_UNICO"] = df["ID_EF"].astype(str) + "|" + df["Produto"]
+    # Empresa / Filial legível → "Service / Filial", "Tools / Matriz" etc
+    # Esse é o mesmo valor que estoque_empresas.empresa_filial
+    # e que movimentos vai espelhar via merge com estoque_empresas
+    df["Empresa / Filial"] = df["Empresa"] + " / " + df["Filial"]
+    df["Produto"]          = df["Produto"].astype(str).str.strip().str.replace(".0", "", regex=False)
+    df["ID_UNICO"]         = df["Empresa / Filial"] + "|" + df["Produto"]
 
     # --- Tipo de Estoque ---
-    if "Tipo de Estoque" in df.columns:
-        df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("Não Informado").astype(str).str.strip().str.title()
-    else:
-        df["Tipo de Estoque"] = "Em Estoque"
+    df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("Não Informado").astype(str).str.strip().str.title()
 
-    # --- Normaliza Conta ---
-    if "Conta" in df.columns:
-        df["Conta"] = df["Conta"].astype(str).str.strip().str.title()
+    # --- Conta ---
+    df["Conta"] = df["Conta"].astype(str).str.strip().str.title()
 
     # --- Numéricos ---
     df["Vlr Unit"]    = pd.to_numeric(df["Vlr Unit"],    errors="coerce").fillna(0)
     df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce").fillna(0)
     df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce").fillna(0)
 
-    # --- estoque_usadas: sobrescreve Conta com o tipo da usada ---
+    # --- estoque_usadas: sobrescreve Conta com tipo da usada ---
     resp_usadas = sb.table("estoque_usadas") \
         .select("codigo, tipo, empresa") \
         .execute()
@@ -135,29 +112,62 @@ def executar_estoque():
             )
             df.loc[mask, "Conta"] = row_u["tipo"]
 
-    df = df.drop(columns=["Empresa", "Filial", "Empresa / Filial_label", "ID_EF"])
+    df = df.drop(columns=["Empresa", "Filial"])
 
-    colunas    = df.columns.tolist()
     nova_ordem = ["Data Fechamento", "Empresa / Filial"]
-    demais     = [c for c in colunas if c not in nova_ordem]
+    demais     = [c for c in df.columns if c not in nova_ordem]
 
     return df[nova_ordem + demais]
 
 
 # ==========================================================
-# MOVIMENTAÇÕES
+# MOVIMENTACOES        <- ETAPA 2 (ainda nao implementada)
 # ==========================================================
-# Substitui: executar_movimentacoes(caminho_zip)
-#   - ZIP lia 04_Movimento/*.xlsx (Robotica e Service apenas)
-#   - Usava 05_Empresas para montar "Empresa / Filial" via "Empresa Filial" (ex: "Robotica 00")
-# Supabase:
-#   - movimentos → empresa e filial já normalizados (ex: "Robotica", "00")
-#   - Monta "Empresa / Filial" direto: empresa.title() + " / " + filial.title()
+
+# def executar_movimentacoes(): ...
+
+
+# ==========================================================
+# ENTRADAS / SAIDAS    <- ETAPA 3 (ainda nao implementada)
+# ==========================================================
+
+# def executar_entradas_saidas(): ...
+
+
+# ==========================================================
+# MOTOR FINAL          <- ETAPA 4 (ainda nao implementada)
+# ==========================================================
+
+# def executar_motor(): ...
+
+
+# ==========================================================
+# MOVIMENTACOES
+# ==========================================================
+# Backup: lia 04_Movimento/*.xlsx (Robotica e Service)
+#         montava Mesclado = empresa + " " + filial
+#         merge com 05_Empresas → pega Empresa / Filial
+#         ID_UNICO = "Robotica / Matriz|produto"
+#
+# Supabase: movimentos tem empresa="Robotica", filial="00"
+#           estoque_empresas tem id="Robotica 00" → empresa_filial="Robotica / Matriz"
+#           mesmo merge, mesma chave
 # ==========================================================
 
 def executar_movimentacoes():
+
     sb = get_supabase()
 
+    # --- Carrega estoque_empresas para o de/para ---
+    resp_emp = sb.table("estoque_empresas") \
+        .select("id, empresa_filial") \
+        .execute()
+
+    df_emp = pd.DataFrame(resp_emp.data)
+    df_emp["id"]             = df_emp["id"].astype(str).str.strip()
+    df_emp["empresa_filial"] = df_emp["empresa_filial"].astype(str).str.strip()
+
+    # --- Carrega movimentos ---
     resp = sb.table("movimentos") \
         .select("empresa, filial, produto, dt_emissao") \
         .execute()
@@ -167,10 +177,19 @@ def executar_movimentacoes():
     if df.empty:
         return pd.DataFrame(columns=["ID_UNICO", "Ult_Mov"])
 
-    # --- ID_UNICO = "Empresa Filial|produto" (ex: "Service 02|000001") ---
-    # movimentos.empresa = "Service", movimentos.filial = "02"
-    df["ID_UNICO"]   = df["empresa"].astype(str).str.strip() + " " + df["filial"].astype(str).str.strip() + "|" + df["produto"].astype(str).str.strip()
+    # --- Monta Mesclado = "Robotica 00" → igual ao backup ---
+    df["Mesclado"] = df["empresa"].astype(str).str.strip() + " " + df["filial"].astype(str).str.strip()
+    df["Produto"]  = df["produto"].astype(str).str.strip()
+
+    # --- Merge com estoque_empresas para pegar Empresa / Filial legível ---
+    df = df.merge(
+        df_emp.rename(columns={"id": "Mesclado", "empresa_filial": "Empresa / Filial"}),
+        on="Mesclado",
+        how="left"
+    )
+
     df["DT Emissao"] = pd.to_datetime(df["dt_emissao"], errors="coerce")
+    df["ID_UNICO"]   = df["Empresa / Filial"] + "|" + df["Produto"]
 
     df = df[df["DT Emissao"].notna()]
 
@@ -182,20 +201,34 @@ def executar_movimentacoes():
 
 
 # ==========================================================
-# ENTRADAS / SAÍDAS
+# ENTRADAS / SAIDAS
 # ==========================================================
-# Substitui: executar_entradas_saidas(caminho_zip)
-#   - ZIP lia 01_Entradas_Saidas/*.xlsx (abas ENTRADA e SAIDA, skiprows=1)
-#   - Filtrava apenas linhas com ESTOQUE == "S"
-#   - Usava 05_Empresas para montar "Empresa / Filial"
-# Supabase:
-#   - entradas_saidas → empresa e filial já normalizados
-#   - Já deve conter apenas registros de estoque (filtro ESTOQUE=="S" foi feito na carga)
+# Backup: lia 01_Entradas_Saidas/*.xlsx (abas ENTRADA e SAIDA)
+#         filtrava ESTOQUE == "S"
+#         montava Mesclado = empresa + " " + filial
+#         merge com 05_Empresas → pega Empresa / Filial
+#         ID_UNICO = "Empresa / Filial|produto"
+#
+# Supabase: entradas_saidas tem empresa, filial (já normalizados)
+#           campo tipo = "ENTRADA" ou "SAIDA"
+#           campo estoque = "S" para filtrar
+#           mesmo merge com estoque_empresas
 # ==========================================================
 
 def executar_entradas_saidas():
+
     sb = get_supabase()
 
+    # --- Carrega estoque_empresas para o de/para ---
+    resp_emp = sb.table("estoque_empresas") \
+        .select("id, empresa_filial") \
+        .execute()
+
+    df_emp = pd.DataFrame(resp_emp.data)
+    df_emp["id"]             = df_emp["id"].astype(str).str.strip()
+    df_emp["empresa_filial"] = df_emp["empresa_filial"].astype(str).str.strip()
+
+    # --- Carrega entradas_saidas (só estoque) ---
     resp = sb.table("entradas_saidas") \
         .select("empresa, filial, produto, tipo, digitacao") \
         .eq("estoque", "S") \
@@ -206,9 +239,19 @@ def executar_entradas_saidas():
     if df.empty:
         return pd.DataFrame(columns=["ID_UNICO", "Ult_Entrada", "Ult_Saida"])
 
-    # --- ID_UNICO = "Empresa Filial|produto" (ex: "Maquinas 01|000001") ---
-    df["ID_UNICO"]  = df["empresa"].astype(str).str.strip() + " " + df["filial"].astype(str).str.strip() + "|" + df["produto"].astype(str).str.strip()
+    # --- Monta Mesclado = "Service 02" → igual ao backup ---
+    df["Mesclado"] = df["empresa"].astype(str).str.strip() + " " + df["filial"].astype(str).str.strip()
+    df["Produto"]  = df["produto"].astype(str).str.strip()
+
+    # --- Merge com estoque_empresas para pegar Empresa / Filial legível ---
+    df = df.merge(
+        df_emp.rename(columns={"id": "Mesclado", "empresa_filial": "Empresa / Filial"}),
+        on="Mesclado",
+        how="left"
+    )
+
     df["digitacao"] = pd.to_datetime(df["digitacao"], errors="coerce")
+    df["ID_UNICO"]  = df["Empresa / Filial"] + "|" + df["Produto"]
 
     # --- Separa entrada e saída pelo campo tipo ---
     df["DtEnt"] = df["digitacao"].where(df["tipo"].str.upper() == "ENTRADA", pd.NaT)
@@ -218,109 +261,3 @@ def executar_entradas_saidas():
         Ult_Entrada=("DtEnt", "max"),
         Ult_Saida  =("DtSai", "max"),
     )
-
-
-# ==========================================================
-# MOTOR FINAL
-# ==========================================================
-# Lógica idêntica ao backup — só muda a fonte dos dados.
-# ==========================================================
-
-def executar_motor():
-
-    df_estoque = executar_estoque()
-    df_mov     = executar_movimentacoes()
-    df_es      = executar_entradas_saidas()
-
-    df_final = df_estoque.merge(df_mov, on="ID_UNICO", how="left")
-    df_final = df_final.merge(df_es,   on="ID_UNICO", how="left")
-
-    # --- Última movimentação = max entre mov, entrada e saída ---
-    df_final["Ult_Movimentacao"] = df_final[["Ult_Mov", "Ult_Entrada", "Ult_Saida"]].max(axis=1)
-    df_final["Ult_Movimentacao"] = pd.to_datetime(df_final["Ult_Movimentacao"], errors="coerce")
-
-    def origem(row):
-        if row["Ult_Movimentacao"] == row["Ult_Saida"]:
-            return "Ult_Saida"
-        elif row["Ult_Movimentacao"] == row["Ult_Entrada"]:
-            return "Ult_Entrada"
-        elif row["Ult_Movimentacao"] == row["Ult_Mov"]:
-            return "Ult_Mov"
-        return None
-
-    df_final["Origem Mov"] = df_final.apply(origem, axis=1)
-    df_final = df_final.drop(columns=["Ult_Mov", "Ult_Entrada", "Ult_Saida"])
-
-    # --- Normalização Title Case ---
-    df_final["Tipo de Estoque"] = df_final["Tipo de Estoque"].astype(str).str.title()
-
-    CONTA_CORRECOES = {
-        "MR":                  "Material Revenda",
-        "MATERIAL REVENDA":    "Material Revenda",
-        "MATERIAL DE REVENDA": "Material De Revenda",
-    }
-    df_final["Conta"] = df_final["Conta"].astype(str).str.strip().str.upper().map(
-        lambda x: CONTA_CORRECOES.get(x, x)
-    ).str.title()
-
-    df_final = df_final.drop(columns=["ID_UNICO"])
-
-    # --- Data base = data do fechamento ---
-    DataBase = pd.to_datetime(df_final["Data Fechamento"].iloc[0])
-
-    df_final["Dias Sem Mov"] = (DataBase - df_final["Ult_Movimentacao"]).dt.days.fillna(9999)
-
-    df_final["Meses Ult Mov"] = np.where(
-        df_final["Ult_Movimentacao"].notna(),
-        (DataBase.year  - df_final["Ult_Movimentacao"].dt.year)  * 12 +
-        (DataBase.month - df_final["Ult_Movimentacao"].dt.month),
-        np.nan
-    )
-
-    # --- Status Estoque (Obsoleto vs Ativo) ---
-    df_final["Status Estoque"] = np.where(
-        df_final["Tipo de Estoque"].str.contains("Fabric", case=False),
-        "Até 6 meses",
-        np.where(
-            df_final["Ult_Movimentacao"].isna() | (df_final["Meses Ult Mov"] > 6),
-            "Obsoleto",
-            "Até 6 meses"
-        )
-    )
-
-    # --- Status do Movimento (faixa de tempo) ---
-    def status_mov(row):
-        if "Fabric" in str(row["Tipo de Estoque"]):
-            return "Até 6 meses"
-        if pd.isna(row["Meses Ult Mov"]):
-            return "Sem Movimento"
-        if row["Meses Ult Mov"] <= 6:
-            return "Até 6 meses"
-        if row["Meses Ult Mov"] <= 12:
-            return "Até 1 ano"
-        if row["Meses Ult Mov"] <= 24:
-            return "+ 1 ano"
-        return "+ 2 anos"
-
-    df_final["Status do Movimento"] = df_final.apply(status_mov, axis=1)
-
-    # --- Formatação legível do tempo sem movimento ---
-    def formatar(row):
-        if "Fabric" in str(row["Tipo de Estoque"]):
-            return "Em fabricação"
-        if pd.isna(row["Ult_Movimentacao"]):
-            return "Sem movimento"
-        dias      = (DataBase - row["Ult_Movimentacao"]).days
-        anos      = dias // 365
-        meses     = (dias % 365) // 30
-        dias_rest = (dias % 365) % 30
-        return f"{anos} anos {meses} meses {dias_rest} dias"
-
-    df_final["Ano Meses Dias"] = df_final.apply(formatar, axis=1)
-
-    buffer = io.BytesIO()
-    df_final.to_excel(buffer, index=False)
-    buffer.seek(0)
-
-    print(f"✅ Motor concluído — {len(df_final)} registros")
-    return df_final, buffer.getvalue()
