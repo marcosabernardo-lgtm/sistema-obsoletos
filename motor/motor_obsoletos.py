@@ -173,7 +173,7 @@ def executar_motor():
 
     # --- Calculos por fechamento ---
     def calcular_por_fechamento(df):
-        DataBase = pd.to_datetime(df["Data Fechamento"].iloc[0])
+        DataBase = pd.to_datetime(df.name)
 
         df["Dias Sem Mov"] = (DataBase - df["Ult_Movimentacao"]).dt.days.fillna(9999)
 
