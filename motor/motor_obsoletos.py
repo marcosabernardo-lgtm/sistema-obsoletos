@@ -146,16 +146,17 @@ def executar_estoque():
 def executar_resumo():
     sb = get_supabase()
 
-    dados = buscar_tudo(sb, "resumo_movimentacoes", "id_unico, ult_movimentacao")
+    dados = buscar_tudo(sb, "resumo_movimentacoes_cache", "id_unico, ult_movimentacao, origem_mov")
 
     df = pd.DataFrame(dados)
 
     if df.empty:
-        return pd.DataFrame(columns=["ID_UNICO", "Ult_Movimentacao"])
+        return pd.DataFrame(columns=["ID_UNICO", "Ult_Movimentacao", "Origem Mov"])
 
     df = df.rename(columns={
         "id_unico":         "ID_UNICO",
         "ult_movimentacao": "Ult_Movimentacao",
+        "origem_mov":       "Origem Mov",
     })
 
     df["Ult_Movimentacao"] = pd.to_datetime(df["Ult_Movimentacao"], errors="coerce")
