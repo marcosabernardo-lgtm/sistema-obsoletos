@@ -26,11 +26,11 @@ def buscar_tudo(sb, tabela, colunas, filtros=None):
     todos = []
 
     while True:
-        query = sb.table(tabela).select(colunas)
+        query = sb.table(tabela).select(colunas).limit(LIMIT).offset(offset)
         if filtros:
             for col, val in filtros.items():
                 query = query.eq(col, val)
-        resp = query.range(offset, offset + LIMIT - 1).execute()
+        resp = query.execute()
         dados = resp.data
         todos.extend(dados)
         if len(dados) < LIMIT:
