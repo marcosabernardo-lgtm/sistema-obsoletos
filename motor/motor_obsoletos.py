@@ -64,7 +64,7 @@ def executar_estoque():
         "custo_total":     "Custo Total",
     })
 
-    # --- Normaliza empresa (igual ao backup: vem bruto do Protheus) ---
+    # --- Normaliza empresa (vem bruto do Protheus) ---
     def normalizar_empresa(nome):
         nome = str(nome).upper()
         if "TOOLS" in nome:
@@ -79,9 +79,27 @@ def executar_estoque():
 
     df["Empresa"] = df["Empresa"].apply(normalizar_empresa)
     df["Filial"]  = df["Filial"].astype(str).str.title()
-    df["Empresa / Filial"] = df["Empresa"] + " / " + df["Filial"]
-    df["Produto"] = df["Produto"].astype(str).str.strip().str.replace(".0", "", regex=False)
-    df["ID_UNICO"] = df["Empresa / Filial"] + "|" + df["Produto"]
+    df["Empresa / Filial_label"] = df["Empresa"] + " / " + df["Filial"]
+
+    # --- De/para via estoque_empresas: "Service / Filial" → id "Service 02" ---
+    # movimentos e entradas_saidas usam empresa+filial normalizado (ex: "Service", "02")
+    # o ID_UNICO precisa ser "Service 02|produto" para os joins baterem
+    resp_emp = sb.table("estoque_empresas") \
+        .select("id, empresa_filial") \
+        .execute()
+
+    df_emp = pd.DataFrame(resp_emp.data)
+    df_emp["empresa_filial"] = df_emp["empresa_filial"].astype(str).str.strip()
+    df_emp["id"]             = df_emp["id"].astype(str).str.strip()
+    mapa_ef = dict(zip(df_emp["empresa_filial"], df_emp["id"]))
+
+    # ID usado nos joins = id da estoque_empresas (ex: "Service 02")
+    df["ID_EF"]    = df["Empresa / Filial_label"].map(mapa_ef)
+    # Empresa / Filial legível para o dashboard = empresa_filial completo (ex: "Service / Filial")
+    df["Empresa / Filial"] = df["Empresa / Filial_label"]
+
+    df["Produto"]  = df["Produto"].astype(str).str.strip().str.replace(".0", "", regex=False)
+    df["ID_UNICO"] = df["ID_EF"].astype(str) + "|" + df["Produto"]
 
     # --- Tipo de Estoque ---
     if "Tipo de Estoque" in df.columns:
@@ -98,9 +116,7 @@ def executar_estoque():
     df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce").fillna(0)
     df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce").fillna(0)
 
-    # --- Carrega estoque_usadas e sobrescreve Conta (igual ao backup com 06_Usadas) ---
-    # No backup: para cada empresa, se o produto estava no arquivo de usadas,
-    # a Conta era substituída pelo Tipo da usada.
+    # --- estoque_usadas: sobrescreve Conta com o tipo da usada ---
     resp_usadas = sb.table("estoque_usadas") \
         .select("codigo, tipo, empresa") \
         .execute()
@@ -119,11 +135,11 @@ def executar_estoque():
             )
             df.loc[mask, "Conta"] = row_u["tipo"]
 
-    df = df.drop(columns=["Empresa", "Filial"])
+    df = df.drop(columns=["Empresa", "Filial", "Empresa / Filial_label", "ID_EF"])
 
-    colunas   = df.columns.tolist()
+    colunas    = df.columns.tolist()
     nova_ordem = ["Data Fechamento", "Empresa / Filial"]
-    demais    = [c for c in colunas if c not in nova_ordem]
+    demais     = [c for c in colunas if c not in nova_ordem]
 
     return df[nova_ordem + demais]
 
@@ -151,14 +167,10 @@ def executar_movimentacoes():
     if df.empty:
         return pd.DataFrame(columns=["ID_UNICO", "Ult_Mov"])
 
-    # --- Monta Empresa / Filial no mesmo formato do estoque ---
-    # movimentos.empresa já vem normalizado (ex: "Robotica", "Tools")
-    # movimentos.filial  já vem normalizado (ex: "00", "01")
-    # No backup, Filial vinha do Excel e era aplicado .str.title() → "00" → "00" (sem mudança)
-    df["Empresa / Filial"] = df["empresa"].astype(str).str.strip() + " / " + df["filial"].astype(str).str.strip().str.title()
-    df["Produto"]          = df["produto"].astype(str).str.strip()
-    df["ID_UNICO"]         = df["Empresa / Filial"] + "|" + df["Produto"]
-    df["DT Emissao"]       = pd.to_datetime(df["dt_emissao"], errors="coerce")
+    # --- ID_UNICO = "Empresa Filial|produto" (ex: "Service 02|000001") ---
+    # movimentos.empresa = "Service", movimentos.filial = "02"
+    df["ID_UNICO"]   = df["empresa"].astype(str).str.strip() + " " + df["filial"].astype(str).str.strip() + "|" + df["produto"].astype(str).str.strip()
+    df["DT Emissao"] = pd.to_datetime(df["dt_emissao"], errors="coerce")
 
     df = df[df["DT Emissao"].notna()]
 
@@ -194,11 +206,9 @@ def executar_entradas_saidas():
     if df.empty:
         return pd.DataFrame(columns=["ID_UNICO", "Ult_Entrada", "Ult_Saida"])
 
-    # --- Monta Empresa / Filial igual ao estoque ---
-    df["Empresa / Filial"] = df["empresa"].astype(str).str.strip() + " / " + df["filial"].astype(str).str.strip().str.title()
-    df["Produto"]          = df["produto"].astype(str).str.strip()
-    df["ID_UNICO"]         = df["Empresa / Filial"] + "|" + df["Produto"]
-    df["digitacao"]        = pd.to_datetime(df["digitacao"], errors="coerce")
+    # --- ID_UNICO = "Empresa Filial|produto" (ex: "Maquinas 01|000001") ---
+    df["ID_UNICO"]  = df["empresa"].astype(str).str.strip() + " " + df["filial"].astype(str).str.strip() + "|" + df["produto"].astype(str).str.strip()
+    df["digitacao"] = pd.to_datetime(df["digitacao"], errors="coerce")
 
     # --- Separa entrada e saída pelo campo tipo ---
     df["DtEnt"] = df["digitacao"].where(df["tipo"].str.upper() == "ENTRADA", pd.NaT)
