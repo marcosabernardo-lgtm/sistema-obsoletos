@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
-import os
+import httpx
+from supabase import create_client, Client, ClientOptions
+from collections import defaultdict
 
 from tabs.estoque.evolucao_estoque import render as render_evolucao_estoque
 from utils.navbar import render_navbar, render_filtros_topo
@@ -54,59 +56,186 @@ def moeda_br_curta(valor):
     return moeda_br(valor)
 
 # -------------------------------------------------
-# CARREGAR BASE HISTÓRICA
+# CONEXÃO SUPABASE
 # -------------------------------------------------
-CAMINHO_BASE = "data/estoque/estoque_historico.parquet"
 
-if not os.path.exists(CAMINHO_BASE):
-    st.warning("⚠️ Nenhuma base de dados encontrada. Acesse o **Configurador** para processar os dados.")
-    st.stop()
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
-try:
-    df_hist = pd.read_parquet(CAMINHO_BASE)
-except Exception as e:
-    st.error("Erro ao carregar a base de estoque.")
-    st.exception(e)
-    st.stop()
+@st.cache_resource
+def get_supabase() -> Client:
+    http_client = httpx.Client(verify=False, timeout=60.0)
+    return create_client(SUPABASE_URL, SUPABASE_KEY, options=ClientOptions(httpx_client=http_client))
+
+def ler_tabela(supabase: Client, tabela: str, filtros: dict = None) -> pd.DataFrame:
+    registros = []
+    pagina = 0
+    while True:
+        query = supabase.table(tabela).select("*")
+        if filtros:
+            for col, val in filtros.items():
+                query = query.eq(col, val)
+        res = query.range(pagina * 1000, (pagina + 1) * 1000 - 1).execute()
+        registros.extend(res.data)
+        if len(res.data) < 1000:
+            break
+        pagina += 1
+    return pd.DataFrame(registros)
+
+# -------------------------------------------------
+# NORMALIZA EMPRESA
+# -------------------------------------------------
+
+def normalizar_empresa(nome):
+    nome = str(nome).upper()
+    if "TOOLS" in nome:    return "Tools"
+    if "MAQUINAS" in nome: return "Maquinas"
+    if "ALLSERVICE" in nome or "SERVICE" in nome: return "Service"
+    if "ROBOTICA" in nome: return "Robotica"
+    return nome
+
+EMPRESA_FILIAL_MAP_NORM = {
+    ("TOOLS",    "00"): "Tools / Matriz",
+    ("TOOLS",    "01"): "Tools / Filial",
+    ("MAQUINAS", "00"): "Maquinas / Matriz",
+    ("MAQUINAS", "01"): "Maquinas / Filial",
+    ("MAQUINAS", "02"): "Maquinas / Jundiai",
+    ("ROBOTICA", "00"): "Robotica / Matriz",
+    ("ROBOTICA", "01"): "Robotica / Filial Jaragua",
+    ("SERVICE",  "01"): "Service / Matriz",
+    ("SERVICE",  "02"): "Service / Filial",
+    ("SERVICE",  "03"): "Service / Caxias",
+    ("SERVICE",  "04"): "Service / Jundiai",
+}
+
+def mapear_empresa_filial_norm(empresa: str, filial: str) -> str:
+    key = (str(empresa).strip().upper(), str(filial).strip().zfill(2))
+    return EMPRESA_FILIAL_MAP_NORM.get(key, f"{empresa} / {filial}")
+    ("ALLTECH TOOLS DO BRASIL LTDA",         "MATRIZ"):         "Tools / Matriz",
+    ("ALLTECH TOOLS DO BRASIL LTDA",         "FILIAL"):         "Tools / Filial",
+    ("ALLTECH MAQUINAS E EQUIPAMENTOS LTDA", "MATRIZ"):         "Maquinas / Matriz",
+    ("ALLTECH MAQUINAS E EQUIPAMENTOS LTDA", "FILIAL"):         "Maquinas / Filial",
+    ("ALLTECH MAQUINAS E EQUIPAMENTOS LTDA", "JUNDIAI"):        "Maquinas / Jundiai",
+    ("ALLTECH ROBOTICA E AUTOMACAO LTDA",    "MATRIZ"):         "Robotica / Matriz",
+    ("ALLTECH ROBOTICA E AUTOMACAO LTDA",    "FILIAL JARAGUA"): "Robotica / Filial Jaragua",
+    ("ALLSERVICE MANUTENCAO",                "MATRIZ"):         "Service / Matriz",
+    ("ALLSERVICE MANUTENCAO",                "FILIAL"):         "Service / Filial",
+    ("ALLSERVICE MANUTENCAO",                "CAXIAS"):         "Service / Caxias",
+    ("ALLSERVICE MANUTENCAO LTDA",           "JUNDIAI"):        "Service / Jundiai",
+}
+
+def mapear_empresa_filial(empresa: str, filial: str) -> str:
+    key = (str(empresa).strip().upper(), str(filial).strip().upper())
+    return EMPRESA_FILIAL_MAP.get(key, f"{empresa} / {filial}")
+
+# -------------------------------------------------
+# CARREGAR BASE HISTÓRICA DO SUPABASE
+# -------------------------------------------------
+
+@st.cache_data(ttl=3600)
+def carregar_historico():
+    supabase = get_supabase()
+
+    # Estoque histórico completo
+    df = ler_tabela(supabase, "estoque_fechamentos")
+
+    # Usadas
+    df_usadas = ler_tabela(supabase, "estoque_usadas")
+    usadas_tipo_por_empresa = defaultdict(dict)
+    for _, row in df_usadas.iterrows():
+        empresa = str(row.get("empresa", "")).strip()
+        tipo    = str(row.get("tipo", "Maquina Usada")).strip().title()
+        codigo  = str(row.get("codigo", "")).strip().replace(".0", "")
+        usadas_tipo_por_empresa[empresa][codigo] = tipo
+
+    # Renomear colunas
+    df = df.rename(columns={
+        "data_fechamento": "Data Fechamento",
+        "empresa":         "Empresa",
+        "filial":          "Filial",
+        "tipo_de_estoque": "Tipo de Estoque",
+        "conta":           "Conta",
+        "produto":         "Produto",
+        "descricao":       "Descricao",
+        "unid":            "Unid",
+        "saldo_atual":     "Saldo Atual",
+        "vlr_unit":        "Vlr Unit",
+        "custo_total":     "Custo Total",
+    })
+
+    # Tipo de Estoque
+    df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("Em Estoque").astype(str).str.strip().str.title()
+
+    # Empresa / Filial via mapeamento normalizado
+    df["Empresa / Filial"] = df.apply(
+        lambda r: mapear_empresa_filial_norm(r["Empresa"], r["Filial"]), axis=1
+    )
+    df = df.drop(columns=["Empresa", "Filial"], errors="ignore")
+
+    # Produto
+    df["Produto"] = df["Produto"].astype(str).str.strip().str.replace(".0", "", regex=False)
+
+    # Numéricos
+    df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce").fillna(0)
+    df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce").fillna(0)
+    df["Vlr Unit"]    = pd.to_numeric(df["Vlr Unit"],    errors="coerce").fillna(0)
+    df["Data Fechamento"] = pd.to_datetime(df["Data Fechamento"], errors="coerce")
+
+    # Conta
+    if "Conta" in df.columns:
+        df["Conta"] = df["Conta"].astype(str).str.strip().str.title()
+
+    # Marcar usadas
+    for empresa, tipo_map in usadas_tipo_por_empresa.items():
+        for codigo, tipo in tipo_map.items():
+            mask = (
+                df["Empresa / Filial"].str.startswith(empresa) &
+                (df["Produto"] == codigo)
+            )
+            df.loc[mask, "Conta"] = tipo
+
+    if "Tipo de Estoque" not in df.columns:
+        df["Tipo de Estoque"] = "Em Estoque"
+    if "Conta" not in df.columns:
+        df["Conta"] = "Outros"
+
+    return df.sort_values("Data Fechamento")
+
+# -------------------------------------------------
+# CARREGAR BASE OBSOLETOS (último fechamento)
+# -------------------------------------------------
+
+@st.cache_data(ttl=3600)
+def carregar_obsoletos():
+    try:
+        from motor.motor_obsoletos import executar_motor
+        df_obs, _ = executar_motor()
+        return df_obs
+    except Exception:
+        return pd.DataFrame()
+
+# -------------------------------------------------
+# CARREGAMENTO
+# -------------------------------------------------
+
+with st.spinner("Carregando dados do Supabase..."):
+    try:
+        df_hist = carregar_historico()
+    except Exception as e:
+        st.error("Erro ao carregar dados do Supabase.")
+        st.exception(e)
+        st.stop()
 
 if df_hist.empty:
     st.warning("⚠️ Base de dados vazia.")
     st.stop()
 
-# --- PROTEÇÃO E PADRONIZAÇÃO DE COLUNAS ---
-if "Tipo de Estoque" not in df_hist.columns:
-    df_hist["Tipo de Estoque"] = "EM ESTOQUE"
-if "Conta" not in df_hist.columns:
-    df_hist["Conta"] = "Outros"
-
-df_hist["Custo Total"] = pd.to_numeric(df_hist["Custo Total"], errors="coerce").fillna(0)
-df_hist["Data Fechamento"] = pd.to_datetime(df_hist["Data Fechamento"], errors="coerce")
-df_hist = df_hist.sort_values("Data Fechamento")
-
-# -------------------------------------------------
-# CARREGAR BASE OBSOLETOS
-# -------------------------------------------------
-CAMINHO_OBSOLETOS_DIR = "data/obsoletos"
-df_obsoleto = pd.DataFrame()
-
-if os.path.exists(CAMINHO_OBSOLETOS_DIR):
-    arquivos_obs = [f for f in os.listdir(CAMINHO_OBSOLETOS_DIR) if f.endswith(".parquet")]
-    if arquivos_obs:
-        try:
-            df_obsoleto = pd.concat([
-                pd.read_parquet(os.path.join(CAMINHO_OBSOLETOS_DIR, f))
-                for f in arquivos_obs
-            ], ignore_index=True)
-            # Proteção para o obsoleto também
-            if not df_obsoleto.empty:
-                if "Tipo de Estoque" not in df_obsoleto.columns: df_obsoleto["Tipo de Estoque"] = "EM ESTOQUE"
-                if "Conta" not in df_obsoleto.columns: df_obsoleto["Conta"] = "Outros"
-        except Exception:
-            df_obsoleto = pd.DataFrame()
+df_obsoleto = carregar_obsoletos()
 
 # -------------------------------------------------
 # FILTROS NO TOPO
 # -------------------------------------------------
+
 datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=True)
 datas_fmt_list    = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
 datas_map         = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
@@ -117,7 +246,6 @@ df_preview        = df_hist[df_hist["Data Fechamento"] == data_preview]
 
 empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique())
 
-# Captura seleções atuais para filtros dependentes
 ef_ja_sel     = st.session_state.get("estoque_empresa_sel", [])
 filial_ja_sel = st.session_state.get("estoque_filial_sel", [])
 contas_ja_sel = st.session_state.get("estoque_conta", [])
@@ -129,10 +257,8 @@ ef_ativos = [
 ] if (ef_ja_sel or filial_ja_sel) else list(empresas_disponiveis)
 
 df_filtrado_opcoes = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
-
 contas_disponiveis = sorted(df_filtrado_opcoes["Conta"].dropna().unique())
 
-# Filtra opções de "Tipo de Estoque" baseada na conta selecionada (cascata)
 df_tipo_opcoes = df_filtrado_opcoes.copy()
 if contas_ja_sel:
     df_tipo_opcoes = df_tipo_opcoes[df_tipo_opcoes["Conta"].isin(contas_ja_sel)]
@@ -159,6 +285,7 @@ tipos_sel        = filtros.get("tipo_de_estoque", [])
 # -------------------------------------------------
 # FILTRAR BASE KPI E HISTÓRICO
 # -------------------------------------------------
+
 def aplicar_filtros(df_alvo):
     if df_alvo.empty: return df_alvo
     temp = df_alvo.copy()
@@ -170,41 +297,37 @@ def aplicar_filtros(df_alvo):
         temp = temp[temp["Tipo de Estoque"].isin(tipos_sel)]
     return temp
 
-df_kpi = aplicar_filtros(df_hist[df_hist["Data Fechamento"] == data_selecionada])
+df_kpi           = aplicar_filtros(df_hist[df_hist["Data Fechamento"] == data_selecionada])
 df_hist_filtrado = aplicar_filtros(df_hist)
 
 # -------------------------------------------------
 # CALCULAR MoM e YoY
 # -------------------------------------------------
+
 datas_sorted = sorted(df_hist["Data Fechamento"].unique())
 idx_atual    = list(datas_sorted).index(data_selecionada) if data_selecionada in datas_sorted else -1
 valor_atual  = df_kpi["Custo Total"].sum()
 
-# Cálculo MoM
-valor_mom = 0
-perc_mom = 0
-data_mom = None
+valor_mom = 0; perc_mom = 0; data_mom = None
 if idx_atual > 0:
-    data_mom = datas_sorted[idx_atual - 1]
-    df_mom = aplicar_filtros(df_hist[df_hist["Data Fechamento"] == data_mom])
+    data_mom  = datas_sorted[idx_atual - 1]
+    df_mom    = aplicar_filtros(df_hist[df_hist["Data Fechamento"] == data_mom])
     valor_mom = df_mom["Custo Total"].sum()
     perc_mom  = ((valor_atual - valor_mom) / valor_mom * 100) if valor_mom > 0 else 0
 
-# Cálculo YoY
-valor_yoy = 0
-perc_yoy = 0
-data_yoy = None
-data_yoy_alvo = data_selecionada - pd.DateOffset(years=1)
+valor_yoy = 0; perc_yoy = 0; data_yoy = None
+data_yoy_alvo   = data_selecionada - pd.DateOffset(years=1)
 datas_yoy_match = [d for d in datas_sorted if abs((pd.Timestamp(d) - data_yoy_alvo).days) <= 31]
 if datas_yoy_match:
-    data_yoy = min(datas_yoy_match, key=lambda d: abs((pd.Timestamp(d) - data_yoy_alvo).days))
-    df_yoy   = aplicar_filtros(df_hist[df_hist["Data Fechamento"] == data_yoy])
+    data_yoy  = min(datas_yoy_match, key=lambda d: abs((pd.Timestamp(d) - data_yoy_alvo).days))
+    df_yoy    = aplicar_filtros(df_hist[df_hist["Data Fechamento"] == data_yoy])
     valor_yoy = df_yoy["Custo Total"].sum()
     perc_yoy  = ((valor_atual - valor_yoy) / valor_yoy * 100) if valor_yoy > 0 else 0
 
 # -------------------------------------------------
-# CARDS KPI (TABELA)
+# CARDS KPI
 # -------------------------------------------------
+
 def seta(v): return "⬆" if v >= 0 else "⬇"
 
 label_atual = data_selecionada.strftime("%y-%b").lower()
@@ -256,8 +379,8 @@ st.markdown("---")
 # -------------------------------------------------
 # RENDER ABAS
 # -------------------------------------------------
+
 try:
-    # Passando os dados filtrados para a tab de evolução
     render_evolucao_estoque(df_hist_filtrado, df_obsoleto, moeda_br, df_kpi, data_selecionada, valor_mom, valor_yoy)
 except Exception as e:
     st.error("Erro ao renderizar o dashboard.")

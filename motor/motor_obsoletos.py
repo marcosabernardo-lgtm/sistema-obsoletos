@@ -2,6 +2,7 @@ import pandas as pd
 import io
 import numpy as np
 import httpx
+import streamlit as st
 from supabase import create_client, Client, ClientOptions
 from collections import defaultdict
 
@@ -9,8 +10,8 @@ from collections import defaultdict
 # CONEXÃO SUPABASE
 # ==========================================================
 
-SUPABASE_URL = "https://axamalzrtbpqobcktqdv.supabase.co"
-SUPABASE_KEY = "sb_secret_WqlZHuj6Oqg4HgdLRRZRHA__HKYJA-7"
+SUPABASE_URL = st.secrets["SUPABASE_URL"]
+SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 def get_supabase() -> Client:
     http_client = httpx.Client(verify=False, timeout=60.0)
