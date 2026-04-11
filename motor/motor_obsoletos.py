@@ -155,7 +155,7 @@ def executar_motor():
 
         return grp
 
-    df = df.groupby("Data Fechamento", group_keys=False).apply(calcular)
+    df = df.groupby("Data Fechamento", group_keys=True).apply(calcular, include_groups=False).reset_index(level="Data Fechamento")
 
     df = df.sort_values("Data Fechamento").reset_index(drop=True)
 
