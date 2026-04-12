@@ -5,4 +5,5 @@ pyarrow
 altair
 plotly
 xlsxwriter
-supabase>=2.0.0   # ← adicionar esta linha
+supabase>=2.0.0   # ← adicionar esta linhapdfplumber
+pdfplumber
