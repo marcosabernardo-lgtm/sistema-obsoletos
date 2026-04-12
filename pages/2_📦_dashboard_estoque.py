@@ -169,7 +169,7 @@ def carregar_historico():
 
     # Empresa / Filial via mapeamento normalizado
     df["Empresa / Filial"] = df.apply(
-        lambda r: mapear_empresa_filial_norm(r["Empresa"], r["Filial"]), axis=1
+        lambda r: mapear_empresa_filial(r["Empresa"], r["Filial"]), axis=1
     )
     df = df.drop(columns=["Empresa", "Filial"], errors="ignore")
 
