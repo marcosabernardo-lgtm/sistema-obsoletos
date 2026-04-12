@@ -10,7 +10,10 @@ import httpx
 import pdfplumber
 from supabase import create_client, Client, ClientOptions
 
+from utils.navbar import render_navbar
+
 st.set_page_config(page_title="Configurador", layout="wide")
+render_navbar("Configurador")
 
 # -------------------------------------------------
 # CSS
