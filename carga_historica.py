@@ -11,15 +11,12 @@ Estratégia: upsert por row_hash (SHA256) — idempotente, seguro para recargas.
 Carga em chunks de 1000 linhas para respeitar limites da API do Supabase.
 
 Uso com ZIP:
-    python carga_historica.py --origem "Z:\...\Dados_Movimento.zip"
-
-Uso com pasta:
-    python carga_historica.py --origem "Z:\...\Dados_Movimento"
+    python carga_historica.py --zip "Z:\...\Dados_Movimento.zip"
 
 Filtros opcionais:
-    python carga_historica.py --origem "..." --tabela entradas_saidas
-    python carga_historica.py --origem "..." --tabela movimentos
-    python carga_historica.py --origem "..." --empresa Service
+    python carga_historica.py --zip "..." --tabela entradas_saidas
+    python carga_historica.py --zip "..." --tabela movimentos
+    python carga_historica.py --zip "..." --empresa Service
 """
 
 import argparse
@@ -36,7 +33,6 @@ from supabase import create_client, Client, ClientOptions
 
 # ── Configuração ──────────────────────────────────────────────────────────────
 
-# Lê credenciais do .streamlit/secrets.toml
 import tomllib, pathlib
 _secrets_path = pathlib.Path(__file__).parent / ".streamlit" / "secrets.toml"
 with open(_secrets_path, "rb") as _f:
@@ -45,9 +41,8 @@ with open(_secrets_path, "rb") as _f:
 SUPABASE_URL = _secrets["SUPABASE_URL"]
 SUPABASE_KEY = _secrets["SUPABASE_KEY"]
 
-CHUNK_SIZE = 1000  # linhas por upsert (limite seguro da API Supabase)
+CHUNK_SIZE = 1000
 
-# Mapeamento: prefixo do arquivo → nome da empresa
 EMPRESA_MAP = {
     "01": "Tools",
     "03": "Maquinas",
@@ -58,26 +53,22 @@ EMPRESA_MAP = {
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def make_hash(*values) -> str:
-    """SHA256 de valores concatenados — chave natural para upsert."""
     raw = "|".join(str(v) if v is not None else "" for v in values)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def parse_empresa(filename: str) -> str:
-    """Extrai nome da empresa a partir do nome do arquivo Excel."""
-    name = filename.split("/")[-1]  # pega só o nome, sem pasta
+    name = filename.split("/")[-1]
     prefix = name[:2]
     return EMPRESA_MAP.get(prefix, name.replace(".xlsx", ""))
 
 
 def parse_br_number(value) -> float | None:
-    """Converte número em formato BR (1.234,56) para float."""
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
     s = str(value).strip()
     if not s:
         return None
-    # Remove pontos de milhar e substitui vírgula decimal por ponto
     s = s.replace(".", "").replace(",", ".")
     try:
         return float(s)
@@ -85,25 +76,28 @@ def parse_br_number(value) -> float | None:
         return None
 
 
-def parse_br_date(value) -> str | None:
-    """Converte data para ISO (YYYY-MM-DD). Aceita datetime, serial Excel e string BR."""
+def clean_text(value) -> str | None:
     if value is None or (isinstance(value, float) and pd.isna(value)):
         return None
-    # Já é datetime/Timestamp
-    if isinstance(value, (pd.Timestamp, datetime)):
-        return value.strftime("%Y-%m-%d")
     s = str(value).strip()
-    if not s or s.lower() == "nan" or s.lower() == "none":
+    return s if s else None
+
+
+def to_iso_date(value) -> str | None:
+    """Converte qualquer valor de data para ISO (YYYY-MM-DD) com dayfirst=True."""
+    if value is None:
         return None
-    # Tenta formatos de string
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"):
-        try:
-            return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
-        except ValueError:
-            continue
-    # Tenta via pandas (mais flexível)
+    if isinstance(value, (pd.Timestamp, datetime)):
+        if pd.isna(value):
+            return None
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, float) and pd.isna(value):
+        return None
+    s = str(value).strip()
+    if not s or s.lower() in ("nan", "none", "nat"):
+        return None
     try:
-        ts = pd.to_datetime(s, dayfirst=True)
+        ts = pd.to_datetime(s, dayfirst=True, errors="coerce")
         if pd.notna(ts):
             return ts.strftime("%Y-%m-%d")
     except Exception:
@@ -111,19 +105,8 @@ def parse_br_date(value) -> str | None:
     return None
 
 
-def clean_text(value) -> str | None:
-    """Limpa e normaliza campo texto."""
-    if value is None or (isinstance(value, float) and pd.isna(value)):
-        return None
-    s = str(value).strip()
-    return s if s else None
-
-
 def upsert_chunks(supabase: Client, tabela: str, records: list[dict], empresa: str) -> int:
-    """Envia registros em chunks via upsert. Retorna total inserido/atualizado."""
     import time
-
-    # Remove linhas 100% idênticas (mesmo hash) antes de enviar
     seen = {}
     for r in records:
         seen[r["row_hash"]] = r
@@ -154,7 +137,6 @@ def process_entradas_saidas(
     zf: zipfile.ZipFile,
     empresa_filter: str | None = None,
 ) -> None:
-    """Lê todos os XLSXs de 01_Entradas_Saidas e carrega no Supabase."""
 
     arquivos = [
         n for n in zf.namelist()
@@ -175,26 +157,38 @@ def process_entradas_saidas(
         print(f"   Empresa: {empresa}")
 
         with zf.open(arquivo) as f:
-            xl = pd.ExcelFile(io.BytesIO(f.read()))
+            raw_bytes = io.BytesIO(f.read())
 
+        # Lê duas vezes: uma com dtype=str para textos, outra sem para datas
+        xl = pd.ExcelFile(raw_bytes)
         abas_disponiveis = [a for a in xl.sheet_names if a.upper() in ("ENTRADA", "SAIDA")]
+
         if not abas_disponiveis:
             print(f"   ⚠️  Nenhuma aba ENTRADA/SAIDA encontrada. Abas: {xl.sheet_names}")
             continue
 
         for aba in abas_disponiveis:
-            tipo = aba.upper()  # 'ENTRADA' ou 'SAIDA'
+            tipo = aba.upper()
             print(f"   📋 Aba: {tipo}")
 
-            df = pd.read_excel(xl, sheet_name=aba, dtype=str)
-            df.columns = [c.strip().upper() for c in df.columns]
+            # Lê como string para todos os campos de texto
+            df_str = pd.read_excel(xl, sheet_name=aba, dtype=str)
+            df_str.columns = [c.strip().upper() for c in df_str.columns]
 
-            # Remove linhas completamente vazias
-            df = df.dropna(how="all")
+            # Lê sem dtype=str apenas para converter datas corretamente
+            df_raw = pd.read_excel(xl, sheet_name=aba)
+            df_raw.columns = [c.strip().upper() for c in df_raw.columns]
+
+            # Converte DIGITACAO com dayfirst=True antes de qualquer outra conversão
+            if "DIGITACAO" in df_raw.columns:
+                df_str["DIGITACAO"] = pd.to_datetime(
+                    df_raw["DIGITACAO"], dayfirst=True, errors="coerce"
+                ).dt.strftime("%Y-%m-%d")
+
+            df = df_str.dropna(how="all")
 
             print(f"   → {len(df)} linhas lidas (total bruto)")
 
-            # Filtros: apenas linhas que movimentaram estoque
             if "ESTOQUE" in df.columns:
                 df = df[df["ESTOQUE"].str.strip().str.upper() == "S"]
             if "QUANTIDADE" in df.columns:
@@ -205,12 +199,11 @@ def process_entradas_saidas(
 
             records = []
             for _, row in df.iterrows():
-                doc      = clean_text(row.get("DOCUMENTO"))
-                produto  = clean_text(row.get("PRODUTO"))
-                digitacao = parse_br_date(row.get("DIGITACAO"))
-
+                doc          = clean_text(row.get("DOCUMENTO"))
+                produto      = clean_text(row.get("PRODUTO"))
+                digitacao    = clean_text(row.get("DIGITACAO"))  # já convertida acima
                 centro_custo = clean_text(row.get("CENTRO CUSTO"))
-                row_hash = make_hash(empresa, tipo, doc, produto, digitacao, centro_custo)
+                row_hash     = make_hash(empresa, tipo, doc, produto, digitacao, centro_custo)
 
                 records.append({
                     "row_hash":          row_hash,
@@ -227,7 +220,7 @@ def process_entradas_saidas(
                     "descricao":         clean_text(row.get("DESCRICAO")),
                     "tes":               clean_text(row.get("TES")),
                     "cfop":              clean_text(row.get("CFOP")),
-                    "centro_custo":      clean_text(row.get("CENTRO CUSTO")),
+                    "centro_custo":      centro_custo,
                     "grupo":             clean_text(row.get("GRUPO")),
                     "desc_grupo":        clean_text(row.get("DESC GRUPO")),
                     "forn_cliente":      clean_text(row.get("FORN/CLIENTE")),
@@ -258,7 +251,6 @@ def process_movimentos(
     zf: zipfile.ZipFile,
     empresa_filter: str | None = None,
 ) -> None:
-    """Lê todos os XLSXs de 02_Movimento e carrega no Supabase."""
 
     arquivos = [
         n for n in zf.namelist()
@@ -281,17 +273,20 @@ def process_movimentos(
         with zf.open(arquivo) as f:
             raw = io.BytesIO(f.read())
 
-        # Lê tudo como string mas preserva a data original
-        df = pd.read_excel(raw, dtype=str)
-        df.columns = [c.strip().upper() for c in df.columns]
-        df = df.dropna(how="all")
+        df_str = pd.read_excel(raw, dtype=str)
+        df_str.columns = [c.strip().upper() for c in df_str.columns]
 
-        # Converte data com dayfirst=True para formato BR
-        if "DT EMISSAO" in df.columns:
-            df["DT EMISSAO"] = pd.to_datetime(
-                df["DT EMISSAO"], dayfirst=True, errors="coerce"
-            )
+        raw.seek(0)
+        df_raw = pd.read_excel(raw)
+        df_raw.columns = [c.strip().upper() for c in df_raw.columns]
 
+        # Converte DT EMISSAO com dayfirst=True
+        if "DT EMISSAO" in df_raw.columns:
+            df_str["DT EMISSAO"] = pd.to_datetime(
+                df_raw["DT EMISSAO"], dayfirst=True, errors="coerce"
+            ).dt.strftime("%Y-%m-%d")
+
+        df = df_str.dropna(how="all")
         print(f"   → {len(df)} linhas lidas")
 
         records = []
@@ -299,29 +294,23 @@ def process_movimentos(
             doc        = clean_text(row.get("DOCUMENTO"))
             produto    = clean_text(row.get("PRODUTO"))
             tp_mov     = clean_text(row.get("TP MOVIMENTO"))
-            dt_emissao_raw = row.get("DT EMISSAO")
-            if pd.isna(dt_emissao_raw) if not isinstance(dt_emissao_raw, str) else False:
-                dt_emissao = None
-            elif isinstance(dt_emissao_raw, (pd.Timestamp, datetime)):
-                dt_emissao = dt_emissao_raw.strftime("%Y-%m-%d")
-            else:
-                dt_emissao = parse_br_date(dt_emissao_raw)
+            dt_emissao = clean_text(row.get("DT EMISSAO"))  # já convertida acima
             quantidade = parse_br_number(row.get("QUANTIDADE"))
             tipo_rede  = clean_text(row.get("TIPO RE/DE"))
 
             row_hash = make_hash(empresa, doc, produto, tp_mov, dt_emissao, quantidade, tipo_rede)
 
             records.append({
-                "row_hash":    row_hash,
-                "empresa":     empresa,
-                "filial":      clean_text(row.get("FILIAL")),
+                "row_hash":     row_hash,
+                "empresa":      empresa,
+                "filial":       clean_text(row.get("FILIAL")),
                 "tp_movimento": tp_mov,
-                "produto":     produto,
-                "descricao":   clean_text(row.get("DESCR. PROD")),
-                "quantidade":  quantidade,
-                "tipo_rede":   tipo_rede,
-                "documento":   doc,
-                "dt_emissao":  dt_emissao,
+                "produto":      produto,
+                "descricao":    clean_text(row.get("DESCR. PROD")),
+                "quantidade":   quantidade,
+                "tipo_rede":    tipo_rede,
+                "documento":    doc,
+                "dt_emissao":   dt_emissao,
             })
 
         total = upsert_chunks(supabase, "movimentos", records, empresa)
@@ -334,20 +323,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Carga histórica Protheus → Supabase (entradas_saidas + movimentos)"
     )
-    parser.add_argument(
-        "--zip", required=True,
-        help="Caminho para o arquivo Dados_Movimento.zip"
-    )
-    parser.add_argument(
-        "--tabela", choices=["entradas_saidas", "movimentos"],
-        default=None,
-        help="Processar apenas uma tabela (padrão: ambas)"
-    )
-    parser.add_argument(
-        "--empresa",
-        default=None,
-        help="Filtrar por empresa: Tools | Maquinas | Robotica | Service"
-    )
+    parser.add_argument("--zip", required=True, help="Caminho para o arquivo Dados_Movimento.zip")
+    parser.add_argument("--tabela", choices=["entradas_saidas", "movimentos"], default=None)
+    parser.add_argument("--empresa", default=None)
     args = parser.parse_args()
 
     print("=" * 60)
@@ -359,7 +337,6 @@ def main():
     print(f"  Chunk    : {CHUNK_SIZE} linhas")
     print("=" * 60)
 
-    # Conecta ao Supabase (verify=False para redes corporativas com SSL inspection)
     print("\n🔌 Conectando ao Supabase...")
     http_client = httpx.Client(verify=False, timeout=60.0)
     supabase: Client = create_client(
@@ -369,7 +346,6 @@ def main():
     )
     print("   ✅ Conectado!")
 
-    # Abre o ZIP (aceita com ou sem extensão .zip)
     print(f"\n📦 Abrindo: {args.zip}")
     try:
         zf = zipfile.ZipFile(args.zip, "r")
@@ -378,9 +354,6 @@ def main():
         sys.exit(1)
     except zipfile.BadZipFile:
         print(f"❌ Não é um arquivo ZIP válido: {args.zip}")
-        sys.exit(1)
-    except IsADirectoryError:
-        print(f"❌ Isso é uma pasta, não um arquivo ZIP: {args.zip}")
         sys.exit(1)
 
     inicio = datetime.now()
