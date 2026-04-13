@@ -42,6 +42,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
     if "Conta" not in df.columns:
         df["Conta"] = "Não Informado"
 
+    # Agrupamento inicial para consolidar registros idênticos
     df = (
         df.groupby(
             ["Data Fechamento", "Empresa / Filial", "Tipo de Estoque", "Conta", "Produto", "Descricao", "Status Estoque"],
@@ -49,14 +50,11 @@ def render(df_hist, moeda_br, data_selecionada=None):
         ).agg({"Saldo Atual": "sum", "Custo Total": "sum"})
     )
 
-    df = (
-        df.sort_values("Status Estoque")
-        .drop_duplicates(subset=["Data Fechamento", "Empresa / Filial", "Produto"], keep="first")
-    )
-
+    # Identificação de obsoletos (booleano para facilitar)
     df["obsoleto"] = df["Status Estoque"] == "Obsoleto"
     datas = sorted(df["Data Fechamento"].unique())
 
+    # Determinação das datas de comparação
     if data_selecionada is not None:
         data_sel_ts = pd.Timestamp(data_selecionada)
         datas_anteriores = [d for d in datas if pd.Timestamp(d) < data_sel_ts]
@@ -78,20 +76,40 @@ def render(df_hist, moeda_br, data_selecionada=None):
         data_atual    = pd.Timestamp(datas[-1])
         data_anterior = pd.Timestamp(datas[-2])
 
-    df_atual = df[(df["Data Fechamento"] == data_atual) & (df["obsoleto"] == True)].copy()
-    df_ant   = df[(df["Data Fechamento"] == data_anterior) & (df["obsoleto"] == True)].copy()
+    # -------------------------------------------------------
+    # APLICAÇÃO DA CORREÇÃO SOLICITADA
+    # -------------------------------------------------------
+    # 1. Filtrar por data separadamente
+    df_atual = df[df["Data Fechamento"] == data_atual].copy()
+    df_ant   = df[df["Data Fechamento"] == data_anterior].copy()
+
+    # 2. Deduplicar dentro de cada mês separadamente (priorizando Status via sort)
+    df_atual = (
+        df_atual.sort_values("Status Estoque")
+        .drop_duplicates(subset=["Empresa / Filial", "Produto"], keep="first")
+    )
+    df_ant = (
+        df_ant.sort_values("Status Estoque")
+        .drop_duplicates(subset=["Empresa / Filial", "Produto"], keep="first")
+    )
+
+    # 3. Filtrar obsoletos depois da deduplicação
+    df_atual_obs = df_atual[df_atual["obsoleto"] == True].copy()
+    df_ant_obs   = df_ant[df_ant["obsoleto"] == True].copy()
+    # -------------------------------------------------------
 
     st.caption(f"Comparando **{data_atual.strftime('%d/%m/%Y')}** vs **{data_anterior.strftime('%d/%m/%Y')}**")
 
     chave = ["Empresa / Filial", "Produto"]
 
-    df_ant_sel = df_ant[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Tipo de Estoque"]].copy()
+    # Preparação para o Merge (usando os dataframes já filtrados por obsoleto)
+    df_ant_sel = df_ant_obs[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Tipo de Estoque"]].copy()
     df_ant_sel = df_ant_sel.rename(columns={
         "Custo Total": "Vlr Ant", "Saldo Atual": "Qtd Ant",
         "Descricao": "Descricao_ant", "Conta": "Conta_ant", "Tipo de Estoque": "Tipo_ant"
     })
 
-    df_atual_sel = df_atual[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Tipo de Estoque"]].copy()
+    df_atual_sel = df_atual_obs[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Tipo de Estoque"]].copy()
     df_atual_sel = df_atual_sel.rename(columns={
         "Custo Total": "Vlr Atual", "Saldo Atual": "Qtd Atual",
         "Descricao": "Descricao_atual", "Conta": "Conta_atual", "Tipo de Estoque": "Tipo_atual"
@@ -106,9 +124,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
     base["Conta"]     = base["Conta_atual"].fillna(base["Conta_ant"])
     base["Tipo de Estoque"] = base["Tipo_atual"].fillna(base["Tipo_ant"])
 
-    # -------------------------------------------------------
     # 🔍 DEBUG — itens que existem nos dois meses
-    # -------------------------------------------------------
     with st.expander("🔍 DEBUG — Itens presentes nos dois meses (Qtd Ant vs Qtd Atual)", expanded=False):
         debug_df = base[
             (base["Vlr Ant"] > 0) & (base["Vlr Atual"] > 0)
@@ -130,13 +146,9 @@ def render(df_hist, moeda_br, data_selecionada=None):
             n = len(debug_df[debug_df["Δ Qtd"] > 0])
             st.metric("🔼 Aumentaram quantidade", n)
 
-        st.dataframe(
-            debug_df.sort_values("Δ Qtd").head(50),
-            use_container_width=True,
-            hide_index=True
-        )
-    # -------------------------------------------------------
+        st.dataframe(debug_df.sort_values("Δ Qtd").head(50), use_container_width=True, hide_index=True)
 
+    # Categorização das movimentações
     entrou  = base[(base["Vlr Ant"] == 0) & (base["Vlr Atual"] > 0)].copy()
     entrou["Status Mov"] = "🔴 Entrou"
 
@@ -161,18 +173,23 @@ def render(df_hist, moeda_br, data_selecionada=None):
     ].copy()
     variacao["Status Mov"] = "📊 Variação"
 
+    # Métricas para os Cards
     valor_entrou  = entrou["Vlr Atual"].sum()
     qtd_entrou    = len(entrou)
     valor_saiu    = saiu["Vlr Ant"].sum()
     qtd_saiu      = len(saiu)
     valor_reduziu = reduziu["Vlr Reduzido"].sum()
     qtd_reduziu   = len(reduziu)
-    obs_ant       = df_ant["Custo Total"].sum()
-    obs_atual     = df_atual["Custo Total"].sum()
+    
+    obs_ant       = df_ant_obs["Custo Total"].sum()
+    obs_atual     = df_atual_obs["Custo Total"].sum()
     variacao_real = obs_atual - obs_ant
 
-    df_primeiro     = df[(df["Data Fechamento"] == pd.Timestamp(datas[0])) & (df["obsoleto"] == True)]
-    obs_acum_inicio = df_primeiro["Custo Total"].sum()
+    # Acumulado
+    df_primeiro     = df[df["Data Fechamento"] == pd.Timestamp(datas[0])].copy()
+    # Aplicar mesma deduplicação no primeiro fechamento para consistência no acumulado
+    df_primeiro     = df_primeiro.sort_values("Status Estoque").drop_duplicates(subset=["Empresa / Filial", "Produto"], keep="first")
+    obs_acum_inicio = df_primeiro[df_primeiro["obsoleto"] == True]["Custo Total"].sum()
     obs_acum_atual  = obs_atual
     variacao_acum   = obs_acum_atual - obs_acum_inicio
 
