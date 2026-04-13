@@ -209,10 +209,12 @@ def parse_linha_produto(line):
 # -------------------------------------------------
 
 def extrair_txt(arquivo_bytes):
-    try:
-        texto = arquivo_bytes.decode('utf-8')
-    except UnicodeDecodeError:
-        texto = arquivo_bytes.decode('latin-1')
+    for enc in ('utf-8-sig', 'utf-8', 'latin-1'):
+        try:
+            texto = arquivo_bytes.decode(enc)
+            break
+        except UnicodeDecodeError:
+            continue
 
     lines = texto.split('\n')
     all_data = []
