@@ -42,7 +42,6 @@ def render(df_hist, moeda_br, data_selecionada=None):
     if "Conta" not in df.columns:
         df["Conta"] = "Não Informado"
 
-    # Adicionado "Tipo de Estoque" no agrupamento
     df = (
         df.groupby(
             ["Data Fechamento", "Empresa / Filial", "Tipo de Estoque", "Conta", "Produto", "Descricao", "Status Estoque"],
@@ -86,7 +85,6 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     chave = ["Empresa / Filial", "Produto"]
 
-    # Selecionando colunas incluindo Tipo de Estoque
     df_ant_sel = df_ant[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Tipo de Estoque"]].copy()
     df_ant_sel = df_ant_sel.rename(columns={
         "Custo Total": "Vlr Ant", "Saldo Atual": "Qtd Ant",
@@ -108,6 +106,37 @@ def render(df_hist, moeda_br, data_selecionada=None):
     base["Conta"]     = base["Conta_atual"].fillna(base["Conta_ant"])
     base["Tipo de Estoque"] = base["Tipo_atual"].fillna(base["Tipo_ant"])
 
+    # -------------------------------------------------------
+    # 🔍 DEBUG — itens que existem nos dois meses
+    # -------------------------------------------------------
+    with st.expander("🔍 DEBUG — Itens presentes nos dois meses (Qtd Ant vs Qtd Atual)", expanded=False):
+        debug_df = base[
+            (base["Vlr Ant"] > 0) & (base["Vlr Atual"] > 0)
+        ][["Empresa / Filial", "Produto", "Descricao", "Qtd Ant", "Qtd Atual", "Vlr Ant", "Vlr Atual"]].copy()
+
+        debug_df["Δ Qtd"] = debug_df["Qtd Atual"] - debug_df["Qtd Ant"]
+        debug_df["Δ Vlr"] = debug_df["Vlr Atual"] - debug_df["Vlr Ant"]
+
+        st.caption(f"Total de itens em ambos os meses: **{len(debug_df)}**")
+
+        col_red, col_igual, col_aum = st.columns(3)
+        with col_red:
+            n = len(debug_df[debug_df["Δ Qtd"] < 0])
+            st.metric("🔽 Reduziram quantidade", n)
+        with col_igual:
+            n = len(debug_df[debug_df["Δ Qtd"] == 0])
+            st.metric("➡️ Quantidade igual", n)
+        with col_aum:
+            n = len(debug_df[debug_df["Δ Qtd"] > 0])
+            st.metric("🔼 Aumentaram quantidade", n)
+
+        st.dataframe(
+            debug_df.sort_values("Δ Qtd").head(50),
+            use_container_width=True,
+            hide_index=True
+        )
+    # -------------------------------------------------------
+
     entrou  = base[(base["Vlr Ant"] == 0) & (base["Vlr Atual"] > 0)].copy()
     entrou["Status Mov"] = "🔴 Entrou"
 
@@ -120,6 +149,11 @@ def render(df_hist, moeda_br, data_selecionada=None):
     ].copy()
     reduziu["Status Mov"] = "🔽 Reduziu"
 
+    # Valor reduzido = custo unitário médio × quantidade reduzida
+    reduziu["Qtd Reduzida"]   = reduziu["Qtd Ant"] - reduziu["Qtd Atual"]
+    reduziu["Custo Unit Ant"] = reduziu["Vlr Ant"] / reduziu["Qtd Ant"].replace(0, pd.NA)
+    reduziu["Vlr Reduzido"]   = reduziu["Custo Unit Ant"] * reduziu["Qtd Reduzida"]
+
     variacao = base[
         (base["Vlr Ant"] > 0) & (base["Vlr Atual"] > 0) &
         (base["Qtd Atual"] == base["Qtd Ant"]) &
@@ -131,7 +165,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
     qtd_entrou    = len(entrou)
     valor_saiu    = saiu["Vlr Ant"].sum()
     qtd_saiu      = len(saiu)
-    valor_reduziu = (reduziu["Vlr Ant"] - reduziu["Vlr Atual"]).sum()
+    valor_reduziu = reduziu["Vlr Reduzido"].sum()
     qtd_reduziu   = len(reduziu)
     obs_ant       = df_ant["Custo Total"].sum()
     obs_atual     = df_atual["Custo Total"].sum()
@@ -166,7 +200,6 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # -------------------------------------------------------
     # TABELA COM FILTRO DE STATUS MOV
     # -------------------------------------------------------
-    # Adicionado "Tipo de Estoque" na ordem das colunas
     colunas_tabela = ["Status Mov", "Empresa / Filial", "Tipo de Estoque", "Conta", "Produto", "Descricao",
                       "Qtd Ant", "Vlr Ant", "Qtd Atual", "Vlr Atual"]
 
