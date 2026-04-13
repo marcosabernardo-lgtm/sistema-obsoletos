@@ -53,23 +53,19 @@ def get_supabase() -> Client:
 
 
 def upsert_chunks_estoque(supabase, records, chunk_size=1000):
-    """Upsert em estoque_fechamentos usando constraint natural."""
     import time
-    # Deduplica por chave natural
     seen = {}
     for r in records:
         key = f"{r['data_fechamento']}|{r['empresa']}|{r['filial']}|{r['produto']}"
         seen[key] = r
     records = list(seen.values())
-
     total = 0
     for i in range(0, len(records), chunk_size):
         chunk = records[i:i+chunk_size]
         for tentativa in range(1, 4):
             try:
                 supabase.table("estoque_fechamentos").upsert(
-                    chunk,
-                    on_conflict="data_fechamento,empresa,filial,produto"
+                    chunk, on_conflict="data_fechamento,empresa,filial,produto"
                 ).execute()
                 break
             except Exception:
@@ -81,7 +77,6 @@ def upsert_chunks_estoque(supabase, records, chunk_size=1000):
 
 
 def upsert_chunks(supabase, tabela, records, chunk_size=1000):
-    """Upsert genérico por row_hash."""
     import time
     seen = {r["row_hash"]: r for r in records}
     records = list(seen.values())
@@ -101,7 +96,7 @@ def upsert_chunks(supabase, tabela, records, chunk_size=1000):
 
 
 # -------------------------------------------------
-# EXTRAÇÃO PDF
+# PARSER DE LINHA (TXT e PDF)
 # -------------------------------------------------
 
 POSSIVEIS_TIPOS_ESTOQUE = [
@@ -125,6 +120,158 @@ def separar_empresa_filial(texto_firma):
             return texto[:match.start()].strip(), match.group(1).strip()
     return texto, ""
 
+
+def to_float(s):
+    """Converte string numérica BR para float."""
+    if not s:
+        return None
+    s = str(s).strip().replace('.', '').replace(',', '.')
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def parse_linha_produto(line):
+    """
+    Parser unificado para linhas de produto do TXT e PDF.
+    Suporta 2 formatos de valores:
+      - UNITÁRIO | TOTAL          (2 colunas)
+      - UNITÁRIO | PARCIAL | TOTAL (3 colunas — quando TOTAL vazio usa PARCIAL)
+    """
+    partes = [p.strip() for p in line.split('|')]
+    partes = [p for p in partes if p != '']
+
+    if len(partes) < 4:
+        return None
+
+    # Localiza o campo que tem o padrão CODIGO - DESCRICAO
+    cod_idx = None
+    for i, p in enumerate(partes):
+        if re.match(r'^[\d.]+\s*-\s*.+', p):
+            cod_idx = i
+            break
+
+    if cod_idx is None:
+        return None
+
+    match_cod = re.match(r'^([\d.]+)\s*-\s*(.*)', partes[cod_idx])
+    if not match_cod:
+        return None
+
+    codigo, descricao = match_cod.groups()
+    remaining = partes[cod_idx + 1:]
+
+    if len(remaining) < 2:
+        return None
+
+    unid    = remaining[0]
+    qtd_str = remaining[1]
+    valores = remaining[2:]
+
+    quantidade = to_float(qtd_str)
+
+    if len(valores) >= 3:
+        # UNITÁRIO | PARCIAL | TOTAL
+        vlr_unit = to_float(valores[0])
+        parcial  = to_float(valores[1])
+        total    = to_float(valores[2])
+        if total is None and parcial is not None:
+            total = parcial
+    elif len(valores) >= 2:
+        # UNITÁRIO | TOTAL
+        vlr_unit = to_float(valores[0])
+        total    = to_float(valores[1])
+    elif len(valores) == 1:
+        vlr_unit = to_float(valores[0])
+        total    = None
+    else:
+        return None
+
+    if quantidade is None or vlr_unit is None:
+        return None
+
+    if total is None:
+        total = round(quantidade * vlr_unit, 2)
+
+    return {
+        "codigo":    codigo.strip(),
+        "descricao": descricao.strip(),
+        "unid":      unid,
+        "quantidade": quantidade,
+        "vlr_unit":  vlr_unit,
+        "total":     total,
+    }
+
+
+# -------------------------------------------------
+# EXTRAÇÃO TXT
+# -------------------------------------------------
+
+def extrair_txt(arquivo_bytes):
+    try:
+        texto = arquivo_bytes.decode('utf-8')
+    except UnicodeDecodeError:
+        texto = arquivo_bytes.decode('latin-1')
+
+    lines = texto.split('\n')
+    all_data = []
+    data_fechamento = None
+    empresa = None
+    filial = None
+    tipo_estoque = None
+    conta = None
+    ignorar_resumo = False
+
+    for line in lines:
+        if "R E S U M O" in line:
+            ignorar_resumo = True
+            continue
+        if "FIRMA:" in line:
+            ignorar_resumo = False
+        if ignorar_resumo:
+            continue
+
+        if "FIRMA:" in line:
+            conteudo = line.split(':', 1)[1]
+            empresa, filial = separar_empresa_filial(conteudo)
+
+        elif "ESTOQUES EXISTENTES EM:" in line:
+            data_str = line.split("EM:", 1)[1].replace('|', '').strip()
+            data_fechamento = data_str
+
+        elif '*' in line:
+            for tipo in POSSIVEIS_TIPOS_ESTOQUE:
+                if tipo in line:
+                    tipo_estoque = tipo
+                    break
+            match_conta = re.search(r'\*\*\*\s*([\w\s&/]+?)\s*\*\*\*', line)
+            if match_conta:
+                conta = match_conta.group(1).strip()
+
+        elif line.strip().startswith('|') and "D I S C R I M I N A" not in line:
+            resultado = parse_linha_produto(line)
+            if resultado:
+                all_data.append({
+                    "Data Fechamento": data_fechamento,
+                    "Empresa":         empresa,
+                    "Filial":          filial,
+                    "Tipo de Estoque": tipo_estoque,
+                    "Conta":           conta,
+                    "Código":          resultado["codigo"],
+                    "Descrição":       resultado["descricao"],
+                    "Unid":            resultado["unid"],
+                    "Quantidade":      resultado["quantidade"],
+                    "Vlr Unit":        resultado["vlr_unit"],
+                    "Valor Total":     resultado["total"],
+                })
+
+    return pd.DataFrame(all_data)
+
+
+# -------------------------------------------------
+# EXTRAÇÃO PDF
+# -------------------------------------------------
 
 def extrair_pdf(arquivo_bytes):
     all_data = []
@@ -167,37 +314,21 @@ def extrair_pdf(arquivo_bytes):
                         conta = match_conta.group(1).strip()
 
                 elif line.strip().startswith('|') and "D I S C R I M I N A" not in line:
-                    partes = [p.strip() for p in line.split('|')]
-                    partes = [p for p in partes if p != '']
-                    if len(partes) < 5:
-                        continue
-                    try:
-                        desc_completa = partes[1] if len(partes) > 1 else ""
-                        match_cod = re.match(r'^([\d.]+)\s*-\s*(.*)', desc_completa)
-                        if not match_cod:
-                            continue
-                        codigo, descricao = match_cod.groups()
-                        unid       = partes[2] if len(partes) > 2 else ""
-                        qtd_str    = partes[3] if len(partes) > 3 else "0"
-                        vlr_str    = partes[4] if len(partes) > 4 else "0"
-                        quantidade = float(qtd_str.replace('.', '').replace(',', '.'))
-                        vlr_unit   = float(vlr_str.replace('.', '').replace(',', '.'))
-                        valor_total = float(partes[5].replace('.', '').replace(',', '.')) if len(partes) > 5 and partes[5] else quantidade * vlr_unit
+                    resultado = parse_linha_produto(line)
+                    if resultado:
                         all_data.append({
                             "Data Fechamento": data_fechamento,
                             "Empresa":         empresa,
                             "Filial":          filial,
                             "Tipo de Estoque": tipo_estoque,
                             "Conta":           conta,
-                            "Código":          codigo.strip(),
-                            "Descrição":       descricao.strip(),
-                            "Unid":            unid,
-                            "Quantidade":      quantidade,
-                            "Vlr Unit":        vlr_unit,
-                            "Valor Total":     valor_total,
+                            "Código":          resultado["codigo"],
+                            "Descrição":       resultado["descricao"],
+                            "Unid":            resultado["unid"],
+                            "Quantidade":      resultado["quantidade"],
+                            "Vlr Unit":        resultado["vlr_unit"],
+                            "Valor Total":     resultado["total"],
                         })
-                    except (ValueError, IndexError):
-                        continue
 
     return pd.DataFrame(all_data)
 
@@ -253,13 +384,12 @@ def clean_text(value):
 
 EMPRESA_MAP = {"01": "Tools", "03": "Maquinas", "05": "Robotica", "07": "Service"}
 
-def parse_empresa(filename):
+def parse_empresa_zip(filename):
     name = filename.split("/")[-1]
     return EMPRESA_MAP.get(name[:2], name.replace(".xlsx", ""))
 
 
 def processar_zip(supabase, zip_bytes, status_placeholder):
-    import time
     total_es = 0
     total_mov = 0
     log_msgs = []
@@ -273,7 +403,7 @@ def processar_zip(supabase, zip_bytes, status_placeholder):
         # --- Entradas/Saídas ---
         arqs_es = [n for n in zf.namelist() if "01_Entradas_Saidas" in n and n.endswith(".xlsx")]
         for arquivo in arqs_es:
-            empresa = parse_empresa(arquivo)
+            empresa = parse_empresa_zip(arquivo)
             log(f"📥 Entradas/Saídas — {empresa}...")
 
             with zf.open(arquivo) as f:
@@ -348,7 +478,7 @@ def processar_zip(supabase, zip_bytes, status_placeholder):
         # --- Movimentos ---
         arqs_mov = [n for n in zf.namelist() if "02_Movimento" in n and n.endswith(".xlsx")]
         for arquivo in arqs_mov:
-            empresa = parse_empresa(arquivo)
+            empresa = parse_empresa_zip(arquivo)
             log(f"🔄 Movimentos — {empresa}...")
 
             with zf.open(arquivo) as f:
@@ -403,7 +533,7 @@ supabase = get_supabase()
 
 st.markdown('<div class="step-box">', unsafe_allow_html=True)
 st.markdown('<div class="step-title">📄 Passo 1 — Importar Fechamento de Estoque</div>', unsafe_allow_html=True)
-st.markdown('<div class="step-desc">Selecione todos os PDFs do fechamento mensal (um por empresa). Os dados serão extraídos e inseridos em estoque_fechamentos.</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-desc">Selecione todos os arquivos do fechamento mensal (um por empresa). Aceita PDF e TXT.</div>', unsafe_allow_html=True)
 
 arquivos_fechamento = st.file_uploader(
     "Selecione os arquivos de fechamento",
@@ -426,8 +556,7 @@ if arquivos_fechamento:
                     if arquivo.name.lower().endswith(".pdf"):
                         df_extraido = extrair_pdf(arquivo_bytes)
                     else:
-                        st.error(f"Formato TXT ainda não suportado: {arquivo.name}")
-                        continue
+                        df_extraido = extrair_txt(arquivo_bytes)
 
                     if df_extraido.empty:
                         st.warning(f"Nenhum dado encontrado em {arquivo.name}")
@@ -491,17 +620,16 @@ st.markdown("---")
 
 st.markdown('<div class="step-box">', unsafe_allow_html=True)
 st.markdown('<div class="step-title">🔄 Passo 3 — Atualizar Dashboards</div>', unsafe_allow_html=True)
-st.markdown('<div class="step-desc">Após importar o fechamento e as movimentações, recrie os caches para atualizar os dashboards. Este processo pode levar alguns minutos.</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-desc">Após importar o fechamento e as movimentações, execute os SQLs abaixo no SQL Editor do Supabase para atualizar os dashboards.</div>', unsafe_allow_html=True)
 
 st.warning("⚠️ Execute este passo somente após concluir os Passos 1 e 2.")
 
-if st.button("🔄 Recriar Caches e Atualizar Dashboards", type="primary", key="btn_cache"):
-    st.info("Para recriar os caches, execute os SQLs abaixo no SQL Editor do Supabase na ordem indicada.")
-    st.code("""-- 1. Apagar caches antigos
+with st.expander("Ver SQLs para executar no Supabase"):
+    st.code("""-- PASSO 3A: Apagar caches antigos
 DROP TABLE IF EXISTS resumo_movimentacoes_cache;
 DROP TABLE IF EXISTS motor_obsoletos_cache;""", language="sql")
 
-    st.code("""-- 2. Recriar resumo_movimentacoes_cache
+    st.code("""-- PASSO 3B: Recriar resumo_movimentacoes_cache
 CREATE TABLE resumo_movimentacoes_cache AS
 WITH fechamentos AS (
     SELECT DISTINCT data_fechamento
@@ -552,7 +680,7 @@ SELECT data_fechamento, id_unico, ult_mov, ult_entrada, ult_saida, ult_movimenta
 FROM agrupado;
 CREATE INDEX ON resumo_movimentacoes_cache (data_fechamento, id_unico);""", language="sql")
 
-    st.code("""-- 3. Recriar motor_obsoletos_cache
+    st.code("""-- PASSO 3C: Recriar motor_obsoletos_cache
 CREATE TABLE motor_obsoletos_cache AS
 SELECT ef.data_fechamento,
        CASE
@@ -580,7 +708,7 @@ LEFT JOIN resumo_movimentacoes_cache rc
 WHERE ef.data_fechamento >= '2025-12-31';
 CREATE INDEX ON motor_obsoletos_cache (data_fechamento);""", language="sql")
 
-    st.info("Após executar os SQLs, faça Reboot do app no Streamlit Cloud.")
+    st.info("Após executar os SQLs, faça **Reboot** do app no Streamlit Cloud.")
 
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("---")
