@@ -27,7 +27,6 @@ def card(titulo, valor, cor_borda="#EC6E21", cor_valor=None, subtitulo=None):
         unsafe_allow_html=True
     )
 
-
 # -------------------------------------------------------
 # FUNÇÃO PRINCIPAL
 # -------------------------------------------------------
@@ -40,7 +39,6 @@ def render(df_hist, moeda_br, data_selecionada=None):
     if "Conta" not in df.columns:
         df["Conta"] = "Não Informado"
 
-    # Agrupamento
     df = (
         df.groupby(
             ["Data Fechamento", "Empresa / Filial", "Tipo de Estoque", "Conta", "Produto", "Descricao", "Status Estoque"],
@@ -51,9 +49,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
     df["obsoleto"] = df["Status Estoque"] == "Obsoleto"
     datas = sorted(df["Data Fechamento"].unique())
 
-    # ------------------------------
     # Datas
-    # ------------------------------
     if data_selecionada is not None:
         data_sel_ts = pd.Timestamp(data_selecionada)
         datas_anteriores = [d for d in datas if pd.Timestamp(d) < data_sel_ts]
@@ -78,29 +74,27 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     st.caption(f"Comparando **{data_atual.strftime('%d/%m/%Y')}** vs **{data_anterior.strftime('%d/%m/%Y')}**")
 
-    # ------------------------------
     # Base deduplicada
-    # ------------------------------
     df_at = df[df["Data Fechamento"] == data_atual].copy()
     df_an = df[df["Data Fechamento"] == data_anterior].copy()
 
-    df_at = df_at.sort_values("obsoleto", ascending=False).drop_duplicates(
+    df_at_dedup = df_at.sort_values("obsoleto", ascending=False).drop_duplicates(
         subset=["Empresa / Filial", "Produto"], keep="first"
     )
 
-    df_an = df_an.sort_values("obsoleto", ascending=False).drop_duplicates(
+    df_an_dedup = df_an.sort_values("obsoleto", ascending=False).drop_duplicates(
         subset=["Empresa / Filial", "Produto"], keep="first"
     )
 
     chave = ["Empresa / Filial", "Produto"]
 
-    df_ant = df_an[chave + ["Custo Total", "Saldo Atual", "obsoleto"]].rename(columns={
+    df_ant = df_an_dedup[chave + ["Custo Total", "Saldo Atual", "obsoleto"]].rename(columns={
         "Custo Total": "Vlr Ant",
         "Saldo Atual": "Qtd Ant",
         "obsoleto": "Obs Ant"
     })
 
-    df_atual = df_at[chave + ["Custo Total", "Saldo Atual", "obsoleto"]].rename(columns={
+    df_atual = df_at_dedup[chave + ["Custo Total", "Saldo Atual", "obsoleto"]].rename(columns={
         "Custo Total": "Vlr Atual",
         "Saldo Atual": "Qtd Atual",
         "obsoleto": "Obs Atual"
@@ -111,31 +105,24 @@ def render(df_hist, moeda_br, data_selecionada=None):
     for c in ["Vlr Ant", "Qtd Ant", "Vlr Atual", "Qtd Atual"]:
         base[c] = base[c].fillna(0)
 
-    # ------------------------------
-    # MOVIMENTOS
-    # ------------------------------
-
-    entrou = base[(base["Vlr Ant"] == 0) & (base["Vlr Atual"] > 0)].copy()
-
-    saiu = base[(base["Vlr Ant"] > 0) & (base["Vlr Atual"] == 0)].copy()
+    # Movimentos
+    entrou = base[(base["Vlr Ant"] == 0) & (base["Vlr Atual"] > 0)]
+    saiu = base[(base["Vlr Ant"] > 0) & (base["Vlr Atual"] == 0)]
 
     saiu_obs = base[
         (base["Obs Ant"] == True) &
         (base["Obs Atual"] == False) &
         (base["Qtd Atual"] > 0)
-    ].copy()
+    ]
 
     variacao = base[
         (base["Vlr Ant"] > 0) &
         (base["Vlr Atual"] > 0) &
         (base["Qtd Ant"] == base["Qtd Atual"]) &
         (base["Vlr Ant"] != base["Vlr Atual"])
-    ].copy()
+    ]
 
-    # ------------------------------
-    # VALORES
-    # ------------------------------
-
+    # Valores
     obs_ant = base[base["Obs Ant"] == True]["Vlr Ant"].sum()
     obs_atual = base[base["Obs Atual"] == True]["Vlr Atual"].sum()
 
@@ -154,9 +141,9 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     gap = obs_atual - reconstruido
 
-    # ------------------------------
-    # CARDS
-    # ------------------------------
+    # -------------------------------------------------------
+    # CARDS PRINCIPAIS
+    # -------------------------------------------------------
 
     st.subheader("🧮 Reconciliação do Obsoleto")
 
@@ -184,3 +171,30 @@ def render(df_hist, moeda_br, data_selecionada=None):
     with c6:
         cor_gap = "#51cf66" if abs(gap) < 1 else "#ff6b6b"
         card("Gap de Reconciliação", moeda_br(gap), "#fff", cor_valor=cor_gap)
+
+    # -------------------------------------------------------
+    # 🔎 QUEBRA DO GAP
+    # -------------------------------------------------------
+
+    st.markdown("### 🔎 Composição do Gap")
+
+    # Base cheia (sem deduplicar)
+    obs_full_ant = df_an[df_an["Status Estoque"] == "Obsoleto"]["Custo Total"].sum()
+    obs_full_at = df_at[df_at["Status Estoque"] == "Obsoleto"]["Custo Total"].sum()
+
+    gap_dedup = (obs_full_at - obs_full_ant) - (obs_atual - obs_ant)
+
+    mudanca_status = saiu_obs["Vlr Ant"].sum()
+
+    outros = gap - gap_dedup + mudanca_status
+
+    c7, c8, c9 = st.columns(3)
+
+    with c7:
+        card("🧩 Deduplicação", moeda_br(gap_dedup), "#74c0fc")
+
+    with c8:
+        card("🔄 Mudança de Status", moeda_br(-mudanca_status), "#51cf66")
+
+    with c9:
+        card("📊 Outros Ajustes", moeda_br(outros), "#fcc419")
