@@ -108,7 +108,7 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     reduziu = base[(base["Vlr Ant"] > 0) & (base["Vlr Atual"] > 0) & (base["Qtd Atual"] < base["Qtd Ant"])].copy()
     reduziu["Status Mov"] = "🔽 Reduziu"
-    reduziu["Vlr Reduzido"] = (reduziu["Vlr Ant"] / reduziu["Qtd Ant"]) * (reduziu["Qtd Ant"] - reduziu["Qtd Atual"])
+    reduziu["Vlr Reduzido"] = (reduziu["Vlr Ant"] / reduziu["Qtd Ant"].replace(0, pd.NA)) * (reduziu["Qtd Ant"] - reduziu["Qtd Atual"])
 
     variacao = base[(base["Vlr Ant"] > 0) & (base["Vlr Atual"] > 0) & (base["Qtd Atual"] == base["Qtd Ant"]) & (base["Vlr Atual"] != base["Vlr Ant"])].copy()
     variacao["Status Mov"] = "📊 Variação"
@@ -124,24 +124,14 @@ def render(df_hist, moeda_br, data_selecionada=None):
     with c3: card("🔽 Reduziu", moeda_br(reduziu["Vlr Reduzido"].sum()), "#74c0fc", subtitulo=f"{len(reduziu)} itens")
     with c4: card("Δ Variação Real", moeda_br(obs_atual - obs_ant), "#fff", cor_valor="#ff6b6b" if (obs_atual-obs_ant)>0 else "#51cf66")
 
-    # Acumulado
-    df_ini = df[df["Data Fechamento"] == pd.Timestamp(datas[0])].sort_values("obsoleto", ascending=False).drop_duplicates(subset=["Empresa / Filial", "Produto"], keep="first")
-    vlr_ini = df_ini[df_ini["obsoleto"] == True]["Custo Total"].sum()
-    st.markdown("---")
-    st.subheader("📈 Acumulado")
-    a1, a2, a3 = st.columns(3)
-    with a1: card("Obsoleto no Início", moeda_br(vlr_ini))
-    with a2: card("Obsoleto Atual", moeda_br(obs_atual))
-    with a3: card("Δ Var. Acumulada", moeda_br(obs_atual - vlr_ini), "#fff", cor_valor="#ff6b6b" if (obs_atual-vlr_ini)>0 else "#51cf66")
-
-    # --- TABELA (FILTRADA PARA EXIBIR APENAS COLUNAS DESEJADAS) ---
+    # --- TABELA DETALHADA ---
     st.markdown("---")
     colunas_tabela = ["Status Mov", "Empresa / Filial", "Tipo de Estoque", "Conta", "Produto", "Descricao", "Qtd Ant", "Vlr Ant", "Qtd Atual", "Vlr Atual"]
     
     frames = []
     for df_tab in [entrou, saiu, reduziu, variacao]:
         if not df_tab.empty:
-            frames.append(df_tab[colunas_tabela]) # Aqui filtramos as colunas antes de juntar
+            frames.append(df_tab[colunas_tabela])
 
     if frames:
         mov = pd.concat(frames, ignore_index=True).sort_values("Vlr Atual", ascending=False)
@@ -168,3 +158,5 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
         st.caption(f"{len(mov_display)} itens exibidos")
         st.dataframe(mov_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("Nenhuma movimentação encontrada para o período.")
