@@ -54,6 +54,8 @@ def get_supabase() -> Client:
 
 def upsert_chunks_estoque(supabase, records, chunk_size=1000):
     import time
+    # Filtra registros com campos obrigatorios nulos
+    records = [r for r in records if r.get('data_fechamento') and r.get('empresa') and r.get('filial') and r.get('produto')]
     seen = {}
     for r in records:
         key = f"{r['data_fechamento']}|{r['empresa']}|{r['filial']}|{r['produto']}"
@@ -229,7 +231,7 @@ def extrair_txt(arquivo_bytes):
         if "R E S U M O" in line:
             ignorar_resumo = True
             continue
-        if "FIRMA:" in line:
+        if "FIRMA:" in line or "FOLHA:" in line:
             ignorar_resumo = False
         if ignorar_resumo:
             continue
