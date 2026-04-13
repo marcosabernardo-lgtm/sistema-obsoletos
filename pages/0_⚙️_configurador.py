@@ -218,7 +218,7 @@ def extrair_txt(arquivo_bytes):
         except UnicodeDecodeError:
             continue
 
-    lines = texto.split('\n')
+    lines = texto.splitlines()
     all_data = []
     data_fechamento = None
     empresa = None
@@ -244,7 +244,7 @@ def extrair_txt(arquivo_bytes):
             data_str = line.split("EM:", 1)[1].replace('|', '').strip()
             data_fechamento = data_str
 
-        elif '*' in line:
+        elif '***' in line:
             for tipo in POSSIVEIS_TIPOS_ESTOQUE:
                 if tipo in line:
                     tipo_estoque = tipo
@@ -308,7 +308,7 @@ def extrair_pdf(arquivo_bytes):
                     data_str = line.split("EM:", 1)[1].replace('|', '').strip()
                     data_fechamento = data_str
 
-                elif '*' in line:
+                elif '***' in line:
                     for tipo in POSSIVEIS_TIPOS_ESTOQUE:
                         if tipo in line:
                             tipo_estoque = tipo
