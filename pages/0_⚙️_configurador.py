@@ -23,17 +23,6 @@ st.markdown("""
 <style>
 section[data-testid="stSidebar"] { display: none !important; }
 [data-testid="collapsedControl"]  { display: none !important; }
-
-.kpi-card {
-    background-color: #005562;
-    border: 2px solid #EC6E21;
-    padding: 16px;
-    border-radius: 10px;
-    text-align: center;
-}
-.kpi-title { font-size: 13px; color: #ccc; }
-.kpi-value { font-size: 22px; font-weight: 700; color: white; }
-
 .step-box {
     background: rgba(0,85,98,0.3);
     border: 1px solid rgba(236,110,33,0.3);
@@ -41,17 +30,8 @@ section[data-testid="stSidebar"] { display: none !important; }
     padding: 20px 24px;
     margin-bottom: 16px;
 }
-.step-title {
-    font-size: 16px;
-    font-weight: 700;
-    color: #EC6E21;
-    margin-bottom: 8px;
-}
-.step-desc {
-    font-size: 13px;
-    color: rgba(255,255,255,0.6);
-    margin-bottom: 16px;
-}
+.step-title { font-size: 16px; font-weight: 700; color: #EC6E21; margin-bottom: 8px; }
+.step-desc  { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 16px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -72,16 +52,25 @@ def get_supabase() -> Client:
     return create_client(SUPABASE_URL, SUPABASE_KEY, options=ClientOptions(httpx_client=http_client))
 
 
-def upsert_chunks(supabase, tabela, records, on_conflict="row_hash", chunk_size=1000):
+def upsert_chunks_estoque(supabase, records, chunk_size=1000):
+    """Upsert em estoque_fechamentos usando constraint natural."""
     import time
-    seen = {r[on_conflict]: r for r in records}
+    # Deduplica por chave natural
+    seen = {}
+    for r in records:
+        key = f"{r['data_fechamento']}|{r['empresa']}|{r['filial']}|{r['produto']}"
+        seen[key] = r
     records = list(seen.values())
+
     total = 0
     for i in range(0, len(records), chunk_size):
         chunk = records[i:i+chunk_size]
         for tentativa in range(1, 4):
             try:
-                supabase.table(tabela).upsert(chunk, on_conflict=on_conflict).execute()
+                supabase.table("estoque_fechamentos").upsert(
+                    chunk,
+                    on_conflict="data_fechamento,empresa,filial,produto"
+                ).execute()
                 break
             except Exception:
                 if tentativa == 3:
@@ -91,103 +80,28 @@ def upsert_chunks(supabase, tabela, records, on_conflict="row_hash", chunk_size=
     return total
 
 
-def recriar_caches(supabase):
-    """Recria resumo_movimentacoes_cache e motor_obsoletos_cache no Supabase."""
-
-    sql_drop_resumo = "DROP TABLE IF EXISTS resumo_movimentacoes_cache;"
-    sql_drop_motor  = "DROP TABLE IF EXISTS motor_obsoletos_cache;"
-
-    sql_resumo = """
-    CREATE TABLE resumo_movimentacoes_cache AS
-    WITH fechamentos AS (
-        SELECT DISTINCT data_fechamento
-        FROM estoque_fechamentos
-        WHERE data_fechamento >= '2025-12-31'
-    ),
-    mov AS (
-        SELECT e.empresa_filial || '|' || m.produto AS id_unico,
-               m.dt_emissao::date AS dt
-        FROM movimentos m
-        JOIN estoque_empresas e ON e.id = (m.empresa || ' ' || m.filial)
-        WHERE m.dt_emissao IS NOT NULL
-    ),
-    es AS (
-        SELECT e.empresa_filial || '|' || es.produto AS id_unico,
-               es.tipo,
-               es.digitacao::date AS dt
-        FROM entradas_saidas es
-        JOIN estoque_empresas e ON e.id = (es.empresa || ' ' || es.filial)
-        WHERE es.estoque = 'S' AND es.digitacao IS NOT NULL
-    ),
-    combinado AS (
-        SELECT f.data_fechamento, mov.id_unico,
-               MAX(CASE WHEN mov.dt <= f.data_fechamento THEN mov.dt END) AS ult_mov,
-               NULL::date AS ult_entrada, NULL::date AS ult_saida
-        FROM fechamentos f CROSS JOIN mov
-        GROUP BY f.data_fechamento, mov.id_unico
-        UNION ALL
-        SELECT f.data_fechamento, es.id_unico, NULL::date,
-               MAX(CASE WHEN es.tipo='ENTRADA' AND es.dt<=f.data_fechamento THEN es.dt END),
-               MAX(CASE WHEN es.tipo='SAIDA'   AND es.dt<=f.data_fechamento THEN es.dt END)
-        FROM fechamentos f CROSS JOIN es
-        GROUP BY f.data_fechamento, es.id_unico
-    ),
-    agrupado AS (
-        SELECT data_fechamento, id_unico,
-               MAX(ult_mov) AS ult_mov, MAX(ult_entrada) AS ult_entrada,
-               MAX(ult_saida) AS ult_saida,
-               GREATEST(MAX(ult_mov), MAX(ult_entrada), MAX(ult_saida)) AS ult_movimentacao
-        FROM combinado GROUP BY data_fechamento, id_unico
-    )
-    SELECT data_fechamento, id_unico, ult_mov, ult_entrada, ult_saida, ult_movimentacao,
-           CASE
-               WHEN ult_movimentacao IS NULL       THEN NULL
-               WHEN ult_movimentacao = ult_saida   THEN 'Ult_Saida'
-               WHEN ult_movimentacao = ult_entrada THEN 'Ult_Entrada'
-               WHEN ult_movimentacao = ult_mov     THEN 'Ult_Mov'
-           END AS origem_mov
-    FROM agrupado;
-    CREATE INDEX ON resumo_movimentacoes_cache (data_fechamento, id_unico);
-    """
-
-    sql_motor = """
-    CREATE TABLE motor_obsoletos_cache AS
-    SELECT ef.data_fechamento,
-           CASE
-               WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
-               WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
-               WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
-               WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
-               ELSE ef.empresa
-           END || ' / ' || INITCAP(ef.filial) AS empresa_filial,
-           ef.tipo_de_estoque, ef.conta, ef.produto, ef.descricao,
-           ef.unid, ef.saldo_atual, ef.vlr_unit, ef.custo_total,
-           rc.ult_movimentacao, rc.origem_mov
-    FROM estoque_fechamentos ef
-    LEFT JOIN resumo_movimentacoes_cache rc
-        ON rc.data_fechamento = ef.data_fechamento
-        AND rc.id_unico = (
-            CASE
-                WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
-                WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
-                WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
-                WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
-                ELSE ef.empresa
-            END || ' / ' || INITCAP(ef.filial) || '|' || ef.produto
-        )
-    WHERE ef.data_fechamento >= '2025-12-31';
-    CREATE INDEX ON motor_obsoletos_cache (data_fechamento);
-    """
-
-    sb = supabase
-    sb.rpc("exec_sql", {"query": sql_drop_resumo}).execute()
-    sb.rpc("exec_sql", {"query": sql_drop_motor}).execute()
-    sb.rpc("exec_sql", {"query": sql_resumo}).execute()
-    sb.rpc("exec_sql", {"query": sql_motor}).execute()
+def upsert_chunks(supabase, tabela, records, chunk_size=1000):
+    """Upsert genérico por row_hash."""
+    import time
+    seen = {r["row_hash"]: r for r in records}
+    records = list(seen.values())
+    total = 0
+    for i in range(0, len(records), chunk_size):
+        chunk = records[i:i+chunk_size]
+        for tentativa in range(1, 4):
+            try:
+                supabase.table(tabela).upsert(chunk, on_conflict="row_hash").execute()
+                break
+            except Exception:
+                if tentativa == 3:
+                    raise
+                time.sleep(5)
+        total += len(chunk)
+    return total
 
 
 # -------------------------------------------------
-# EXTRAÇÃO PDF/TXT
+# EXTRAÇÃO PDF
 # -------------------------------------------------
 
 POSSIVEIS_TIPOS_ESTOQUE = [
@@ -208,9 +122,7 @@ def separar_empresa_filial(texto_firma):
     for palavra in PALAVRAS_FILIAL:
         match = re.search(r'\b(' + palavra + r'\s*\w*)\s*$', texto, re.IGNORECASE)
         if match:
-            filial = match.group(1).strip()
-            empresa = texto[:match.start()].strip()
-            return empresa, filial
+            return texto[:match.start()].strip(), match.group(1).strip()
     return texto, ""
 
 
@@ -260,16 +172,16 @@ def extrair_pdf(arquivo_bytes):
                     if len(partes) < 5:
                         continue
                     try:
-                        descricao_completa = partes[1] if len(partes) > 1 else ""
-                        match_cod = re.match(r'^([\d.]+)\s*-\s*(.*)', descricao_completa)
+                        desc_completa = partes[1] if len(partes) > 1 else ""
+                        match_cod = re.match(r'^([\d.]+)\s*-\s*(.*)', desc_completa)
                         if not match_cod:
                             continue
                         codigo, descricao = match_cod.groups()
-                        unid    = partes[2] if len(partes) > 2 else ""
-                        qtd_str = partes[3] if len(partes) > 3 else "0"
-                        vlr_str = partes[4] if len(partes) > 4 else "0"
-                        quantidade  = float(qtd_str.replace('.', '').replace(',', '.'))
-                        vlr_unit    = float(vlr_str.replace('.', '').replace(',', '.'))
+                        unid       = partes[2] if len(partes) > 2 else ""
+                        qtd_str    = partes[3] if len(partes) > 3 else "0"
+                        vlr_str    = partes[4] if len(partes) > 4 else "0"
+                        quantidade = float(qtd_str.replace('.', '').replace(',', '.'))
+                        vlr_unit   = float(vlr_str.replace('.', '').replace(',', '.'))
                         valor_total = float(partes[5].replace('.', '').replace(',', '.')) if len(partes) > 5 and partes[5] else quantidade * vlr_unit
                         all_data.append({
                             "Data Fechamento": data_fechamento,
@@ -291,7 +203,6 @@ def extrair_pdf(arquivo_bytes):
 
 
 def df_para_supabase(df):
-    """Converte DataFrame extraído para formato do Supabase."""
     records = []
     for _, row in df.iterrows():
         data_raw = str(row.get("Data Fechamento", "")).strip()
@@ -300,24 +211,15 @@ def df_para_supabase(df):
         except Exception:
             data_iso = None
 
-        produto = str(row.get("Código", "")).strip().replace(".0", "")
-        empresa = str(row.get("Empresa", "")).strip()
-        filial  = str(row.get("Filial",  "")).strip()
-
-        row_hash = hashlib.sha256(
-            f"{data_iso}|{empresa}|{filial}|{produto}".encode()
-        ).hexdigest()
-
         records.append({
-            "row_hash":        row_hash,
             "data_fechamento": data_iso,
-            "empresa":         empresa,
-            "filial":          filial,
+            "empresa":         str(row.get("Empresa",         "")).strip() or None,
+            "filial":          str(row.get("Filial",          "")).strip() or None,
             "tipo_de_estoque": str(row.get("Tipo de Estoque", "")).strip() or None,
-            "conta":           str(row.get("Conta", "")).strip() or None,
-            "produto":         produto,
-            "descricao":       str(row.get("Descrição", "")).strip() or None,
-            "unid":            str(row.get("Unid", "")).strip() or None,
+            "conta":           str(row.get("Conta",           "")).strip() or None,
+            "produto":         str(row.get("Código",          "")).strip().replace(".0", "") or None,
+            "descricao":       str(row.get("Descrição",       "")).strip() or None,
+            "unid":            str(row.get("Unid",            "")).strip() or None,
             "saldo_atual":     row.get("Quantidade"),
             "vlr_unit":        row.get("Vlr Unit"),
             "custo_total":     row.get("Valor Total"),
@@ -326,7 +228,7 @@ def df_para_supabase(df):
 
 
 # -------------------------------------------------
-# PROCESSAMENTO ZIP (entradas/saidas + movimentos)
+# PROCESSAMENTO ZIP
 # -------------------------------------------------
 
 def parse_br_number(value):
@@ -356,10 +258,15 @@ def parse_empresa(filename):
     return EMPRESA_MAP.get(name[:2], name.replace(".xlsx", ""))
 
 
-def processar_zip(supabase, zip_bytes, progress_callback=None):
+def processar_zip(supabase, zip_bytes, status_placeholder):
     import time
     total_es = 0
     total_mov = 0
+    log_msgs = []
+
+    def log(msg):
+        log_msgs.append(msg)
+        status_placeholder.info("\n\n".join(log_msgs))
 
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
 
@@ -367,8 +274,7 @@ def processar_zip(supabase, zip_bytes, progress_callback=None):
         arqs_es = [n for n in zf.namelist() if "01_Entradas_Saidas" in n and n.endswith(".xlsx")]
         for arquivo in arqs_es:
             empresa = parse_empresa(arquivo)
-            if progress_callback:
-                progress_callback(f"📥 Entradas/Saídas — {empresa}...")
+            log(f"📥 Entradas/Saídas — {empresa}...")
 
             with zf.open(arquivo) as f:
                 raw_bytes = io.BytesIO(f.read())
@@ -435,14 +341,15 @@ def processar_zip(supabase, zip_bytes, progress_callback=None):
                         "poder_terceiros": clean_text(row.get("PODER TERCEIROS")),
                     })
 
-                total_es += upsert_chunks(supabase, "entradas_saidas", records)
+                n = upsert_chunks(supabase, "entradas_saidas", records)
+                total_es += n
+                log(f"   ✅ {empresa}/{tipo}: {n} registros")
 
         # --- Movimentos ---
         arqs_mov = [n for n in zf.namelist() if "02_Movimento" in n and n.endswith(".xlsx")]
         for arquivo in arqs_mov:
             empresa = parse_empresa(arquivo)
-            if progress_callback:
-                progress_callback(f"🔄 Movimentos — {empresa}...")
+            log(f"🔄 Movimentos — {empresa}...")
 
             with zf.open(arquivo) as f:
                 raw_bytes = io.BytesIO(f.read())
@@ -470,7 +377,6 @@ def processar_zip(supabase, zip_bytes, progress_callback=None):
                 row_hash   = hashlib.sha256(
                     f"{empresa}|{doc}|{produto}|{tp_mov}|{dt_emissao}|{quantidade}|{tipo_rede}".encode()
                 ).hexdigest()
-
                 records.append({
                     "row_hash": row_hash, "empresa": empresa,
                     "filial": clean_text(row.get("FILIAL")),
@@ -480,7 +386,9 @@ def processar_zip(supabase, zip_bytes, progress_callback=None):
                     "documento": doc, "dt_emissao": dt_emissao,
                 })
 
-            total_mov += upsert_chunks(supabase, "movimentos", records)
+            n = upsert_chunks(supabase, "movimentos", records)
+            total_mov += n
+            log(f"   ✅ {empresa}: {n} registros")
 
     return total_es, total_mov
 
@@ -491,63 +399,66 @@ def processar_zip(supabase, zip_bytes, progress_callback=None):
 
 supabase = get_supabase()
 
-# ── BOTÃO 1: Fechamento ──────────────────────────────────────
+# ── PASSO 1: Fechamento ──────────────────────────────────────
 
 st.markdown('<div class="step-box">', unsafe_allow_html=True)
 st.markdown('<div class="step-title">📄 Passo 1 — Importar Fechamento de Estoque</div>', unsafe_allow_html=True)
-st.markdown('<div class="step-desc">Faça upload do PDF ou TXT gerado pelo Protheus. Os dados serão extraídos e inseridos em estoque_fechamentos.</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-desc">Selecione todos os PDFs do fechamento mensal (um por empresa). Os dados serão extraídos e inseridos em estoque_fechamentos.</div>', unsafe_allow_html=True)
 
-arquivo_fechamento = st.file_uploader(
-    "Selecione o arquivo de fechamento",
+arquivos_fechamento = st.file_uploader(
+    "Selecione os arquivos de fechamento",
     type=["pdf", "txt"],
+    accept_multiple_files=True,
     key="upload_fechamento"
 )
 
-if arquivo_fechamento:
-    st.info(f"Arquivo selecionado: **{arquivo_fechamento.name}**")
+if arquivos_fechamento:
+    st.info(f"**{len(arquivos_fechamento)} arquivo(s)** selecionado(s): {', '.join([f.name for f in arquivos_fechamento])}")
 
     if st.button("📥 Importar Fechamento", type="primary", key="btn_fechamento"):
-        with st.spinner("Extraindo dados do arquivo..."):
-            try:
-                arquivo_bytes = arquivo_fechamento.read()
+        todos_records = []
+        todos_df = []
 
-                if arquivo_fechamento.name.lower().endswith(".pdf"):
-                    df_extraido = extrair_pdf(arquivo_bytes)
-                else:
-                    st.error("Suporte a TXT em desenvolvimento. Use o PDF por enquanto.")
-                    st.stop()
+        for arquivo in arquivos_fechamento:
+            with st.spinner(f"Extraindo {arquivo.name}..."):
+                try:
+                    arquivo_bytes = arquivo.read()
+                    if arquivo.name.lower().endswith(".pdf"):
+                        df_extraido = extrair_pdf(arquivo_bytes)
+                    else:
+                        st.error(f"Formato TXT ainda não suportado: {arquivo.name}")
+                        continue
 
-                if df_extraido.empty:
-                    st.error("Nenhum dado encontrado no arquivo.")
-                    st.stop()
+                    if df_extraido.empty:
+                        st.warning(f"Nenhum dado encontrado em {arquivo.name}")
+                        continue
 
-                st.success(f"✅ {len(df_extraido)} registros extraídos.")
+                    todos_df.append(df_extraido)
+                    todos_records.extend(df_para_supabase(df_extraido))
+                    st.success(f"✅ {arquivo.name} — {len(df_extraido)} registros extraídos")
 
-                # Preview
-                with st.expander("Ver prévia dos dados extraídos"):
-                    st.dataframe(df_extraido.head(20), use_container_width=True)
+                except Exception as e:
+                    st.error(f"Erro ao extrair {arquivo.name}: {e}")
 
-            except Exception as e:
-                st.error("Erro ao extrair o arquivo.")
-                st.exception(e)
-                st.stop()
+        if todos_df:
+            df_preview = pd.concat(todos_df, ignore_index=True)
+            with st.expander(f"Ver prévia — {len(df_preview)} registros totais"):
+                st.dataframe(df_preview.head(30), use_container_width=True)
 
-        with st.spinner("Inserindo no Supabase..."):
-            try:
-                records = df_para_supabase(df_extraido)
-                total = upsert_chunks(supabase, "estoque_fechamentos", records, on_conflict="row_hash")
-                st.success(f"✅ {total} registros inseridos em estoque_fechamentos.")
-                st.cache_data.clear()
-            except Exception as e:
-                st.error("Erro ao inserir no Supabase.")
-                st.exception(e)
-                st.stop()
+        if todos_records:
+            with st.spinner("Inserindo no Supabase..."):
+                try:
+                    total = upsert_chunks_estoque(supabase, todos_records)
+                    st.success(f"✅ {total} registros inseridos em estoque_fechamentos.")
+                    st.cache_data.clear()
+                except Exception as e:
+                    st.error("Erro ao inserir no Supabase.")
+                    st.exception(e)
 
 st.markdown('</div>', unsafe_allow_html=True)
-
 st.markdown("---")
 
-# ── BOTÃO 2: Movimentações ───────────────────────────────────
+# ── PASSO 2: Movimentações ───────────────────────────────────
 
 st.markdown('<div class="step-box">', unsafe_allow_html=True)
 st.markdown('<div class="step-title">📦 Passo 2 — Importar Movimentações</div>', unsafe_allow_html=True)
@@ -560,35 +471,23 @@ arquivo_zip = st.file_uploader(
 )
 
 if arquivo_zip:
-    st.info(f"Arquivo selecionado: **{arquivo_zip.name}** ({arquivo_zip.size / 1024 / 1024:.1f} MB)")
+    st.info(f"Arquivo: **{arquivo_zip.name}** ({arquivo_zip.size / 1024 / 1024:.1f} MB)")
 
     if st.button("📥 Importar Movimentações", type="primary", key="btn_zip"):
         status_box = st.empty()
         try:
             zip_bytes = arquivo_zip.read()
-            log_msgs = []
-
-            def atualizar_status(msg):
-                log_msgs.append(msg)
-                status_box.info("\n\n".join(log_msgs))
-
-            atualizar_status("⏳ Iniciando processamento...")
-            total_es, total_mov = processar_zip(supabase, zip_bytes, atualizar_status)
-            atualizar_status(f"✅ Entradas/Saídas: {total_es} registros")
-            atualizar_status(f"✅ Movimentos: {total_mov} registros")
-            st.success("ZIP processado com sucesso!")
+            total_es, total_mov = processar_zip(supabase, zip_bytes, status_box)
+            st.success(f"✅ Concluído — Entradas/Saídas: {total_es} | Movimentos: {total_mov} registros")
             st.cache_data.clear()
-
         except Exception as e:
             st.error("Erro ao processar o ZIP.")
             st.exception(e)
-            st.stop()
 
 st.markdown('</div>', unsafe_allow_html=True)
-
 st.markdown("---")
 
-# ── BOTÃO 3: Recriar Caches ──────────────────────────────────
+# ── PASSO 3: Atualizar Dashboards ───────────────────────────
 
 st.markdown('<div class="step-box">', unsafe_allow_html=True)
 st.markdown('<div class="step-title">🔄 Passo 3 — Atualizar Dashboards</div>', unsafe_allow_html=True)
@@ -597,17 +496,93 @@ st.markdown('<div class="step-desc">Após importar o fechamento e as movimentaç
 st.warning("⚠️ Execute este passo somente após concluir os Passos 1 e 2.")
 
 if st.button("🔄 Recriar Caches e Atualizar Dashboards", type="primary", key="btn_cache"):
-    with st.spinner("Recriando caches no Supabase... Aguarde, isso pode levar alguns minutos."):
-        try:
-            recriar_caches(supabase)
-            st.success("✅ Caches recriados! Os dashboards já refletem os novos dados.")
-            st.cache_data.clear()
-        except Exception as e:
-            st.error("Erro ao recriar caches.")
-            st.exception(e)
+    st.info("Para recriar os caches, execute os SQLs abaixo no SQL Editor do Supabase na ordem indicada.")
+    st.code("""-- 1. Apagar caches antigos
+DROP TABLE IF EXISTS resumo_movimentacoes_cache;
+DROP TABLE IF EXISTS motor_obsoletos_cache;""", language="sql")
+
+    st.code("""-- 2. Recriar resumo_movimentacoes_cache
+CREATE TABLE resumo_movimentacoes_cache AS
+WITH fechamentos AS (
+    SELECT DISTINCT data_fechamento
+    FROM estoque_fechamentos
+    WHERE data_fechamento >= '2025-12-31'
+),
+mov AS (
+    SELECT e.empresa_filial || '|' || m.produto AS id_unico,
+           m.dt_emissao::date AS dt
+    FROM movimentos m
+    JOIN estoque_empresas e ON e.id = (m.empresa || ' ' || m.filial)
+    WHERE m.dt_emissao IS NOT NULL
+),
+es AS (
+    SELECT e.empresa_filial || '|' || es.produto AS id_unico,
+           es.tipo, es.digitacao::date AS dt
+    FROM entradas_saidas es
+    JOIN estoque_empresas e ON e.id = (es.empresa || ' ' || es.filial)
+    WHERE es.estoque = 'S' AND es.digitacao IS NOT NULL
+),
+combinado AS (
+    SELECT f.data_fechamento, mov.id_unico,
+           MAX(CASE WHEN mov.dt <= f.data_fechamento THEN mov.dt END) AS ult_mov,
+           NULL::date AS ult_entrada, NULL::date AS ult_saida
+    FROM fechamentos f CROSS JOIN mov
+    GROUP BY f.data_fechamento, mov.id_unico
+    UNION ALL
+    SELECT f.data_fechamento, es.id_unico, NULL::date,
+           MAX(CASE WHEN es.tipo='ENTRADA' AND es.dt<=f.data_fechamento THEN es.dt END),
+           MAX(CASE WHEN es.tipo='SAIDA'   AND es.dt<=f.data_fechamento THEN es.dt END)
+    FROM fechamentos f CROSS JOIN es
+    GROUP BY f.data_fechamento, es.id_unico
+),
+agrupado AS (
+    SELECT data_fechamento, id_unico,
+           MAX(ult_mov) AS ult_mov, MAX(ult_entrada) AS ult_entrada,
+           MAX(ult_saida) AS ult_saida,
+           GREATEST(MAX(ult_mov), MAX(ult_entrada), MAX(ult_saida)) AS ult_movimentacao
+    FROM combinado GROUP BY data_fechamento, id_unico
+)
+SELECT data_fechamento, id_unico, ult_mov, ult_entrada, ult_saida, ult_movimentacao,
+       CASE
+           WHEN ult_movimentacao IS NULL       THEN NULL
+           WHEN ult_movimentacao = ult_saida   THEN 'Ult_Saida'
+           WHEN ult_movimentacao = ult_entrada THEN 'Ult_Entrada'
+           WHEN ult_movimentacao = ult_mov     THEN 'Ult_Mov'
+       END AS origem_mov
+FROM agrupado;
+CREATE INDEX ON resumo_movimentacoes_cache (data_fechamento, id_unico);""", language="sql")
+
+    st.code("""-- 3. Recriar motor_obsoletos_cache
+CREATE TABLE motor_obsoletos_cache AS
+SELECT ef.data_fechamento,
+       CASE
+           WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+           WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+           WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+           WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+           ELSE ef.empresa
+       END || ' / ' || INITCAP(ef.filial) AS empresa_filial,
+       ef.tipo_de_estoque, ef.conta, ef.produto, ef.descricao,
+       ef.unid, ef.saldo_atual, ef.vlr_unit, ef.custo_total,
+       rc.ult_movimentacao, rc.origem_mov
+FROM estoque_fechamentos ef
+LEFT JOIN resumo_movimentacoes_cache rc
+    ON rc.data_fechamento = ef.data_fechamento
+    AND rc.id_unico = (
+        CASE
+            WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+            WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+            WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+            WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+            ELSE ef.empresa
+        END || ' / ' || INITCAP(ef.filial) || '|' || ef.produto
+    )
+WHERE ef.data_fechamento >= '2025-12-31';
+CREATE INDEX ON motor_obsoletos_cache (data_fechamento);""", language="sql")
+
+    st.info("Após executar os SQLs, faça Reboot do app no Streamlit Cloud.")
 
 st.markdown('</div>', unsafe_allow_html=True)
-
 st.markdown("---")
 st.markdown(
     '<p style="color:rgba(255,255,255,0.3);font-size:12px;text-align:center">'
