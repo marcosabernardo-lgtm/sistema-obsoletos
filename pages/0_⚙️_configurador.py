@@ -437,13 +437,13 @@ def processar_zip(supabase, zip_bytes, status_placeholder):
                     df = df[df["QUANTIDADE"].notna() & (df["QUANTIDADE"] != 0)]
 
                 records = []
-                for _, row in df.iterrows():
+                for idx, row in df.iterrows():
                     doc          = clean_text(row.get("DOCUMENTO"))
                     produto      = clean_text(row.get("PRODUTO"))
                     digitacao    = clean_text(row.get("DIGITACAO"))
                     centro_custo = clean_text(row.get("CENTRO CUSTO"))
                     row_hash     = hashlib.sha256(
-                        f"{empresa}|{tipo}|{doc}|{produto}|{digitacao}|{centro_custo}".encode()
+                        f"{empresa}|{tipo}|{doc}|{produto}|{digitacao}|{centro_custo}|{idx}".encode()
                     ).hexdigest()
 
                     records.append({
