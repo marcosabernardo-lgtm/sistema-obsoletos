@@ -175,12 +175,13 @@ def parse_linha_produto(line):
 
     if len(valores) >= 3:
         # UNITÁRIO | PARCIAL | TOTAL
-        # PARCIAL = QTD * UNITARIO (valor do produto)
-        # TOTAL = acumulado do grupo NCM — ignorar
         vlr_unit = to_float(valores[0])
-        total    = to_float(valores[1])  # usa PARCIAL como custo_total
+        parcial  = to_float(valores[1])
+        total    = to_float(valores[2])
+        if total is None and parcial is not None:
+            total = parcial
     elif len(valores) >= 2:
-        # UNITÁRIO | PARCIAL (sem coluna TOTAL)
+        # UNITÁRIO | TOTAL
         vlr_unit = to_float(valores[0])
         total    = to_float(valores[1])
     elif len(valores) == 1:
@@ -627,125 +628,96 @@ st.markdown('<div class="step-desc">Após importar o fechamento e as movimentaç
 
 st.warning("⚠️ Execute este passo somente após concluir os Passos 1 e 2.")
 
-if st.button("🔄 Recriar Caches e Atualizar Dashboards", type="primary", key="btn_cache"):
-    import pg8000.native as pg8000
-    import re as _re
+SQL_COMPLETO = """-- 1. Apaga caches antigos
+DROP TABLE IF EXISTS resumo_movimentacoes_cache;
+DROP TABLE IF EXISTS motor_obsoletos_cache;
 
-    SQL_DROP = """
-        DROP TABLE IF EXISTS resumo_movimentacoes_cache;
-        DROP TABLE IF EXISTS motor_obsoletos_cache;
-    """
+-- 2. Recria resumo_movimentacoes_cache
+CREATE TABLE resumo_movimentacoes_cache AS
+WITH fechamentos AS (
+    SELECT DISTINCT data_fechamento
+    FROM estoque_fechamentos
+    WHERE data_fechamento >= '2025-12-31'
+),
+mov AS (
+    SELECT e.empresa_filial || '|' || m.produto AS id_unico,
+           m.dt_emissao::date AS dt
+    FROM movimentos m
+    JOIN estoque_empresas e ON e.id = (m.empresa || ' ' || m.filial)
+    WHERE m.dt_emissao IS NOT NULL
+),
+es AS (
+    SELECT e.empresa_filial || '|' || es.produto AS id_unico,
+           es.tipo, es.digitacao::date AS dt
+    FROM entradas_saidas es
+    JOIN estoque_empresas e ON e.id = (es.empresa || ' ' || es.filial)
+    WHERE es.estoque = 'S' AND es.digitacao IS NOT NULL
+),
+combinado AS (
+    SELECT f.data_fechamento, mov.id_unico,
+           MAX(CASE WHEN mov.dt <= f.data_fechamento THEN mov.dt END) AS ult_mov,
+           NULL::date AS ult_entrada, NULL::date AS ult_saida
+    FROM fechamentos f CROSS JOIN mov
+    GROUP BY f.data_fechamento, mov.id_unico
+    UNION ALL
+    SELECT f.data_fechamento, es.id_unico, NULL::date,
+           MAX(CASE WHEN es.tipo='ENTRADA' AND es.dt<=f.data_fechamento THEN es.dt END),
+           MAX(CASE WHEN es.tipo='SAIDA'   AND es.dt<=f.data_fechamento THEN es.dt END)
+    FROM fechamentos f CROSS JOIN es
+    GROUP BY f.data_fechamento, es.id_unico
+),
+agrupado AS (
+    SELECT data_fechamento, id_unico,
+           MAX(ult_mov) AS ult_mov, MAX(ult_entrada) AS ult_entrada,
+           MAX(ult_saida) AS ult_saida,
+           GREATEST(MAX(ult_mov), MAX(ult_entrada), MAX(ult_saida)) AS ult_movimentacao
+    FROM combinado GROUP BY data_fechamento, id_unico
+)
+SELECT data_fechamento, id_unico, ult_mov, ult_entrada, ult_saida, ult_movimentacao,
+       CASE
+           WHEN ult_movimentacao IS NULL       THEN NULL
+           WHEN ult_movimentacao = ult_saida   THEN 'Ult_Saida'
+           WHEN ult_movimentacao = ult_entrada THEN 'Ult_Entrada'
+           WHEN ult_movimentacao = ult_mov     THEN 'Ult_Mov'
+       END AS origem_mov
+FROM agrupado;
 
-    SQL_RESUMO = """
-        CREATE TABLE resumo_movimentacoes_cache AS
-        WITH fechamentos AS (
-            SELECT DISTINCT data_fechamento
-            FROM estoque_fechamentos
-            WHERE data_fechamento >= '2025-12-31'
-        ),
-        mov AS (
-            SELECT e.empresa_filial || '|' || m.produto AS id_unico,
-                   m.dt_emissao::date AS dt
-            FROM movimentos m
-            JOIN estoque_empresas e ON e.id = (m.empresa || ' ' || m.filial)
-            WHERE m.dt_emissao IS NOT NULL
-        ),
-        es AS (
-            SELECT e.empresa_filial || '|' || es.produto AS id_unico,
-                   es.tipo, es.digitacao::date AS dt
-            FROM entradas_saidas es
-            JOIN estoque_empresas e ON e.id = (es.empresa || ' ' || es.filial)
-            WHERE es.estoque = 'S' AND es.digitacao IS NOT NULL
-        ),
-        combinado AS (
-            SELECT f.data_fechamento, mov.id_unico,
-                   MAX(CASE WHEN mov.dt <= f.data_fechamento THEN mov.dt END) AS ult_mov,
-                   NULL::date AS ult_entrada, NULL::date AS ult_saida
-            FROM fechamentos f CROSS JOIN mov
-            GROUP BY f.data_fechamento, mov.id_unico
-            UNION ALL
-            SELECT f.data_fechamento, es.id_unico, NULL::date,
-                   MAX(CASE WHEN es.tipo='ENTRADA' AND es.dt<=f.data_fechamento THEN es.dt END),
-                   MAX(CASE WHEN es.tipo='SAIDA'   AND es.dt<=f.data_fechamento THEN es.dt END)
-            FROM fechamentos f CROSS JOIN es
-            GROUP BY f.data_fechamento, es.id_unico
-        ),
-        agrupado AS (
-            SELECT data_fechamento, id_unico,
-                   MAX(ult_mov) AS ult_mov, MAX(ult_entrada) AS ult_entrada,
-                   MAX(ult_saida) AS ult_saida,
-                   GREATEST(MAX(ult_mov), MAX(ult_entrada), MAX(ult_saida)) AS ult_movimentacao
-            FROM combinado GROUP BY data_fechamento, id_unico
-        )
-        SELECT data_fechamento, id_unico, ult_mov, ult_entrada, ult_saida, ult_movimentacao,
-               CASE
-                   WHEN ult_movimentacao IS NULL       THEN NULL
-                   WHEN ult_movimentacao = ult_saida   THEN 'Ult_Saida'
-                   WHEN ult_movimentacao = ult_entrada THEN 'Ult_Entrada'
-                   WHEN ult_movimentacao = ult_mov     THEN 'Ult_Mov'
-               END AS origem_mov
-        FROM agrupado;
-        CREATE INDEX ON resumo_movimentacoes_cache (data_fechamento, id_unico);
-    """
+CREATE INDEX ON resumo_movimentacoes_cache (data_fechamento, id_unico);
 
-    SQL_MOTOR = """
-        CREATE TABLE motor_obsoletos_cache AS
-        SELECT ef.data_fechamento,
-               CASE
-                   WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
-                   WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
-                   WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
-                   WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
-                   ELSE ef.empresa
-               END || ' / ' || INITCAP(ef.filial) AS empresa_filial,
-               ef.tipo_de_estoque, ef.conta, ef.produto, ef.descricao,
-               ef.unid, ef.saldo_atual, ef.vlr_unit, ef.custo_total,
-               rc.ult_movimentacao, rc.origem_mov
-        FROM estoque_fechamentos ef
-        LEFT JOIN resumo_movimentacoes_cache rc
-            ON rc.data_fechamento = ef.data_fechamento
-            AND rc.id_unico = (
-                CASE
-                    WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
-                    WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
-                    WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
-                    WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
-                    ELSE ef.empresa
-                END || ' / ' || INITCAP(ef.filial) || '|' || ef.produto
-            )
-        WHERE ef.data_fechamento >= '2025-12-31';
-        CREATE INDEX ON motor_obsoletos_cache (data_fechamento);
-    """
+-- 3. Recria motor_obsoletos_cache
+CREATE TABLE motor_obsoletos_cache AS
+SELECT ef.data_fechamento,
+       CASE
+           WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+           WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+           WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+           WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+           ELSE ef.empresa
+       END || ' / ' || INITCAP(ef.filial) AS empresa_filial,
+       ef.tipo_de_estoque, ef.conta, ef.produto, ef.descricao,
+       ef.unid, ef.saldo_atual, ef.vlr_unit, ef.custo_total,
+       rc.ult_movimentacao, rc.origem_mov
+FROM estoque_fechamentos ef
+LEFT JOIN resumo_movimentacoes_cache rc
+    ON rc.data_fechamento = ef.data_fechamento
+    AND rc.id_unico = (
+        CASE
+            WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+            WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+            WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+            WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+            ELSE ef.empresa
+        END || ' / ' || INITCAP(ef.filial) || '|' || ef.produto
+    )
+WHERE ef.data_fechamento >= '2025-12-31';
 
-    try:
-        db_url = st.secrets["SUPABASE_DB"]
-        # Parse da URL: postgresql://user:pass@host:port/db
-        m = _re.match(r"postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)", db_url)
-        user, password, host, port, database = m.group(1), m.group(2), m.group(3), int(m.group(4)), m.group(5)
+CREATE INDEX ON motor_obsoletos_cache (data_fechamento);
+"""
 
-        with st.spinner("Conectando ao banco de dados..."):
-            conn = pg8000.Connection(user=user, password=password, host=host, port=port, database=database, ssl_context=True)
-
-        with st.spinner("Apagando caches antigos..."):
-            conn.run(SQL_DROP)
-            st.success("✅ Caches antigos removidos.")
-
-        with st.spinner("Recriando resumo_movimentacoes_cache... (pode levar alguns minutos)"):
-            conn.run(SQL_RESUMO)
-            st.success("✅ resumo_movimentacoes_cache recriado.")
-
-        with st.spinner("Recriando motor_obsoletos_cache..."):
-            conn.run(SQL_MOTOR)
-            st.success("✅ motor_obsoletos_cache recriado.")
-
-        conn.close()
-
-        st.success("🎉 Dashboards atualizados! Faça Reboot do app para ver os novos dados.")
-        st.cache_data.clear()
-
-    except Exception as e:
-        st.error("Erro ao recriar caches.")
-        st.exception(e)
+if st.button("🔄 Gerar SQL para Atualizar Dashboards", type="primary", key="btn_cache"):
+    st.success("✅ SQL gerado! Copie o código abaixo e cole no **SQL Editor** do Supabase.")
+    st.info("📋 Acesse: **supabase.com → seu projeto → SQL Editor** → cole o código → clique em **Run**")
+    st.code(SQL_COMPLETO, language="sql")
 
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("---")
