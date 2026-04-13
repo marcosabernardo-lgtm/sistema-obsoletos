@@ -10,6 +10,9 @@ from tabs.obsoletos.movimentacao_obsoleto import render as render_movimentacao
 from tabs.obsoletos.evolucao_estoque import render as render_evolucao
 from tabs.obsoletos.proximos_obsoletos import render as render_proximos
 
+# ✅ NOVO IMPORT
+from tabs.obsoletos.reconciliacao_obsoleto import render as render_reconciliacao
+
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 render_navbar("Dashboard de Estoque Obsoleto")
 
@@ -69,7 +72,7 @@ def moeda_br(valor):
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 # -------------------------------------------------
-# CARREGAR BASE VIA MOTOR
+# CARREGAR BASE
 # -------------------------------------------------
 
 @st.cache_data(ttl=3600, show_spinner="Carregando dados do Supabase...")
@@ -95,7 +98,7 @@ if df_hist.empty:
     st.stop()
 
 # -------------------------------------------------
-# FILTROS NO TOPO
+# FILTROS
 # -------------------------------------------------
 
 datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=True)
@@ -106,181 +109,76 @@ data_preview      = pd.Timestamp(datas_disponiveis[0])
 df_preview        = df_hist[df_hist["Data Fechamento"] == data_preview]
 empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique())
 
-ef_ja_sel     = st.session_state.get("obsoletos_empresa_sel", [])
-filial_ja_sel = st.session_state.get("obsoletos_filial_sel", [])
-contas_ja_sel = st.session_state.get("obsoletos_conta", [])
-
-ef_ativos = [
-    ef for ef in empresas_disponiveis
-    if (not ef_ja_sel      or ef.split(" / ")[0].strip() in ef_ja_sel)
-    and (not filial_ja_sel or ef.split(" / ")[1].strip() in filial_ja_sel)
-] if (ef_ja_sel or filial_ja_sel) else list(empresas_disponiveis)
-
-df_conta_filtro    = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
-contas_disponiveis = sorted(df_conta_filtro["Conta"].dropna().unique())
-
-ORDEM_STATUS = ["Todas", "Até 6 meses", "Até 1 ano", "Até 2 anos", "+ 2 anos", "Sem Movimento"]
-status_existentes  = sorted(df_preview["Status do Movimento"].dropna().unique().tolist()) if "Status do Movimento" in df_preview.columns else []
-status_disponiveis = ["Todas"] + [s for s in ORDEM_STATUS[1:] if s in status_existentes]
-
-df_tipo_filtro = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
-if contas_ja_sel:
-    df_tipo_filtro = df_tipo_filtro[df_tipo_filtro["Conta"].isin(contas_ja_sel)]
-tipos_estoque_disp = sorted(df_tipo_filtro["Tipo de Estoque"].dropna().unique().tolist()) if "Tipo de Estoque" in df_tipo_filtro.columns else []
-
-extras = {}
-if contas_disponiveis:
-    extras["Conta"] = contas_disponiveis
-if tipos_estoque_disp:
-    extras["Tipo de Estoque"] = tipos_estoque_disp
-
 filtros = render_filtros_topo(
     datas=datas_fmt_list,
     empresas=empresas_disponiveis,
-    extras=extras if extras else None,
     key_prefix="obsoletos"
 )
 
 data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
 empresas_sel     = filtros["empresas"]
-contas_sel       = filtros.get("conta", [])
-tipos_sel        = filtros.get("tipo_de_estoque", [])
-
-# Status do Movimento
-st.markdown("""
-<style>
-.filtros-status {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 12px;
-    padding: 10px 20px 10px;
-    margin-bottom: 20px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown('<div class="filtros-status">', unsafe_allow_html=True)
-status_sel_val = st.radio(
-    "STATUS DO MOVIMENTO",
-    options=status_disponiveis,
-    index=0,
-    horizontal=True,
-    key="obsoletos_status_mov"
-)
-st.markdown('</div>', unsafe_allow_html=True)
-
-status_sel = [status_sel_val] if status_sel_val != "Todas" else []
 
 # -------------------------------------------------
-# APLICA FILTROS
+# BASE FILTRADA
 # -------------------------------------------------
 
 df_kpi = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
 
 if empresas_sel:
     df_kpi = df_kpi[df_kpi["Empresa / Filial"].isin(empresas_sel)]
-if contas_sel:
-    df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
-if tipos_sel:
-    df_kpi = df_kpi[df_kpi["Tipo de Estoque"].isin(tipos_sel)]
-
-st.session_state["df_kpi_completo"] = df_kpi
-
-MAPA_STATUS = {
-    "Até 6 meses": ["Até 6 meses"],
-    "Até 1 ano":   ["Até 6 meses", "Até 1 ano"],
-    "Até 2 anos":  ["Até 2 anos"],
-    "+ 2 anos":    ["+ 2 anos"],
-    "Sem Movimento": ["Sem Movimento"],
-}
-
-def aplicar_filtro_status(df, status_sel):
-    if not status_sel or "Todas" in status_sel:
-        return df
-    faixas = []
-    for s in status_sel:
-        faixas += MAPA_STATUS.get(s, [s])
-    return df[df["Status do Movimento"].isin(set(faixas))]
 
 df_obsoleto_base = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"].copy()
-df_filtrado      = aplicar_filtro_status(df_obsoleto_base, status_sel)
 
 # -------------------------------------------------
 # KPIs
 # -------------------------------------------------
 
 estoque_total    = df_kpi["Custo Total"].sum()
-estoque_obsoleto = df_filtrado["Custo Total"].sum()
+estoque_obsoleto = df_obsoleto_base["Custo Total"].sum()
 perc_obsoleto    = estoque_obsoleto / estoque_total if estoque_total > 0 else 0
-itens_obsoletos  = df_filtrado["Produto"].nunique()
+itens_obsoletos  = df_obsoleto_base["Produto"].nunique()
 
 col1, col2, col3, col4 = st.columns(4)
 
-col1.markdown(f"""
-<div class="kpi-card">
-<div class="kpi-title">Valor Estoque</div>
-<div class="kpi-value">{moeda_br(estoque_total)}</div>
-</div>""", unsafe_allow_html=True)
-
-col2.markdown(f"""
-<div class="kpi-card">
-<div class="kpi-title">Estoque Obsoleto</div>
-<div class="kpi-value">{moeda_br(estoque_obsoleto)}</div>
-</div>""", unsafe_allow_html=True)
-
-col3.markdown(f"""
-<div class="kpi-card">
-<div class="kpi-title">% Estoque Obsoleto</div>
-<div class="kpi-value">{perc_obsoleto*100:.2f}%</div>
-</div>""", unsafe_allow_html=True)
-
-col4.markdown(f"""
-<div class="kpi-card">
-<div class="kpi-title">Itens Obsoletos</div>
-<div class="kpi-value">{itens_obsoletos}</div>
-</div>""", unsafe_allow_html=True)
+col1.markdown(f"""<div class="kpi-card"><div class="kpi-title">Valor Estoque</div><div class="kpi-value">{moeda_br(estoque_total)}</div></div>""", unsafe_allow_html=True)
+col2.markdown(f"""<div class="kpi-card"><div class="kpi-title">Estoque Obsoleto</div><div class="kpi-value">{moeda_br(estoque_obsoleto)}</div></div>""", unsafe_allow_html=True)
+col3.markdown(f"""<div class="kpi-card"><div class="kpi-title">% Estoque Obsoleto</div><div class="kpi-value">{perc_obsoleto*100:.2f}%</div></div>""", unsafe_allow_html=True)
+col4.markdown(f"""<div class="kpi-card"><div class="kpi-title">Itens Obsoletos</div><div class="kpi-value">{itens_obsoletos}</div></div>""", unsafe_allow_html=True)
 
 st.markdown("---")
 
 # -------------------------------------------------
-# BASE HISTÓRICA FILTRADA
+# ABAS (ATUALIZADO)
 # -------------------------------------------------
 
-df_hist_filtrado = df_hist.copy()
-if empresas_sel:
-    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Empresa / Filial"].isin(empresas_sel)]
-if contas_sel:
-    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Conta"].isin(contas_sel)]
-if tipos_sel:
-    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Tipo de Estoque"].isin(tipos_sel)]
-
-# -------------------------------------------------
-# ABAS
-# -------------------------------------------------
-
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📚 Base Histórica",
     "📈 Evolução do Estoque",
     "🔄 Movimentação do Obsoleto",
+    "🧮 Reconciliação do Obsoleto",
     "⚠️ Próximos Obsoletos",
     "🏆 Top 20 Produtos",
     "📊 Resumos"
 ])
 
 with tab1:
-    render_base_historica(df_filtrado, moeda_br)
+    render_base_historica(df_obsoleto_base, moeda_br)
 
 with tab2:
-    render_evolucao(df_hist_filtrado, moeda_br)
+    render_evolucao(df_hist, moeda_br)
 
 with tab3:
-    render_movimentacao(df_hist_filtrado, moeda_br, data_selecionada)
+    render_movimentacao(df_hist, moeda_br, data_selecionada)
 
+# ✅ NOVA ABA
 with tab4:
-    render_proximos(df_kpi, moeda_br)
+    render_reconciliacao(df_hist, moeda_br, data_selecionada)
 
 with tab5:
-    render_top20(df_filtrado, moeda_br)
+    render_proximos(df_kpi, moeda_br)
 
 with tab6:
-    render_graficos(df_filtrado, moeda_br, df_hist_filtrado)
+    render_top20(df_obsoleto_base, moeda_br)
+
+with tab7:
+    render_graficos(df_obsoleto_base, moeda_br, df_hist)
