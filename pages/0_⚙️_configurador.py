@@ -175,13 +175,12 @@ def parse_linha_produto(line):
 
     if len(valores) >= 3:
         # UNITÁRIO | PARCIAL | TOTAL
+        # PARCIAL = QTD * UNITARIO (valor do produto)
+        # TOTAL = acumulado do grupo NCM — ignorar
         vlr_unit = to_float(valores[0])
-        parcial  = to_float(valores[1])
-        total    = to_float(valores[2])
-        if total is None and parcial is not None:
-            total = parcial
+        total    = to_float(valores[1])  # usa PARCIAL como custo_total
     elif len(valores) >= 2:
-        # UNITÁRIO | TOTAL
+        # UNITÁRIO | PARCIAL (sem coluna TOTAL)
         vlr_unit = to_float(valores[0])
         total    = to_float(valores[1])
     elif len(valores) == 1:
