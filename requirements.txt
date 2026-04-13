@@ -5,5 +5,6 @@ pyarrow
 altair
 plotly
 xlsxwriter
-supabase>=2.0.0   # ← adicionar esta linhapdfplumber
-pdfplumber
+supabase>=2.0.0   # ← adicionar esta linha
+pdfplumberpsycopg2-binary
+psycopg2-binary
