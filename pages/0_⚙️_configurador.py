@@ -629,7 +629,8 @@ st.markdown('<div class="step-desc">Após importar o fechamento e as movimentaç
 st.warning("⚠️ Execute este passo somente após concluir os Passos 1 e 2.")
 
 if st.button("🔄 Recriar Caches e Atualizar Dashboards", type="primary", key="btn_cache"):
-    import psycopg2
+    import pg8000.native as pg8000
+    import re as _re
 
     SQL_DROP = """
         DROP TABLE IF EXISTS resumo_movimentacoes_cache;
@@ -719,24 +720,25 @@ if st.button("🔄 Recriar Caches e Atualizar Dashboards", type="primary", key="
 
     try:
         db_url = st.secrets["SUPABASE_DB"]
+        # Parse da URL: postgresql://user:pass@host:port/db
+        m = _re.match(r"postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)", db_url)
+        user, password, host, port, database = m.group(1), m.group(2), m.group(3), int(m.group(4)), m.group(5)
+
         with st.spinner("Conectando ao banco de dados..."):
-            conn = psycopg2.connect(db_url, connect_timeout=30, sslmode="require")
-            conn.autocommit = True
-            cur = conn.cursor()
+            conn = pg8000.Connection(user=user, password=password, host=host, port=port, database=database, ssl_context=True)
 
         with st.spinner("Apagando caches antigos..."):
-            cur.execute(SQL_DROP)
+            conn.run(SQL_DROP)
             st.success("✅ Caches antigos removidos.")
 
         with st.spinner("Recriando resumo_movimentacoes_cache... (pode levar alguns minutos)"):
-            cur.execute(SQL_RESUMO)
+            conn.run(SQL_RESUMO)
             st.success("✅ resumo_movimentacoes_cache recriado.")
 
         with st.spinner("Recriando motor_obsoletos_cache..."):
-            cur.execute(SQL_MOTOR)
+            conn.run(SQL_MOTOR)
             st.success("✅ motor_obsoletos_cache recriado.")
 
-        cur.close()
         conn.close()
 
         st.success("🎉 Dashboards atualizados! Faça Reboot do app para ver os novos dados.")
