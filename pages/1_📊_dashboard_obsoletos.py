@@ -10,9 +10,6 @@ from tabs.obsoletos.movimentacao_obsoleto import render as render_movimentacao
 from tabs.obsoletos.evolucao_estoque import render as render_evolucao
 from tabs.obsoletos.proximos_obsoletos import render as render_proximos
 
-# ✅ NOVO IMPORT
-from tabs.obsoletos.reconciliacao_obsoleto import render as render_reconciliacao
-
 st.set_page_config(page_title="Dashboard Estoque", layout="wide")
 render_navbar("Dashboard de Estoque Obsoleto")
 
@@ -151,11 +148,10 @@ st.markdown("---")
 # ABAS (ATUALIZADO)
 # -------------------------------------------------
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📚 Base Histórica",
     "📈 Evolução do Estoque",
     "🔄 Movimentação do Obsoleto",
-    "🧮 Reconciliação do Obsoleto",
     "⚠️ Próximos Obsoletos",
     "🏆 Top 20 Produtos",
     "📊 Resumos"
@@ -170,15 +166,11 @@ with tab2:
 with tab3:
     render_movimentacao(df_hist, moeda_br, data_selecionada)
 
-# ✅ NOVA ABA
 with tab4:
-    render_reconciliacao(df_hist, moeda_br, data_selecionada)
-
-with tab5:
     render_proximos(df_kpi, moeda_br)
 
-with tab6:
+with tab5:
     render_top20(df_obsoleto_base, moeda_br)
 
-with tab7:
+with tab6:
     render_graficos(df_obsoleto_base, moeda_br, df_hist)
