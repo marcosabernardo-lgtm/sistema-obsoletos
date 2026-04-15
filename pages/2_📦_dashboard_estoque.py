@@ -137,23 +137,12 @@ def mapear_empresa_filial(empresa: str, filial: str) -> str:
 def carregar_historico():
     supabase = get_supabase()
 
-    # Estoque histórico completo
-    df = ler_tabela(supabase, "estoque_fechamentos")
+    # Lê da tabela cache já processada — muito mais rápido
+    df = ler_tabela(supabase, "estoque_historico_cache")
 
-    # Usadas
-    df_usadas = ler_tabela(supabase, "estoque_usadas")
-    usadas_tipo_por_empresa = defaultdict(dict)
-    for _, row in df_usadas.iterrows():
-        empresa = str(row.get("empresa", "")).strip()
-        tipo    = str(row.get("tipo", "Maquina Usada")).strip().title()
-        codigo  = str(row.get("codigo", "")).strip().replace(".0", "")
-        usadas_tipo_por_empresa[empresa][codigo] = tipo
-
-    # Renomear colunas
     df = df.rename(columns={
         "data_fechamento": "Data Fechamento",
-        "empresa":         "Empresa",
-        "filial":          "Filial",
+        "empresa_filial":  "Empresa / Filial",
         "tipo_de_estoque": "Tipo de Estoque",
         "conta":           "Conta",
         "produto":         "Produto",
@@ -164,41 +153,13 @@ def carregar_historico():
         "custo_total":     "Custo Total",
     })
 
-    # Tipo de Estoque
-    df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("Em Estoque").astype(str).str.strip().str.title()
-
-    # Empresa / Filial via mapeamento normalizado
-    df["Empresa / Filial"] = df.apply(
-        lambda r: mapear_empresa_filial(r["Empresa"], r["Filial"]), axis=1
-    )
-    df = df.drop(columns=["Empresa", "Filial"], errors="ignore")
-
-    # Produto
-    df["Produto"] = df["Produto"].astype(str).str.strip().str.replace(".0", "", regex=False)
-
-    # Numéricos
-    df["Saldo Atual"] = pd.to_numeric(df["Saldo Atual"], errors="coerce").fillna(0)
-    df["Custo Total"] = pd.to_numeric(df["Custo Total"], errors="coerce").fillna(0)
-    df["Vlr Unit"]    = pd.to_numeric(df["Vlr Unit"],    errors="coerce").fillna(0)
     df["Data Fechamento"] = pd.to_datetime(df["Data Fechamento"], errors="coerce")
-
-    # Conta
-    if "Conta" in df.columns:
-        df["Conta"] = df["Conta"].astype(str).str.strip().str.title()
-
-    # Marcar usadas
-    for empresa, tipo_map in usadas_tipo_por_empresa.items():
-        for codigo, tipo in tipo_map.items():
-            mask = (
-                df["Empresa / Filial"].str.startswith(empresa) &
-                (df["Produto"] == codigo)
-            )
-            df.loc[mask, "Conta"] = tipo
-
-    if "Tipo de Estoque" not in df.columns:
-        df["Tipo de Estoque"] = "Em Estoque"
-    if "Conta" not in df.columns:
-        df["Conta"] = "Outros"
+    df["Saldo Atual"]     = pd.to_numeric(df["Saldo Atual"], errors="coerce").fillna(0)
+    df["Custo Total"]     = pd.to_numeric(df["Custo Total"], errors="coerce").fillna(0)
+    df["Vlr Unit"]        = pd.to_numeric(df["Vlr Unit"],    errors="coerce").fillna(0)
+    df["Produto"]         = df["Produto"].astype(str).str.strip().str.replace(".0", "", regex=False)
+    df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("Em Estoque").astype(str).str.strip()
+    df["Conta"]           = df["Conta"].astype(str).str.strip()
 
     return df.sort_values("Data Fechamento")
 
