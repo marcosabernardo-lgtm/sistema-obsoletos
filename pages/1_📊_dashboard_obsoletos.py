@@ -72,7 +72,7 @@ def moeda_br(valor):
 # CARREGAR BASE
 # -------------------------------------------------
 
-@st.cache_data(ttl=3600, show_spinner="Carregando dados do Supabase...")
+@st.cache_data(ttl=3600, show_spinner="Carregando dados...")
 def carregar_base():
     from motor.motor_obsoletos import executar_motor
     df, _ = executar_motor()
@@ -86,8 +86,7 @@ def carregar_base():
 try:
     df_hist = carregar_base()
 except Exception as e:
-    st.error("Erro ao carregar dados do Supabase.")
-    st.exception(e)
+    st.error("Erro ao carregar dados.")
     st.stop()
 
 if df_hist.empty:
@@ -95,7 +94,7 @@ if df_hist.empty:
     st.stop()
 
 # -------------------------------------------------
-# FILTROS
+# FILTROS DE TOPO
 # -------------------------------------------------
 
 datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=True)
@@ -116,11 +115,10 @@ data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
 empresas_sel     = filtros["empresas"]
 
 # -------------------------------------------------
-# BASE FILTRADA
+# BASE FILTRADA (KPIs)
 # -------------------------------------------------
 
 df_kpi = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
-
 if empresas_sel:
     df_kpi = df_kpi[df_kpi["Empresa / Filial"].isin(empresas_sel)]
 
@@ -136,7 +134,6 @@ perc_obsoleto    = estoque_obsoleto / estoque_total if estoque_total > 0 else 0
 itens_obsoletos  = df_obsoleto_base["Produto"].nunique()
 
 col1, col2, col3, col4 = st.columns(4)
-
 col1.markdown(f"""<div class="kpi-card"><div class="kpi-title">Valor Estoque</div><div class="kpi-value">{moeda_br(estoque_total)}</div></div>""", unsafe_allow_html=True)
 col2.markdown(f"""<div class="kpi-card"><div class="kpi-title">Estoque Obsoleto</div><div class="kpi-value">{moeda_br(estoque_obsoleto)}</div></div>""", unsafe_allow_html=True)
 col3.markdown(f"""<div class="kpi-card"><div class="kpi-title">% Estoque Obsoleto</div><div class="kpi-value">{perc_obsoleto*100:.2f}%</div></div>""", unsafe_allow_html=True)
@@ -145,7 +142,7 @@ col4.markdown(f"""<div class="kpi-card"><div class="kpi-title">Itens Obsoletos</
 st.markdown("---")
 
 # -------------------------------------------------
-# ABAS (ATUALIZADO)
+# ABAS
 # -------------------------------------------------
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -158,7 +155,23 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 ])
 
 with tab1:
-    render_base_historica(df_obsoleto_base, moeda_br)
+    col_vis, col_info = st.columns([2, 3])
+    with col_vis:
+        visao_base = st.radio(
+            "Visualizar itens:",
+            options=["Apenas Obsoletos", "Geral (Todo o Estoque)"],
+            horizontal=True,
+            key="visao_base_historica"
+        )
+    
+    if visao_base == "Apenas Obsoletos":
+        df_para_tabela = df_obsoleto_base
+        st.caption(f"Exibindo apenas itens com status **Obsoleto**")
+    else:
+        df_para_tabela = df_kpi
+        st.caption(f"Exibindo **todo o estoque** (Giro + Obsoletos)")
+
+    render_base_historica(df_para_tabela, moeda_br)
 
 with tab2:
     render_evolucao(df_hist, moeda_br)

@@ -2,24 +2,12 @@ import streamlit as st
 import pandas as pd
 import io
 
-# -------------------------------------------------------
-# 1. FUNÇÃO DE ESTILO (CARD)
-# -------------------------------------------------------
 def card(titulo, valor, cor_borda="#EC6E21", cor_valor=None, subtitulo=None):
     cor_val = cor_valor if cor_valor else "white"
     sub_html = f'<div style="font-size:12px;color:#aaa;margin-top:4px">{subtitulo}</div>' if subtitulo else ""
     st.markdown(
         f"""
-        <div style="
-            border:2px solid {cor_borda};
-            border-radius:12px;
-            padding:16px;
-            min-height:90px;
-            display:flex;
-            flex-direction:column;
-            justify-content:center;
-            text-align:center;
-        ">
+        <div style="border:2px solid {cor_borda}; border-radius:12px; padding:16px; min-height:90px; display:flex; flex-direction:column; justify-content:center; text-align:center;">
             <div style="font-size:13px;color:white">{titulo}</div>
             <div style="font-size:22px;font-weight:bold;color:{cor_val}">{valor}</div>
             {sub_html}
@@ -28,28 +16,13 @@ def card(titulo, valor, cor_borda="#EC6E21", cor_valor=None, subtitulo=None):
         unsafe_allow_html=True
     )
 
-
-# -------------------------------------------------------
-# 2. FUNÇÃO PRINCIPAL
-# -------------------------------------------------------
 def render(df_hist, moeda_br, data_selecionada=None):
-
     df = df_hist.copy()
 
-    # --- PROTEÇÃO ---
-    if "Tipo de Estoque" not in df.columns:
-        df["Tipo de Estoque"] = "Não Informado"
-    if "Conta" not in df.columns:
-        df["Conta"] = "Não Informado"
+    if "Tipo de Estoque" not in df.columns: df["Tipo de Estoque"] = "Não Informado"
+    if "Conta" not in df.columns: df["Conta"] = "Não Informado"
 
-    # Agrupamento
-    df = (
-        df.groupby(
-            ["Data Fechamento", "Empresa / Filial", "Tipo de Estoque", "Conta", "Produto", "Descricao", "Status Estoque"],
-            as_index=False
-        ).agg({"Saldo Atual": "sum", "Custo Total": "sum"})
-    )
-
+    # Criar coluna booleana baseada no status
     df["obsoleto"] = df["Status Estoque"] == "Obsoleto"
     datas = sorted(df["Data Fechamento"].unique())
 
@@ -57,34 +30,25 @@ def render(df_hist, moeda_br, data_selecionada=None):
     if data_selecionada is not None:
         data_sel_ts = pd.Timestamp(data_selecionada)
         datas_anteriores = [d for d in datas if pd.Timestamp(d) < data_sel_ts]
-
-        if data_sel_ts not in [pd.Timestamp(d) for d in datas]:
-            st.warning("Data selecionada não encontrada no histórico.")
+        if data_sel_ts not in [pd.Timestamp(d) for d in datas] or len(datas_anteriores) == 0:
+            st.warning("Histórico insuficiente para comparação.")
             return
-
-        if len(datas_anteriores) == 0:
-            st.info(f"{data_sel_ts.strftime('%d/%m/%Y')} é o primeiro fechamento.")
-            return
-
         data_atual = data_sel_ts
         data_anterior = pd.Timestamp(max(datas_anteriores))
     else:
-        if len(datas) < 2:
-            st.warning("Histórico insuficiente.")
-            return
+        if len(datas) < 2: return
+        data_atual, data_anterior = pd.Timestamp(datas[-1]), pd.Timestamp(datas[-2])
 
-        data_atual = pd.Timestamp(datas[-1])
-        data_anterior = pd.Timestamp(datas[-2])
-
-    # --- DEDUPLICAÇÃO ---
+    # --- DEDUPLICAÇÃO CORRIGIDA ---
+    # Ordenamos por Custo Total para garantir que o status 'Obsoleto' 
+    # só seja mantido se for a linha principal do produto.
     df_at_raw = df[df["Data Fechamento"] == data_atual].copy()
     df_an_raw = df[df["Data Fechamento"] == data_anterior].copy()
 
-    df_at_dedup = df_at_raw.sort_values("obsoleto", ascending=False).drop_duplicates(
+    df_at_dedup = df_at_raw.sort_values("Custo Total", ascending=False).drop_duplicates(
         subset=["Empresa / Filial", "Produto"], keep="first"
     )
-
-    df_an_dedup = df_an_raw.sort_values("obsoleto", ascending=False).drop_duplicates(
+    df_an_dedup = df_an_raw.sort_values("Custo Total", ascending=False).drop_duplicates(
         subset=["Empresa / Filial", "Produto"], keep="first"
     )
 
@@ -92,146 +56,60 @@ def render(df_hist, moeda_br, data_selecionada=None):
 
     chave = ["Empresa / Filial", "Produto"]
 
-    # --- BASE COMPLETA (AGORA COM STATUS) ---
-    df_ant_sel = df_an_dedup[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Tipo de Estoque", "obsoleto"]].rename(columns={
-        "Custo Total": "Vlr Ant",
-        "Saldo Atual": "Qtd Ant",
-        "Descricao": "Desc_ant",
-        "Conta": "Conta_ant",
-        "Tipo de Estoque": "Tipo_ant",
-        "obsoleto": "Obs Ant"
+    # --- PREPARAÇÃO PARA MERGE ---
+    df_ant_sel = df_an_dedup[chave + ["Custo Total", "Saldo Atual", "obsoleto"]].rename(columns={
+        "Custo Total": "Vlr Ant", "Saldo Atual": "Qtd Ant", "obsoleto": "Obs Ant"
     })
-
     df_atual_sel = df_at_dedup[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Tipo de Estoque", "obsoleto"]].rename(columns={
-        "Custo Total": "Vlr Atual",
-        "Saldo Atual": "Qtd Atual",
-        "Descricao": "Desc_at",
-        "Conta": "Conta_at",
-        "Tipo de Estoque": "Tipo_at",
-        "obsoleto": "Obs Atual"
+        "Custo Total": "Vlr Atual", "Saldo Atual": "Qtd Atual", "obsoleto": "Obs Atual"
     })
 
     base = df_atual_sel.merge(df_ant_sel, on=chave, how="outer")
 
-    for c in ["Vlr Ant", "Qtd Ant", "Vlr Atual", "Qtd Atual"]:
-        base[c] = base[c].fillna(0)
+    for c in ["Vlr Ant", "Qtd Ant", "Vlr Atual", "Qtd Atual"]: base[c] = base[c].fillna(0)
+    base["Obs Ant"] = base["Obs Ant"].fillna(False)
+    base["Obs Atual"] = base["Obs Atual"].fillna(False)
 
-    base["Descricao"] = base["Desc_at"].fillna(base["Desc_ant"])
-    base["Conta"] = base["Conta_at"].fillna(base["Conta_ant"])
-    base["Tipo de Estoque"] = base["Tipo_at"].fillna(base["Tipo_ant"])
-
-    # -------------------------------------------------------
-    # CATEGORIAS
-    # -------------------------------------------------------
-
-    entrou = base[(base["Vlr Ant"] == 0) & (base["Vlr Atual"] > 0)].copy()
+    # --- CATEGORIAS ---
+    # 1. Entrou: Não era obsoleto (ou não existia) e agora é
+    entrou = base[(base["Obs Ant"] == False) & (base["Obs Atual"] == True)].copy()
     entrou["Status Mov"] = "🔴 Entrou"
 
-    saiu = base[(base["Vlr Ant"] > 0) & (base["Vlr Atual"] == 0)].copy()
+    # 2. Saiu: Era obsoleto e agora zerou ou não é mais obsoleto
+    saiu = base[(base["Obs Ant"] == True) & ((base["Obs Atual"] == False) | (base["Vlr Atual"] == 0))].copy()
     saiu["Status Mov"] = "🟢 Saiu"
+    
+    # Subcategoria para o Card de "Saiu do Obsoleto" (Mudança de status com saldo)
+    reduziu = saiu[saiu["Vlr Atual"] > 0].copy()
+    reduziu["Vlr Reduzido"] = reduziu["Vlr Ant"]
 
-    # 🔽 NOVO CONCEITO
-    reduziu = base[
-        (base["Obs Ant"] == True) &
-        (base["Obs Atual"] == False) &
-        (base["Qtd Atual"] > 0)
-    ].copy()
-
-    reduziu["Status Mov"] = "🔽 Saiu do Obsoleto"
-    reduziu["Vlr Reduzido"] = reduziu["Vlr Ant"] - reduziu["Vlr Atual"]
-
-    variacao = base[
-        (base["Vlr Ant"] > 0) &
-        (base["Vlr Atual"] > 0) &
-        (base["Qtd Atual"] == base["Qtd Ant"]) &
-        (base["Vlr Atual"] != base["Vlr Ant"])
-    ].copy()
-
+    # 3. Variação (Itens que continuam obsoletos mas mudou o valor)
+    variacao = base[(base["Obs Ant"] == True) & (base["Obs Atual"] == True) & (base["Vlr Atual"] != base["Vlr Ant"])].copy()
     variacao["Status Mov"] = "📊 Variação"
 
-    # -------------------------------------------------------
-    # MÉTRICAS
-    # -------------------------------------------------------
-
-    obs_ant = base[base["Obs Ant"] == True]["Vlr Ant"].sum()
-    obs_atual = base[base["Obs Atual"] == True]["Vlr Atual"].sum()
-
-    qtd_variacao = len(variacao)
-
-    # -------------------------------------------------------
-    # CARDS
-    # -------------------------------------------------------
-
-    st.subheader("📅 Mês Atual vs Mês Anterior")
+    # --- CARDS ---
+    st.subheader("📅 Movimentação do Período")
     c1, c2, c3, c4 = st.columns(4)
-
-    with c1:
-        card("🔴 Entrou", moeda_br(entrou["Vlr Atual"].sum()), "#ff6b6b", subtitulo=f"{len(entrou)} itens")
-
-    with c2:
-        card("🟢 Saiu", moeda_br(saiu["Vlr Ant"].sum()), "#51cf66", subtitulo=f"{len(saiu)} itens")
-
-    with c3:
-        card("🔽 Saiu do Obsoleto", moeda_br(reduziu["Vlr Reduzido"].sum()), "#74c0fc", subtitulo=f"{len(reduziu)} itens")
-
+    with c1: card("🔴 Entrou", moeda_br(entrou["Vlr Atual"].sum()), "#ff6b6b", subtitulo=f"{len(entrou)} itens")
+    with c2: card("🟢 Saiu Total", moeda_br(saiu[saiu["Vlr Atual"]==0]["Vlr Ant"].sum()), "#51cf66", subtitulo=f"{len(saiu[saiu['Vlr Atual']==0])} itens")
+    with c3: card("🔽 Mudou p/ Giro", moeda_br(reduziu["Vlr Atual"].sum()), "#74c0fc", subtitulo=f"{len(reduziu)} itens")
     with c4:
-        card(
-            "Δ Variação Real",
-            moeda_br(obs_atual - obs_ant),
-            "#fff",
-            cor_valor="#ff6b6b" if (obs_atual - obs_ant) > 0 else "#51cf66",
-            subtitulo=f"{qtd_variacao} itens"
-        )
+        v_ant = base[base["Obs Ant"] == True]["Vlr Ant"].sum()
+        v_atu = base[base["Obs Atual"] == True]["Vlr Atual"].sum()
+        dif = v_atu - v_ant
+        card("Δ Variação Real", moeda_br(dif), "#fff", cor_valor="#ff6b6b" if dif > 0 else "#51cf66", subtitulo="Saldo Final vs Inicial")
 
-    # -------------------------------------------------------
-    # TABELA
-    # -------------------------------------------------------
-
+    # --- TABELA ---
     st.markdown("---")
-
-    colunas_tabela = [
-        "Status Mov", "Empresa / Filial", "Tipo de Estoque",
-        "Conta", "Produto", "Descricao",
-        "Qtd Ant", "Vlr Ant", "Qtd Atual", "Vlr Atual"
-    ]
-
-    frames = []
-    for df_tab in [entrou, saiu, reduziu, variacao]:
-        if not df_tab.empty:
-            frames.append(df_tab[colunas_tabela])
-
+    frames = [df_tab for df_tab in [entrou, saiu, variacao] if not df_tab.empty]
     if frames:
         mov = pd.concat(frames, ignore_index=True).sort_values("Vlr Atual", ascending=False)
-
-        col_radio, col_export = st.columns([4, 1])
-
-        with col_radio:
-            status_radio = st.radio(
-                "Visualizar",
-                options=["Todos", "🔴 Entrou", "🟢 Saiu", "🔽 Saiu do Obsoleto"],
-                horizontal=True
-            )
-
+        status_radio = st.radio("Filtrar Tabela:", options=["Todos", "🔴 Entrou", "🟢 Saiu", "📊 Variação"], horizontal=True)
         mov_filtrado = mov if status_radio == "Todos" else mov[mov["Status Mov"] == status_radio]
-
-        busca = st.text_input("🔍 PESQUISAR", placeholder="Produto, empresa...")
-        if busca:
-            mov_filtrado = mov_filtrado[
-                mov_filtrado.apply(lambda row: row.astype(str).str.contains(busca, case=False).any(), axis=1)
-            ]
-
-        with col_export:
-            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-            buffer = io.BytesIO()
-            mov_filtrado.to_excel(buffer, index=False)
-            st.download_button("📥 Exportar", buffer.getvalue(), "movimentacao.xlsx", use_container_width=True)
-
-        mov_display = mov_filtrado.copy()
-        mov_display["Vlr Ant"] = mov_display["Vlr Ant"].apply(moeda_br)
-        mov_display["Vlr Atual"] = mov_display["Vlr Atual"].apply(moeda_br)
-
-        st.caption(f"{len(mov_display)} itens exibidos")
-        st.dataframe(mov_display, use_container_width=True, hide_index=True)
-
+        
+        st.dataframe(mov_filtrado[[
+            "Status Mov", "Empresa / Filial", "Produto", "Descricao", 
+            "Qtd Ant", "Vlr Ant", "Qtd Atual", "Vlr Atual"
+        ]].style.format({"Vlr Ant": moeda_br, "Vlr Atual": moeda_br}), use_container_width=True, hide_index=True)
     else:
-        st.info("Nenhuma movimentação encontrada para o período.")
+        st.info("Nenhuma movimentação detectada.")
