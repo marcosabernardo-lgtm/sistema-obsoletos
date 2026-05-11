@@ -563,19 +563,76 @@ st.markdown("---")
 
 st.markdown('<div class="step-box">', unsafe_allow_html=True)
 st.markdown('<div class="step-title">🔄 Passo 3 — Atualizar Dashboards</div>', unsafe_allow_html=True)
-st.markdown('<div class="step-desc">Após importar o fechamento e as movimentações, clique no botão abaixo para recriar os caches e atualizar os dashboards.</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-desc">Duas sub-etapas: (3a) rode o SQL abaixo no Supabase SQL Editor; (3b) clique no botão para recriar os demais caches.</div>', unsafe_allow_html=True)
 
 st.warning("⚠️ Execute este passo somente após concluir os Passos 1 e 2.")
 
-if st.button("🔄 Recriar Caches e Atualizar Dashboards", type="primary", key="btn_cache"):
-    try:
-        with st.spinner("Apagando caches antigos..."):
-            supabase.rpc("drop_caches").execute()
-            st.success("✅ Caches antigos removidos.")
+SQL_RESUMO_MANUAL = """\
+-- Cole este SQL no Supabase SQL Editor e execute (sem limite de timeout)
+DROP TABLE IF EXISTS resumo_movimentacoes_cache;
 
-        with st.spinner("Recriando resumo_movimentacoes_cache... (pode levar alguns minutos)"):
-            supabase.rpc("criar_resumo_movimentacoes_cache").execute()
-            st.success("✅ resumo_movimentacoes_cache recriado.")
+CREATE TABLE resumo_movimentacoes_cache AS
+WITH fechamentos AS (
+    SELECT DISTINCT data_fechamento
+    FROM estoque_fechamentos
+    WHERE data_fechamento >= '2025-12-31'
+),
+mov AS (
+    SELECT e.empresa_filial || '|' || m.produto AS id_unico,
+           m.dt_emissao::date AS dt
+    FROM movimentos m
+    JOIN estoque_empresas e ON e.id = (m.empresa || ' ' || m.filial)
+    WHERE m.dt_emissao IS NOT NULL
+),
+es AS (
+    SELECT e.empresa_filial || '|' || es.produto AS id_unico,
+           es.tipo, es.digitacao::date AS dt
+    FROM entradas_saidas es
+    JOIN estoque_empresas e ON e.id = (es.empresa || ' ' || es.filial)
+    WHERE es.estoque = 'S' AND es.digitacao IS NOT NULL
+),
+combinado AS (
+    SELECT f.data_fechamento, mov.id_unico,
+           MAX(CASE WHEN mov.dt <= f.data_fechamento THEN mov.dt END) AS ult_mov,
+           NULL::date AS ult_entrada, NULL::date AS ult_saida
+    FROM fechamentos f CROSS JOIN mov
+    GROUP BY f.data_fechamento, mov.id_unico
+    UNION ALL
+    SELECT f.data_fechamento, es.id_unico, NULL::date,
+           MAX(CASE WHEN es.tipo='ENTRADA' AND es.dt<=f.data_fechamento THEN es.dt END),
+           MAX(CASE WHEN es.tipo='SAIDA'   AND es.dt<=f.data_fechamento THEN es.dt END)
+    FROM fechamentos f CROSS JOIN es
+    GROUP BY f.data_fechamento, es.id_unico
+),
+agrupado AS (
+    SELECT data_fechamento, id_unico,
+           MAX(ult_mov) AS ult_mov, MAX(ult_entrada) AS ult_entrada,
+           MAX(ult_saida) AS ult_saida,
+           GREATEST(MAX(ult_mov), MAX(ult_entrada), MAX(ult_saida)) AS ult_movimentacao
+    FROM combinado GROUP BY data_fechamento, id_unico
+)
+SELECT data_fechamento, id_unico, ult_mov, ult_entrada, ult_saida, ult_movimentacao,
+       CASE
+           WHEN ult_movimentacao IS NULL       THEN NULL
+           WHEN ult_movimentacao = ult_saida   THEN 'Ult_Saida'
+           WHEN ult_movimentacao = ult_entrada THEN 'Ult_Entrada'
+           WHEN ult_movimentacao = ult_mov     THEN 'Ult_Mov'
+       END AS origem_mov
+FROM agrupado;
+
+CREATE INDEX ON resumo_movimentacoes_cache (data_fechamento, id_unico);"""
+
+with st.expander("📋 Passo 3a — Abrir SQL para rodar no Supabase SQL Editor", expanded=True):
+    st.info("A query de resumo é pesada demais para o timeout da API. Cole o SQL abaixo no [Supabase SQL Editor](https://supabase.com/dashboard) e execute lá.")
+    st.code(SQL_RESUMO_MANUAL, language="sql")
+
+st.markdown("**Passo 3b** — Após rodar o SQL acima, clique para recriar os demais caches:")
+
+if st.button("🔄 Recriar motor_obsoletos e estoque_historico", type="primary", key="btn_cache"):
+    try:
+        with st.spinner("Apagando motor_obsoletos_cache e estoque_historico_cache antigos..."):
+            supabase.rpc("drop_caches_parcial").execute()
+            st.success("✅ Caches antigos removidos.")
 
         with st.spinner("Recriando motor_obsoletos_cache..."):
             supabase.rpc("criar_motor_obsoletos_cache").execute()
