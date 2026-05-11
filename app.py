@@ -1,5 +1,11 @@
 import streamlit as st
 import os
+from utils.supabase_client import get_supabase
+
+try:
+    get_supabase()
+except Exception:
+    pass
 
 st.set_page_config(
     page_title="Grupo Alltech — Gestão de Estoques",

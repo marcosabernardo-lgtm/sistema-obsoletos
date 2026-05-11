@@ -1,9 +1,8 @@
-import re
 import streamlit as st
 import pandas as pd
-import pg8000.native as pg8000
 
 from utils.navbar import render_navbar
+from utils.supabase_client import get_supabase
 
 st.set_page_config(page_title="Máquinas Usadas", layout="wide")
 render_navbar("Máquinas Usadas")
@@ -39,38 +38,10 @@ st.markdown("Gestão e histórico das máquinas classificadas como Usada ou Nova
 st.markdown("---")
 
 # -------------------------------------------------
-# CONEXÃO DIRETA POSTGRESQL
+# CONEXÃO
 # -------------------------------------------------
 
-def _nova_conn():
-    db_url = st.secrets["SUPABASE_DB"]
-    m = re.match(r"postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)", db_url)
-    return pg8000.Connection(
-        user=m[1], password=m[2], host=m[3],
-        port=int(m[4]), database=m[5], ssl_context=True
-    )
-
-def db_query(sql: str, params=None) -> list[dict]:
-    conn = _nova_conn()
-    try:
-        rows = conn.run(sql, **(params or {}))
-        cols = [c["name"] for c in conn.columns]
-        return [dict(zip(cols, row)) for row in rows]
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
-
-def db_exec(sql: str, params=None):
-    conn = _nova_conn()
-    try:
-        conn.run(sql, **(params or {}))
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+supabase = get_supabase()
 
 def moeda(v):
     if v is None or (isinstance(v, float) and pd.isna(v)):
@@ -81,14 +52,21 @@ def moeda(v):
 # CARGA DE DADOS
 # -------------------------------------------------
 
+def _norm_empresa(e: str) -> str:
+    e = str(e).upper()
+    if "TOOLS" in e:      return "Tools"
+    if "MAQUINAS" in e:   return "Maquinas"
+    if "ALLSERVICE" in e: return "Service"
+    if "ROBOTICA" in e:   return "Robotica"
+    return e
+
 @st.cache_data(ttl=120, show_spinner=False)
 def carregar_usadas() -> pd.DataFrame:
-    rows = db_query("""
-        SELECT id, empresa, codigo, tipo, descricao
-        FROM estoque_usadas
-        ORDER BY empresa, codigo
-    """)
-    return pd.DataFrame(rows) if rows else pd.DataFrame(
+    resp = supabase.table("estoque_usadas") \
+        .select("id, empresa, codigo, tipo, descricao") \
+        .order("empresa") \
+        .execute()
+    return pd.DataFrame(resp.data) if resp.data else pd.DataFrame(
         columns=["id", "empresa", "codigo", "tipo", "descricao"]
     )
 
@@ -96,41 +74,16 @@ def carregar_usadas() -> pd.DataFrame:
 def carregar_historico(codigos: tuple) -> pd.DataFrame:
     if not codigos:
         return pd.DataFrame()
-    placeholders = ", ".join(f":{i}" for i in range(len(codigos)))
-    params = {str(i): cod for i, cod in enumerate(codigos)}
-    rows = db_query(f"""
-        SELECT
-            ef.data_fechamento,
-            CASE
-                WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
-                WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
-                WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
-                WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
-                ELSE ef.empresa
-            END AS empresa_norm,
-            ef.filial,
-            eu.empresa AS empresa_usadas,
-            ef.produto,
-            ef.descricao,
-            ef.unid,
-            ef.saldo_atual,
-            ef.vlr_unit,
-            ef.custo_total
-        FROM estoque_fechamentos ef
-        JOIN estoque_usadas eu ON eu.codigo = ef.produto
-            AND (
-                CASE
-                    WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
-                    WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
-                    WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
-                    WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
-                    ELSE ef.empresa
-                END
-            ) = eu.empresa
-        WHERE ef.produto IN ({placeholders})
-        ORDER BY ef.data_fechamento, ef.produto
-    """, params)
-    return pd.DataFrame(rows) if rows else pd.DataFrame()
+    resp = supabase.table("estoque_fechamentos") \
+        .select("data_fechamento,empresa,filial,produto,descricao,unid,saldo_atual,vlr_unit,custo_total") \
+        .in_("produto", list(codigos)) \
+        .order("data_fechamento") \
+        .execute()
+    df = pd.DataFrame(resp.data) if resp.data else pd.DataFrame()
+    if df.empty:
+        return df
+    df["empresa_norm"] = df["empresa"].apply(_norm_empresa)
+    return df
 
 # -------------------------------------------------
 # CARREGA DADOS
@@ -242,12 +195,12 @@ with aba_cadastro:
                     st.error("Informe o código do produto.")
                 else:
                     try:
-                        db_exec(
-                            "INSERT INTO estoque_usadas (empresa, codigo, tipo, descricao) "
-                            "VALUES (:empresa, :codigo, :tipo, :descricao)",
-                            {"empresa": nova_empresa, "codigo": novo_codigo.strip(),
-                             "tipo": novo_tipo, "descricao": nova_desc.strip() or None}
-                        )
+                        supabase.table("estoque_usadas").insert({
+                            "empresa":   nova_empresa,
+                            "codigo":    novo_codigo.strip(),
+                            "tipo":      novo_tipo,
+                            "descricao": nova_desc.strip() or None,
+                        }).execute()
                         st.success(f"✅ {novo_codigo.strip()} adicionado como {novo_tipo}.")
                         carregar_usadas.clear()
                         carregar_historico.clear()
@@ -267,7 +220,7 @@ with aba_cadastro:
                 idx = opcoes.index(sel)
                 id_remover = int(df_usadas.iloc[idx]["id"])
                 try:
-                    db_exec("DELETE FROM estoque_usadas WHERE id = :id", {"id": id_remover})
+                    supabase.table("estoque_usadas").delete().eq("id", id_remover).execute()
                     st.success("✅ Removido com sucesso.")
                     carregar_usadas.clear()
                     carregar_historico.clear()

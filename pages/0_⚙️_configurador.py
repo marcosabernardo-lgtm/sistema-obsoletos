@@ -728,14 +728,6 @@ if st.button("🔄 Recriar Caches e Atualizar Dashboards", type="primary", key="
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("---")
 
-# ── GESTÃO DE MÁQUINAS USADAS ────────────────────────────────
-
-st.markdown('<div class="step-box">', unsafe_allow_html=True)
-st.markdown('<div class="step-title">🔧 Gestão de Máquinas Usadas</div>', unsafe_allow_html=True)
-st.markdown('<div class="step-desc">O cadastro e histórico de máquinas usadas foi movido para a página dedicada.</div>', unsafe_allow_html=True)
-st.page_link("pages/5_🔧_maquinas_usadas.py", label="Abrir página de Máquinas Usadas", icon="🔧")
-st.markdown('</div>', unsafe_allow_html=True)
-st.markdown("---")
 st.markdown(
     '<p style="color:rgba(255,255,255,0.3);font-size:12px;text-align:center">'
     'Siga os passos em ordem: Fechamento → Movimentações → Atualizar Dashboards'
