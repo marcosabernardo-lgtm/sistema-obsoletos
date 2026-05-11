@@ -120,8 +120,10 @@ def render(df_hist, moeda_br, data_selecionada=None):
     # CATEGORIZAÇÃO DAS MOVIMENTAÇÕES
     # -------------------------------------------------------
 
-    # 1. Entrou: Não era obsoleto e agora é
+    # 1. Entrou: Não era obsoleto e agora é — Qtd/Vlr anterior zerados pois não era obsoleto
     entrou = base[(base["Obs Ant"] == False) & (base["Obs Atual"] == True)].copy()
+    entrou["Qtd Ant"] = 0
+    entrou["Vlr Ant"] = 0
     entrou["Status Mov"] = "🔴 Entrou"
 
     # 2. Saiu Total: Era obsoleto e agora o saldo é zero
