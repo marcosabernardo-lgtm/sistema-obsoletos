@@ -126,8 +126,10 @@ def render(df_hist, moeda_br, data_selecionada=None):
     entrou["Vlr Ant"] = 0
     entrou["Status Mov"] = "🔴 Entrou"
 
-    # 2. Saiu Total: Era obsoleto e agora o saldo é zero
+    # 2. Saiu Total: Era obsoleto e agora o saldo é zero — Qtd/Vlr atual zerados pois saiu da lista
     saiu_total = base[(base["Obs Ant"] == True) & (base["Vlr Atual"] == 0)].copy()
+    saiu_total["Qtd Atual"] = 0
+    saiu_total["Vlr Atual"] = 0
     saiu_total["Status Mov"] = "🟢 Saiu Total"
 
     # 3. Mudou p/ Giro: Era obsoleto, ainda tem saldo, mas não é mais classificado como obsoleto
