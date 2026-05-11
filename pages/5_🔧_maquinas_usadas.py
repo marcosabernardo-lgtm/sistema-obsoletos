@@ -48,6 +48,14 @@ def moeda(v):
         return "—"
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
+
+def _rebuild_historico_cache():
+    try:
+        supabase.rpc("rebuild_estoque_historico").execute()
+        st.cache_data.clear()
+    except Exception as e:
+        st.warning(f"⚠️ Cache do dashboard não atualizado automaticamente: {e}")
+
 # -------------------------------------------------
 # CARGA DE DADOS
 # -------------------------------------------------
@@ -199,6 +207,7 @@ with aba_cadastro:
                     st.error(f"Erros: {'; '.join(erros)}")
                 else:
                     st.success(f"✅ {len(linhas_sel)} registro(s) removido(s).")
+                    _rebuild_historico_cache()
                 carregar_usadas.clear()
                 carregar_historico.clear()
                 st.rerun()
@@ -229,6 +238,7 @@ with aba_cadastro:
                         "descricao": nova_desc.strip() or None,
                     }).execute()
                     st.success(f"✅ {novo_codigo.strip()} adicionado como {novo_tipo}.")
+                    _rebuild_historico_cache()
                     carregar_usadas.clear()
                     carregar_historico.clear()
                     st.rerun()
