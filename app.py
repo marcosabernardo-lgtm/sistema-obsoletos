@@ -1,5 +1,11 @@
 import streamlit as st
 import os
+from utils.supabase_client import get_supabase
+
+try:
+    get_supabase()
+except Exception:
+    pass
 
 st.set_page_config(
     page_title="Grupo Alltech — Gestão de Estoques",
@@ -90,6 +96,7 @@ div[data-testid="stButton"] > button:focus {
 .card-est > div[data-testid="stButton"] > button { border-top: 2px solid #00C9E0 !important; }
 .card-dio > div[data-testid="stButton"] > button { border-top: 2px solid #9B7BFF !important; }
 .card-inv > div[data-testid="stButton"] > button { border-top: 2px solid #2ECC71 !important; }
+.card-maq > div[data-testid="stButton"] > button { border-top: 2px solid #F4A261 !important; }
 .card-cfg > div[data-testid="stButton"] > button { border-top: 2px solid rgba(255,255,255,0.25) !important; }
 
 .home-footer {
@@ -158,13 +165,16 @@ with col4:
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col5:
+    st.markdown('<div class="card-maq">', unsafe_allow_html=True)
+    if st.button("🔧  Máquinas Usadas\n\nCadastro e histórico de máquinas classificadas como usada ou nova, com evolução de estoque.", key="btn_maq"):
+        st.switch_page("pages/5_🔧_maquinas_usadas.py")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with col6:
     st.markdown('<div class="card-cfg">', unsafe_allow_html=True)
     if st.button("⚙️  Configurador\n\nProcessamento de fechamentos mensais, atualização das bases e administração do sistema.", key="btn_cfg"):
         st.switch_page("pages/0_⚙️_configurador.py")
     st.markdown('</div>', unsafe_allow_html=True)
-
-with col6:
-    st.markdown("<div></div>", unsafe_allow_html=True)
 
 # ── FOOTER ───────────────────────────────────────────────
 
