@@ -732,83 +732,8 @@ st.markdown("---")
 
 st.markdown('<div class="step-box">', unsafe_allow_html=True)
 st.markdown('<div class="step-title">🔧 Gestão de Máquinas Usadas</div>', unsafe_allow_html=True)
-st.markdown('<div class="step-desc">Cadastre produtos que devem ser classificados como Máquina Usada ou Máquina Nova. Após adicionar ou remover, execute o Passo 3 para atualizar os dashboards.</div>', unsafe_allow_html=True)
-
-EMPRESAS_OPCOES = ["Tools", "Maquinas", "Robotica", "Service"]
-TIPOS_OPCOES    = ["Maquina Usada", "Máquina Nova"]
-
-def carregar_usadas():
-    resp = supabase.table("estoque_usadas").select("id, empresa, codigo, tipo, descricao").order("empresa").execute()
-    return pd.DataFrame(resp.data) if resp.data else pd.DataFrame(columns=["id","empresa","codigo","tipo","descricao"])
-
-try:
-    df_usadas = carregar_usadas()
-except Exception as _e:
-    st.error(f"Erro ao carregar máquinas usadas: {_e}")
-    df_usadas = pd.DataFrame(columns=["id","empresa","codigo","tipo","descricao"])
-
-# --- Tabela atual ---
-if not df_usadas.empty:
-    st.dataframe(
-        df_usadas[["empresa", "codigo", "tipo", "descricao"]].rename(columns={
-            "empresa":  "Empresa",
-            "codigo":   "Código",
-            "tipo":     "Tipo",
-            "descricao":"Descrição",
-        }),
-        use_container_width=True,
-        hide_index=True,
-    )
-else:
-    st.info("Nenhuma máquina cadastrada.")
-
-# --- Adicionar nova ---
-with st.expander("➕ Adicionar Máquina"):
-    col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
-    with col1:
-        nova_empresa = st.selectbox("Empresa", EMPRESAS_OPCOES, key="nova_empresa")
-    with col2:
-        novo_codigo = st.text_input("Código do Produto", key="novo_codigo")
-    with col3:
-        novo_tipo = st.selectbox("Tipo", TIPOS_OPCOES, key="novo_tipo")
-    with col4:
-        nova_desc = st.text_input("Descrição (opcional)", key="nova_desc")
-
-    if st.button("➕ Adicionar", type="primary", key="btn_add_usada"):
-        if not novo_codigo.strip():
-            st.error("Informe o código do produto.")
-        else:
-            try:
-                sb = get_supabase()
-                sb.table("estoque_usadas").insert({
-                    "empresa":   nova_empresa,
-                    "codigo":    novo_codigo.strip(),
-                    "tipo":      novo_tipo,
-                    "descricao": nova_desc.strip() or None,
-                }).execute()
-                st.success(f"✅ {novo_codigo.strip()} adicionado como {novo_tipo}.")
-                st.cache_data.clear()
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao adicionar: {e}")
-
-# --- Remover ---
-if not df_usadas.empty:
-    with st.expander("🗑️ Remover Máquina"):
-        opcoes = [f"{r['empresa']} | {r['codigo']} | {r['tipo']}" for _, r in df_usadas.iterrows()]
-        sel = st.selectbox("Selecione para remover", opcoes, key="sel_remover")
-        if st.button("🗑️ Remover", type="secondary", key="btn_rem_usada"):
-            idx = opcoes.index(sel)
-            id_remover = df_usadas.iloc[idx]["id"]
-            try:
-                sb = get_supabase()
-                sb.table("estoque_usadas").delete().eq("id", id_remover).execute()
-                st.success(f"✅ Removido com sucesso.")
-                st.cache_data.clear()
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao remover: {e}")
-
+st.markdown('<div class="step-desc">O cadastro e histórico de máquinas usadas foi movido para a página dedicada.</div>', unsafe_allow_html=True)
+st.page_link("pages/5_🔧_maquinas_usadas.py", label="Abrir página de Máquinas Usadas", icon="🔧")
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("---")
 st.markdown(
