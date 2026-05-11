@@ -72,7 +72,7 @@ def moeda_br(valor):
 # CARREGAR BASE
 # -------------------------------------------------
 
-@st.cache_data(ttl=3600, show_spinner="Carregando dados...")
+@st.cache_data(ttl=60, show_spinner="Carregando dados...")
 def carregar_base():
     from motor.motor_obsoletos import executar_motor
     df, _ = executar_motor()
