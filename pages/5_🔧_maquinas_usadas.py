@@ -63,11 +63,11 @@ def _norm_empresa(e: str) -> str:
 @st.cache_data(ttl=120, show_spinner=False)
 def carregar_usadas() -> pd.DataFrame:
     resp = supabase.table("estoque_usadas") \
-        .select("id, empresa, codigo, tipo, descricao") \
+        .select("*") \
         .order("empresa") \
         .execute()
     return pd.DataFrame(resp.data) if resp.data else pd.DataFrame(
-        columns=["id", "empresa", "codigo", "tipo", "descricao"]
+        columns=["empresa", "codigo", "tipo", "descricao"]
     )
 
 @st.cache_data(ttl=120, show_spinner=False)
@@ -218,9 +218,12 @@ with aba_cadastro:
             sel = st.selectbox("Selecione para remover", opcoes)
             if st.button("🗑️ Remover", type="secondary", use_container_width=True):
                 idx = opcoes.index(sel)
-                id_remover = int(df_usadas.iloc[idx]["id"])
+                row_rem = df_usadas.iloc[idx]
                 try:
-                    supabase.table("estoque_usadas").delete().eq("id", id_remover).execute()
+                    supabase.table("estoque_usadas").delete() \
+                        .eq("empresa", row_rem["empresa"]) \
+                        .eq("codigo", row_rem["codigo"]) \
+                        .execute()
                     st.success("✅ Removido com sucesso.")
                     carregar_usadas.clear()
                     carregar_historico.clear()
