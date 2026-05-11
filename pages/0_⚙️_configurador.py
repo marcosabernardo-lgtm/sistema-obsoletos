@@ -54,7 +54,6 @@ def get_supabase() -> Client:
 
 def upsert_chunks_estoque(supabase, records, chunk_size=1000):
     import time
-    # Filtra registros com campos obrigatorios nulos
     records = [r for r in records if r.get('data_fechamento') and r.get('empresa') and r.get('filial') and r.get('produto')]
     seen = {}
     for r in records:
@@ -124,7 +123,6 @@ def separar_empresa_filial(texto_firma):
 
 
 def to_float(s):
-    """Converte string numérica BR para float."""
     if not s:
         return None
     s = str(s).strip().replace('.', '').replace(',', '.')
@@ -135,52 +133,32 @@ def to_float(s):
 
 
 def parse_linha_produto(line):
-    """
-    Parser unificado para linhas de produto do TXT e PDF.
-    Suporta 2 formatos de valores:
-      - UNITÁRIO | TOTAL          (2 colunas)
-      - UNITÁRIO | PARCIAL | TOTAL (3 colunas — quando TOTAL vazio usa PARCIAL)
-    """
     partes = [p.strip() for p in line.split('|')]
     partes = [p for p in partes if p != '']
-
     if len(partes) < 4:
         return None
-
-    # Localiza o campo que tem o padrão CODIGO - DESCRICAO
     cod_idx = None
     for i, p in enumerate(partes):
         if re.match(r'^[\d.]+\s*-\s*.+', p):
             cod_idx = i
             break
-
     if cod_idx is None:
         return None
-
     match_cod = re.match(r'^([\d.]+)\s*-\s*(.*)', partes[cod_idx])
     if not match_cod:
         return None
-
     codigo, descricao = match_cod.groups()
     remaining = partes[cod_idx + 1:]
-
     if len(remaining) < 2:
         return None
-
     unid    = remaining[0]
     qtd_str = remaining[1]
     valores = remaining[2:]
-
     quantidade = to_float(qtd_str)
-
     if len(valores) >= 3:
-        # UNITÁRIO | PARCIAL | TOTAL
-        # PARCIAL = QTD * UNITARIO (valor do produto)
-        # TOTAL = acumulado do grupo NCM — ignorar
         vlr_unit = to_float(valores[0])
-        total    = to_float(valores[1])  # usa PARCIAL como custo_total
+        total    = to_float(valores[1])
     elif len(valores) >= 2:
-        # UNITÁRIO | PARCIAL (sem coluna TOTAL)
         vlr_unit = to_float(valores[0])
         total    = to_float(valores[1])
     elif len(valores) == 1:
@@ -188,13 +166,10 @@ def parse_linha_produto(line):
         total    = None
     else:
         return None
-
     if quantidade is None or vlr_unit is None:
         return None
-
     if total is None:
         total = round(quantidade * vlr_unit, 2)
-
     return {
         "codigo":    codigo.strip(),
         "descricao": descricao.strip(),
@@ -216,7 +191,6 @@ def extrair_txt(arquivo_bytes):
             break
         except UnicodeDecodeError:
             continue
-
     lines = texto.splitlines()
     all_data = []
     data_fechamento = None
@@ -225,7 +199,6 @@ def extrair_txt(arquivo_bytes):
     tipo_estoque = None
     conta = None
     ignorar_resumo = False
-
     for line in lines:
         if "R E S U M O" in line:
             ignorar_resumo = True
@@ -234,15 +207,12 @@ def extrair_txt(arquivo_bytes):
             ignorar_resumo = False
         if ignorar_resumo:
             continue
-
         if "FIRMA:" in line:
             conteudo = line.split(':', 1)[1]
             empresa, filial = separar_empresa_filial(conteudo)
-
         elif "ESTOQUES EXISTENTES EM:" in line:
             data_str = line.split("EM:", 1)[1].replace('|', '').strip()
             data_fechamento = data_str
-
         elif '***' in line:
             for tipo in POSSIVEIS_TIPOS_ESTOQUE:
                 if tipo in line:
@@ -251,7 +221,6 @@ def extrair_txt(arquivo_bytes):
             match_conta = re.search(r'\*\*\*\s*([\w\s&/]+?)\s*\*\*\*', line)
             if match_conta:
                 conta = match_conta.group(1).strip()
-
         elif line.strip().startswith('|') and "D I S C R I M I N A" not in line:
             resultado = parse_linha_produto(line)
             if resultado:
@@ -268,7 +237,6 @@ def extrair_txt(arquivo_bytes):
                     "Vlr Unit":        resultado["vlr_unit"],
                     "Valor Total":     resultado["total"],
                 })
-
     return pd.DataFrame(all_data)
 
 
@@ -284,7 +252,6 @@ def extrair_pdf(arquivo_bytes):
     tipo_estoque = None
     conta = None
     ignorar_resumo = False
-
     with pdfplumber.open(io.BytesIO(arquivo_bytes)) as pdf:
         for page in pdf.pages:
             text = page.extract_text(layout=True)
@@ -298,15 +265,12 @@ def extrair_pdf(arquivo_bytes):
                     ignorar_resumo = False
                 if ignorar_resumo:
                     continue
-
                 if "FIRMA:" in line:
                     conteudo = line.split(':', 1)[1]
                     empresa, filial = separar_empresa_filial(conteudo)
-
                 elif "ESTOQUES EXISTENTES EM:" in line:
                     data_str = line.split("EM:", 1)[1].replace('|', '').strip()
                     data_fechamento = data_str
-
                 elif '***' in line:
                     for tipo in POSSIVEIS_TIPOS_ESTOQUE:
                         if tipo in line:
@@ -315,7 +279,6 @@ def extrair_pdf(arquivo_bytes):
                     match_conta = re.search(r'\*\*\*\s*([\w\s&/]+?)\s*\*\*\*', line)
                     if match_conta:
                         conta = match_conta.group(1).strip()
-
                 elif line.strip().startswith('|') and "D I S C R I M I N A" not in line:
                     resultado = parse_linha_produto(line)
                     if resultado:
@@ -332,7 +295,6 @@ def extrair_pdf(arquivo_bytes):
                             "Vlr Unit":        resultado["vlr_unit"],
                             "Valor Total":     resultado["total"],
                         })
-
     return pd.DataFrame(all_data)
 
 
@@ -344,7 +306,6 @@ def df_para_supabase(df):
             data_iso = pd.to_datetime(data_raw, dayfirst=True).strftime("%Y-%m-%d")
         except Exception:
             data_iso = None
-
         records.append({
             "data_fechamento": data_iso,
             "empresa":         str(row.get("Empresa",         "")).strip() or None,
@@ -402,19 +363,14 @@ def processar_zip(supabase, zip_bytes, status_placeholder):
         status_placeholder.info("\n\n".join(log_msgs))
 
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-
-        # --- Entradas/Saídas ---
         arqs_es = [n for n in zf.namelist() if "01_Entradas_Saidas" in n and n.endswith(".xlsx")]
         for arquivo in arqs_es:
             empresa = parse_empresa_zip(arquivo)
             log(f"📥 Entradas/Saídas — {empresa}...")
-
             with zf.open(arquivo) as f:
                 raw_bytes = io.BytesIO(f.read())
-
             xl = pd.ExcelFile(raw_bytes)
             abas = [a for a in xl.sheet_names if a.upper() in ("ENTRADA", "SAIDA")]
-
             for aba in abas:
                 tipo = aba.upper()
                 df_str = pd.read_excel(xl, sheet_name=aba, dtype=str)
@@ -422,19 +378,16 @@ def processar_zip(supabase, zip_bytes, status_placeholder):
                 raw_bytes.seek(0)
                 df_raw = pd.read_excel(io.BytesIO(raw_bytes.getvalue()))
                 df_raw.columns = [c.strip().upper() for c in df_raw.columns]
-
                 if "DIGITACAO" in df_raw.columns:
                     df_str["DIGITACAO"] = pd.to_datetime(
                         df_raw["DIGITACAO"], dayfirst=True, errors="coerce"
                     ).dt.strftime("%Y-%m-%d")
-
                 df = df_str.dropna(how="all")
                 if "ESTOQUE" in df.columns:
                     df = df[df["ESTOQUE"].str.strip().str.upper() == "S"]
                 if "QUANTIDADE" in df.columns:
                     df["QUANTIDADE"] = df["QUANTIDADE"].apply(parse_br_number)
                     df = df[df["QUANTIDADE"].notna() & (df["QUANTIDADE"] != 0)]
-
                 records = []
                 for idx, row in df.iterrows():
                     doc          = clean_text(row.get("DOCUMENTO"))
@@ -444,7 +397,6 @@ def processar_zip(supabase, zip_bytes, status_placeholder):
                     row_hash     = hashlib.sha256(
                         f"{empresa}|{tipo}|{doc}|{produto}|{digitacao}|{centro_custo}|{idx}".encode()
                     ).hexdigest()
-
                     records.append({
                         "row_hash": row_hash, "empresa": empresa, "tipo": tipo,
                         "filial": clean_text(row.get("FILIAL")),
@@ -473,31 +425,25 @@ def processar_zip(supabase, zip_bytes, status_placeholder):
                         "estoque": clean_text(row.get("ESTOQUE")),
                         "poder_terceiros": clean_text(row.get("PODER TERCEIROS")),
                     })
-
                 n = upsert_chunks(supabase, "entradas_saidas", records)
                 total_es += n
                 log(f"   ✅ {empresa}/{tipo}: {n} registros")
 
-        # --- Movimentos ---
         arqs_mov = [n for n in zf.namelist() if "02_Movimento" in n and n.endswith(".xlsx")]
         for arquivo in arqs_mov:
             empresa = parse_empresa_zip(arquivo)
             log(f"🔄 Movimentos — {empresa}...")
-
             with zf.open(arquivo) as f:
                 raw_bytes = io.BytesIO(f.read())
-
             df_str = pd.read_excel(raw_bytes, dtype=str)
             df_str.columns = [c.strip().upper() for c in df_str.columns]
             raw_bytes.seek(0)
             df_raw = pd.read_excel(raw_bytes)
             df_raw.columns = [c.strip().upper() for c in df_raw.columns]
-
             if "DT EMISSAO" in df_raw.columns:
                 df_str["DT EMISSAO"] = pd.to_datetime(
                     df_raw["DT EMISSAO"], dayfirst=True, errors="coerce"
                 ).dt.strftime("%Y-%m-%d")
-
             df = df_str.dropna(how="all")
             records = []
             for _, row in df.iterrows():
@@ -518,7 +464,6 @@ def processar_zip(supabase, zip_bytes, status_placeholder):
                     "quantidade": quantidade, "tipo_rede": tipo_rede,
                     "documento": doc, "dt_emissao": dt_emissao,
                 })
-
             n = upsert_chunks(supabase, "movimentos", records)
             total_mov += n
             log(f"   ✅ {empresa}: {n} registros")
@@ -551,7 +496,6 @@ if arquivos_fechamento:
     if st.button("📥 Importar Fechamento", type="primary", key="btn_fechamento"):
         todos_records = []
         todos_df = []
-
         for arquivo in arquivos_fechamento:
             with st.spinner(f"Extraindo {arquivo.name}..."):
                 try:
@@ -560,15 +504,12 @@ if arquivos_fechamento:
                         df_extraido = extrair_pdf(arquivo_bytes)
                     else:
                         df_extraido = extrair_txt(arquivo_bytes)
-
                     if df_extraido.empty:
                         st.warning(f"Nenhum dado encontrado em {arquivo.name}")
                         continue
-
                     todos_df.append(df_extraido)
                     todos_records.extend(df_para_supabase(df_extraido))
                     st.success(f"✅ {arquivo.name} — {len(df_extraido)} registros extraídos")
-
                 except Exception as e:
                     st.error(f"Erro ao extrair {arquivo.name}: {e}")
 
@@ -604,7 +545,6 @@ arquivo_zip = st.file_uploader(
 
 if arquivo_zip:
     st.info(f"Arquivo: **{arquivo_zip.name}** ({arquivo_zip.size / 1024 / 1024:.1f} MB)")
-
     if st.button("📥 Importar Movimentações", type="primary", key="btn_zip"):
         status_box = st.empty()
         try:
@@ -721,30 +661,40 @@ if st.button("🔄 Recriar Caches e Atualizar Dashboards", type="primary", key="
     SQL_ESTOQUE_CACHE = """
         CREATE TABLE estoque_historico_cache AS
         SELECT
-            data_fechamento,
+            ef.data_fechamento,
             CASE
-                WHEN empresa ILIKE '%TOOLS%'      THEN 'Tools'
-                WHEN empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
-                WHEN empresa ILIKE '%ALLSERVICE%' THEN 'Service'
-                WHEN empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
-                ELSE empresa
-            END || ' / ' || INITCAP(filial) AS empresa_filial,
-            INITCAP(COALESCE(tipo_de_estoque, 'Em Estoque')) AS tipo_de_estoque,
-            INITCAP(conta) AS conta,
-            produto,
-            descricao,
-            unid,
-            saldo_atual,
-            vlr_unit,
-            custo_total
-        FROM estoque_fechamentos
-        ORDER BY data_fechamento;
+                WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+                WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+                WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+                WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+                ELSE ef.empresa
+            END || ' / ' || INITCAP(ef.filial) AS empresa_filial,
+            INITCAP(COALESCE(ef.tipo_de_estoque, 'Em Estoque')) AS tipo_de_estoque,
+            INITCAP(COALESCE(eu.tipo, ef.conta)) AS conta,
+            ef.produto,
+            ef.descricao,
+            ef.unid,
+            ef.saldo_atual,
+            ef.vlr_unit,
+            ef.custo_total
+        FROM estoque_fechamentos ef
+        LEFT JOIN estoque_usadas eu
+            ON eu.codigo = ef.produto
+            AND (
+                CASE
+                    WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+                    WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+                    WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+                    WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+                    ELSE ef.empresa
+                END
+            ) = eu.empresa
+        ORDER BY ef.data_fechamento;
         CREATE INDEX ON estoque_historico_cache (data_fechamento);
     """
 
     try:
         db_url = st.secrets["SUPABASE_DB"]
-        # Parse da URL: postgresql://user:pass@host:port/db
         m = _re.match(r"postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)", db_url)
         user, password, host, port, database = m.group(1), m.group(2), m.group(3), int(m.group(4)), m.group(5)
 
@@ -768,13 +718,94 @@ if st.button("🔄 Recriar Caches e Atualizar Dashboards", type="primary", key="
             st.success("✅ estoque_historico_cache recriado.")
 
         conn.close()
-
         st.success("🎉 Dashboards atualizados! Faça Reboot do app para ver os novos dados.")
         st.cache_data.clear()
 
     except Exception as e:
         st.error("Erro ao recriar caches.")
         st.exception(e)
+
+st.markdown('</div>', unsafe_allow_html=True)
+st.markdown("---")
+
+# ── GESTÃO DE MÁQUINAS USADAS ────────────────────────────────
+
+st.markdown('<div class="step-box">', unsafe_allow_html=True)
+st.markdown('<div class="step-title">🔧 Gestão de Máquinas Usadas</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-desc">Cadastre produtos que devem ser classificados como Máquina Usada ou Máquina Nova. Após adicionar ou remover, execute o Passo 3 para atualizar os dashboards.</div>', unsafe_allow_html=True)
+
+EMPRESAS_OPCOES = ["Tools", "Maquinas", "Robotica", "Service"]
+TIPOS_OPCOES    = ["Maquina Usada", "Máquina Nova"]
+
+@st.cache_data(ttl=60)
+def carregar_usadas():
+    sb = get_supabase()
+    resp = sb.table("estoque_usadas").select("id, empresa, codigo, tipo, descricao").order("empresa").execute()
+    return pd.DataFrame(resp.data) if resp.data else pd.DataFrame(columns=["id","empresa","codigo","tipo","descricao"])
+
+df_usadas = carregar_usadas()
+
+# --- Tabela atual ---
+if not df_usadas.empty:
+    st.dataframe(
+        df_usadas[["empresa", "codigo", "tipo", "descricao"]].rename(columns={
+            "empresa":  "Empresa",
+            "codigo":   "Código",
+            "tipo":     "Tipo",
+            "descricao":"Descrição",
+        }),
+        use_container_width=True,
+        hide_index=True,
+    )
+else:
+    st.info("Nenhuma máquina cadastrada.")
+
+# --- Adicionar nova ---
+with st.expander("➕ Adicionar Máquina"):
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
+    with col1:
+        nova_empresa = st.selectbox("Empresa", EMPRESAS_OPCOES, key="nova_empresa")
+    with col2:
+        novo_codigo = st.text_input("Código do Produto", key="novo_codigo")
+    with col3:
+        novo_tipo = st.selectbox("Tipo", TIPOS_OPCOES, key="novo_tipo")
+    with col4:
+        nova_desc = st.text_input("Descrição (opcional)", key="nova_desc")
+
+    if st.button("➕ Adicionar", type="primary", key="btn_add_usada"):
+        if not novo_codigo.strip():
+            st.error("Informe o código do produto.")
+        else:
+            try:
+                sb = get_supabase()
+                sb.table("estoque_usadas").insert({
+                    "empresa":   nova_empresa,
+                    "codigo":    novo_codigo.strip(),
+                    "tipo":      novo_tipo,
+                    "descricao": nova_desc.strip() or None,
+                }).execute()
+                st.success(f"✅ {novo_codigo.strip()} adicionado como {novo_tipo}.")
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao adicionar: {e}")
+
+# --- Remover ---
+if not df_usadas.empty:
+    with st.expander("🗑️ Remover Máquina"):
+        opcoes = [f"{r['empresa']} | {r['codigo']} | {r['tipo']}" for _, r in df_usadas.iterrows()]
+        sel = st.selectbox("Selecione para remover", opcoes, key="sel_remover")
+        if st.button("🗑️ Remover", type="secondary", key="btn_rem_usada"):
+            idx = opcoes.index(sel)
+            id_remover = df_usadas.iloc[idx]["id"]
+            try:
+                sb = get_supabase()
+                sb.table("estoque_usadas").delete().eq("id", id_remover).execute()
+                st.success(f"✅ Removido com sucesso.")
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao remover: {e}")
 
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("---")
