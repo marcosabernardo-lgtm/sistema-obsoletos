@@ -164,74 +164,76 @@ TIPOS_OPCOES    = ["Maquina Usada", "Máquina Nova"]
 
 with aba_cadastro:
     if not df_usadas.empty:
-        st.dataframe(
-            df_usadas[["empresa", "codigo", "tipo", "descricao"]].rename(columns={
-                "empresa":   "Empresa",
-                "codigo":    "Código",
-                "tipo":      "Tipo",
-                "descricao": "Descrição",
-            }),
+        st.caption("Selecione uma ou mais linhas para remover.")
+        df_exib = df_usadas[["empresa", "codigo", "tipo", "descricao"]].rename(columns={
+            "empresa":   "Empresa",
+            "codigo":    "Código",
+            "tipo":      "Tipo",
+            "descricao": "Descrição",
+        }).reset_index(drop=True)
+
+        sel_event = st.dataframe(
+            df_exib,
             use_container_width=True,
             hide_index=True,
+            on_select="rerun",
+            selection_mode="multi-row",
+            key="tabela_usadas",
         )
+        linhas_sel = sel_event.selection.rows if sel_event.selection.rows else []
+
+        if linhas_sel:
+            st.warning(f"{len(linhas_sel)} máquina(s) selecionada(s).")
+            if st.button("🗑️ Remover selecionadas", type="primary"):
+                erros = []
+                for idx in linhas_sel:
+                    row = df_usadas.iloc[idx]
+                    try:
+                        supabase.table("estoque_usadas").delete() \
+                            .eq("empresa", row["empresa"]) \
+                            .eq("codigo",  row["codigo"]) \
+                            .execute()
+                    except Exception as e:
+                        erros.append(str(e))
+                if erros:
+                    st.error(f"Erros: {'; '.join(erros)}")
+                else:
+                    st.success(f"✅ {len(linhas_sel)} registro(s) removido(s).")
+                carregar_usadas.clear()
+                carregar_historico.clear()
+                st.rerun()
     else:
         st.info("Nenhuma máquina cadastrada.")
 
     st.markdown("---")
-    col_add, col_rem = st.columns(2)
-
-    with col_add:
-        st.subheader("➕ Adicionar")
-        with st.form("form_adicionar", clear_on_submit=True):
-            c1, c2 = st.columns(2)
-            with c1:
-                nova_empresa = st.selectbox("Empresa", EMPRESAS_OPCOES)
-                novo_codigo  = st.text_input("Código do Produto")
-            with c2:
-                novo_tipo = st.selectbox("Tipo", TIPOS_OPCOES)
-                nova_desc = st.text_input("Descrição (opcional)")
-            if st.form_submit_button("➕ Adicionar", type="primary", use_container_width=True):
-                if not novo_codigo.strip():
-                    st.error("Informe o código do produto.")
-                else:
-                    try:
-                        supabase.table("estoque_usadas").insert({
-                            "empresa":   nova_empresa,
-                            "codigo":    novo_codigo.strip(),
-                            "tipo":      novo_tipo,
-                            "descricao": nova_desc.strip() or None,
-                        }).execute()
-                        st.success(f"✅ {novo_codigo.strip()} adicionado como {novo_tipo}.")
-                        carregar_usadas.clear()
-                        carregar_historico.clear()
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao adicionar: {e}")
-
-    with col_rem:
-        st.subheader("🗑️ Remover")
-        if not df_usadas.empty:
-            opcoes = [
-                f"{r['empresa']} | {r['codigo']} | {r['tipo']}"
-                for _, r in df_usadas.iterrows()
-            ]
-            sel = st.selectbox("Selecione para remover", opcoes)
-            if st.button("🗑️ Remover", type="secondary", use_container_width=True):
-                idx = opcoes.index(sel)
-                row_rem = df_usadas.iloc[idx]
+    st.subheader("➕ Adicionar")
+    with st.form("form_adicionar", clear_on_submit=True):
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            nova_empresa = st.selectbox("Empresa", EMPRESAS_OPCOES)
+        with c2:
+            novo_codigo  = st.text_input("Código do Produto")
+        with c3:
+            novo_tipo = st.selectbox("Tipo", TIPOS_OPCOES)
+        with c4:
+            nova_desc = st.text_input("Descrição (opcional)")
+        if st.form_submit_button("➕ Adicionar", type="primary", use_container_width=True):
+            if not novo_codigo.strip():
+                st.error("Informe o código do produto.")
+            else:
                 try:
-                    supabase.table("estoque_usadas").delete() \
-                        .eq("empresa", row_rem["empresa"]) \
-                        .eq("codigo", row_rem["codigo"]) \
-                        .execute()
-                    st.success("✅ Removido com sucesso.")
+                    supabase.table("estoque_usadas").insert({
+                        "empresa":   nova_empresa,
+                        "codigo":    novo_codigo.strip(),
+                        "tipo":      novo_tipo,
+                        "descricao": nova_desc.strip() or None,
+                    }).execute()
+                    st.success(f"✅ {novo_codigo.strip()} adicionado como {novo_tipo}.")
                     carregar_usadas.clear()
                     carregar_historico.clear()
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erro ao remover: {e}")
-        else:
-            st.info("Nenhuma máquina para remover.")
+                    st.error(f"Erro ao adicionar: {e}")
 
 # ── ABA HISTÓRICO ─────────────────────────────────
 
