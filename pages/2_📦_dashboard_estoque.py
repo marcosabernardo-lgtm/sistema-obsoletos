@@ -137,7 +137,6 @@ def mapear_empresa_filial(empresa: str, filial: str) -> str:
 def carregar_historico():
     supabase = get_supabase()
 
-    # Lê da tabela cache já processada — muito mais rápido
     df = ler_tabela(supabase, "estoque_historico_cache")
 
     df = df.rename(columns={
@@ -161,13 +160,25 @@ def carregar_historico():
     df["Tipo de Estoque"] = df["Tipo de Estoque"].fillna("Em Estoque").astype(str).str.strip()
     df["Conta"]           = df["Conta"].astype(str).str.strip()
 
+    # Aplica overrides de estoque_usadas em tempo de execução
+    resp_usadas = supabase.table("estoque_usadas").select("codigo, tipo, empresa").execute()
+    df_usadas = pd.DataFrame(resp_usadas.data) if resp_usadas.data else pd.DataFrame()
+    if not df_usadas.empty:
+        df_usadas["codigo"] = df_usadas["codigo"].astype(str).str.strip().str.replace(".0", "", regex=False)
+        for _, row in df_usadas.iterrows():
+            mask = (
+                (df["Produto"] == row["codigo"]) &
+                df["Empresa / Filial"].str.startswith(str(row["empresa"]))
+            )
+            df.loc[mask, "Conta"] = str(row["tipo"]).strip()
+
     return df.sort_values("Data Fechamento")
 
 # -------------------------------------------------
 # CARREGAR BASE OBSOLETOS (último fechamento)
 # -------------------------------------------------
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=60)
 def carregar_obsoletos():
     try:
         from motor.motor_obsoletos import executar_motor
