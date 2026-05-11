@@ -133,7 +133,7 @@ def mapear_empresa_filial(empresa: str, filial: str) -> str:
 # CARREGAR BASE HISTÓRICA DO SUPABASE
 # -------------------------------------------------
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=60)
 def carregar_historico():
     supabase = get_supabase()
 
