@@ -42,36 +42,35 @@ st.markdown("---")
 # CONEXÃO DIRETA POSTGRESQL
 # -------------------------------------------------
 
-def _conn_params():
+def _nova_conn():
     db_url = st.secrets["SUPABASE_DB"]
     m = re.match(r"postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)", db_url)
-    return dict(user=m[1], password=m[2], host=m[3], port=int(m[4]), database=m[5], ssl_context=True)
-
-@st.cache_resource
-def get_conn():
-    return pg8000.Connection(**_conn_params())
+    return pg8000.Connection(
+        user=m[1], password=m[2], host=m[3],
+        port=int(m[4]), database=m[5], ssl_context=True
+    )
 
 def db_query(sql: str, params=None) -> list[dict]:
-    conn = get_conn()
+    conn = _nova_conn()
     try:
         rows = conn.run(sql, **(params or {}))
         cols = [c["name"] for c in conn.columns]
         return [dict(zip(cols, row)) for row in rows]
-    except Exception:
-        # reconecta e tenta uma vez mais
+    finally:
         try:
             conn.close()
         except Exception:
             pass
-        st.cache_resource.clear()
-        conn2 = pg8000.Connection(**_conn_params())
-        rows = conn2.run(sql, **(params or {}))
-        cols = [c["name"] for c in conn2.columns]
-        return [dict(zip(cols, row)) for row in rows]
 
 def db_exec(sql: str, params=None):
-    conn = get_conn()
-    conn.run(sql, **(params or {}))
+    conn = _nova_conn()
+    try:
+        conn.run(sql, **(params or {}))
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def moeda(v):
     if v is None or (isinstance(v, float) and pd.isna(v)):
