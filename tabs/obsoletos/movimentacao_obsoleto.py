@@ -85,10 +85,13 @@ def render(df_hist, moeda_br, data_selecionada=None):
     chave = ["Empresa / Filial", "Produto"]
 
     # --- PREPARAÇÃO DOS DADOS ---
-    df_ant_sel = df_an_dedup[chave + ["Custo Total", "Saldo Atual", "obsoleto"]].rename(columns={
+    df_ant_sel = df_an_dedup[chave + ["Custo Total", "Saldo Atual", "obsoleto", "Descricao", "Conta", "Tipo de Estoque"]].rename(columns={
         "Custo Total": "Vlr Ant",
         "Saldo Atual": "Qtd Ant",
-        "obsoleto": "Obs Ant"
+        "obsoleto": "Obs Ant",
+        "Descricao": "_Descricao_ant",
+        "Conta": "_Conta_ant",
+        "Tipo de Estoque": "_Tipo_ant",
     })
 
     df_atual_sel = df_at_dedup[chave + ["Custo Total", "Saldo Atual", "Descricao", "Conta", "Tipo de Estoque", "obsoleto"]].rename(columns={
@@ -106,6 +109,12 @@ def render(df_hist, moeda_br, data_selecionada=None):
     
     base["Obs Ant"] = base["Obs Ant"].fillna(False)
     base["Obs Atual"] = base["Obs Atual"].fillna(False)
+
+    # Usa dados do período anterior como fallback para itens ausentes no período atual
+    base["Descricao"] = base["Descricao"].fillna(base["_Descricao_ant"]).fillna("—")
+    base["Conta"] = base["Conta"].fillna(base["_Conta_ant"]).fillna("—")
+    base["Tipo de Estoque"] = base["Tipo de Estoque"].fillna(base["_Tipo_ant"]).fillna("—")
+    base = base.drop(columns=["_Descricao_ant", "_Conta_ant", "_Tipo_ant"])
 
     # -------------------------------------------------------
     # CATEGORIZAÇÃO DAS MOVIMENTAÇÕES
