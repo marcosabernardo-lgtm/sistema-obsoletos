@@ -1,7 +1,7 @@
+import time
 import streamlit as st
 import pandas as pd
-import httpx
-from supabase import create_client, Client, ClientOptions
+from supabase import create_client, Client
 
 from utils.navbar import render_navbar
 
@@ -47,8 +47,17 @@ SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 @st.cache_resource
 def get_supabase() -> Client:
-    http_client = httpx.Client(verify=False, timeout=120.0)
-    return create_client(SUPABASE_URL, SUPABASE_KEY, options=ClientOptions(httpx_client=http_client))
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def _executar_com_retry(fn, tentativas=3, espera=2):
+    for i in range(tentativas):
+        try:
+            return fn()
+        except Exception as e:
+            if i < tentativas - 1:
+                time.sleep(espera)
+            else:
+                raise
 
 supabase = get_supabase()
 
@@ -63,10 +72,12 @@ def moeda(v):
 
 @st.cache_data(ttl=120, show_spinner=False)
 def carregar_usadas() -> pd.DataFrame:
-    resp = supabase.table("estoque_usadas") \
-        .select("id, empresa, codigo, tipo, descricao") \
-        .order("empresa") \
-        .execute()
+    resp = _executar_com_retry(
+        lambda: supabase.table("estoque_usadas")
+            .select("id, empresa, codigo, tipo, descricao")
+            .order("empresa")
+            .execute()
+    )
     return pd.DataFrame(resp.data) if resp.data else pd.DataFrame(
         columns=["id", "empresa", "codigo", "tipo", "descricao"]
     )
@@ -75,11 +86,13 @@ def carregar_usadas() -> pd.DataFrame:
 def carregar_historico(codigos: tuple, empresas: tuple) -> pd.DataFrame:
     if not codigos:
         return pd.DataFrame()
-    resp = supabase.table("estoque_fechamentos") \
-        .select("data_fechamento,empresa,filial,produto,descricao,unid,saldo_atual,vlr_unit,custo_total") \
-        .in_("produto", list(codigos)) \
-        .order("data_fechamento") \
-        .execute()
+    resp = _executar_com_retry(
+        lambda: supabase.table("estoque_fechamentos")
+            .select("data_fechamento,empresa,filial,produto,descricao,unid,saldo_atual,vlr_unit,custo_total")
+            .in_("produto", list(codigos))
+            .order("data_fechamento")
+            .execute()
+    )
     df = pd.DataFrame(resp.data) if resp.data else pd.DataFrame()
     if df.empty:
         return df
