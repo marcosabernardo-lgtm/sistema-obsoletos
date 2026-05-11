@@ -737,7 +737,6 @@ st.markdown('<div class="step-desc">Cadastre produtos que devem ser classificado
 EMPRESAS_OPCOES = ["Tools", "Maquinas", "Robotica", "Service"]
 TIPOS_OPCOES    = ["Maquina Usada", "Máquina Nova"]
 
-@st.cache_data(ttl=60)
 def carregar_usadas():
     sb = get_supabase()
     resp = sb.table("estoque_usadas").select("id, empresa, codigo, tipo, descricao").order("empresa").execute()
