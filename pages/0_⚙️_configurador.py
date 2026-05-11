@@ -563,14 +563,19 @@ st.markdown("---")
 
 st.markdown('<div class="step-box">', unsafe_allow_html=True)
 st.markdown('<div class="step-title">🔄 Passo 3 — Atualizar Dashboards</div>', unsafe_allow_html=True)
-st.markdown('<div class="step-desc">Duas sub-etapas: (3a) rode o SQL abaixo no Supabase SQL Editor; (3b) clique no botão para recriar os demais caches.</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-desc">Cole o SQL abaixo no Supabase SQL Editor e execute. Após concluir, clique no botão para limpar o cache do app.</div>', unsafe_allow_html=True)
 
 st.warning("⚠️ Execute este passo somente após concluir os Passos 1 e 2.")
 
-SQL_RESUMO_MANUAL = """\
--- Cole este SQL no Supabase SQL Editor e execute (sem limite de timeout)
-DROP TABLE IF EXISTS resumo_movimentacoes_cache;
+SQL_CACHES = """\
+-- Cole no Supabase SQL Editor: https://supabase.com/dashboard
+-- Menu: Project > SQL Editor > New query
 
+DROP TABLE IF EXISTS resumo_movimentacoes_cache;
+DROP TABLE IF EXISTS motor_obsoletos_cache;
+DROP TABLE IF EXISTS estoque_historico_cache;
+
+-- 1/3: resumo de movimentacoes (query mais pesada, pode demorar alguns minutos)
 CREATE TABLE resumo_movimentacoes_cache AS
 WITH fechamentos AS (
     SELECT DISTINCT data_fechamento
@@ -619,35 +624,73 @@ SELECT data_fechamento, id_unico, ult_mov, ult_entrada, ult_saida, ult_movimenta
            WHEN ult_movimentacao = ult_mov     THEN 'Ult_Mov'
        END AS origem_mov
 FROM agrupado;
+CREATE INDEX ON resumo_movimentacoes_cache (data_fechamento, id_unico);
 
-CREATE INDEX ON resumo_movimentacoes_cache (data_fechamento, id_unico);"""
+-- 2/3: motor de obsoletos
+CREATE TABLE motor_obsoletos_cache AS
+SELECT ef.data_fechamento,
+       CASE
+           WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+           WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+           WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+           WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+           ELSE ef.empresa
+       END || ' / ' || INITCAP(ef.filial) AS empresa_filial,
+       ef.tipo_de_estoque, ef.conta, ef.produto, ef.descricao,
+       ef.unid, ef.saldo_atual, ef.vlr_unit, ef.custo_total,
+       rc.ult_movimentacao, rc.origem_mov
+FROM estoque_fechamentos ef
+LEFT JOIN resumo_movimentacoes_cache rc
+    ON rc.data_fechamento = ef.data_fechamento
+    AND rc.id_unico = (
+        CASE
+            WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+            WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+            WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+            WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+            ELSE ef.empresa
+        END || ' / ' || INITCAP(ef.filial) || '|' || ef.produto
+    )
+WHERE ef.data_fechamento >= '2025-12-31';
+CREATE INDEX ON motor_obsoletos_cache (data_fechamento);
 
-with st.expander("📋 Passo 3a — Abrir SQL para rodar no Supabase SQL Editor", expanded=True):
-    st.info("A query de resumo é pesada demais para o timeout da API. Cole o SQL abaixo no [Supabase SQL Editor](https://supabase.com/dashboard) e execute lá.")
-    st.code(SQL_RESUMO_MANUAL, language="sql")
+-- 3/3: historico de estoque
+CREATE TABLE estoque_historico_cache AS
+SELECT
+    ef.data_fechamento,
+    CASE
+        WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+        WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+        WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+        WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+        ELSE ef.empresa
+    END || ' / ' || INITCAP(ef.filial) AS empresa_filial,
+    INITCAP(COALESCE(ef.tipo_de_estoque, 'Em Estoque')) AS tipo_de_estoque,
+    INITCAP(COALESCE(eu.tipo, ef.conta)) AS conta,
+    ef.produto, ef.descricao, ef.unid, ef.saldo_atual, ef.vlr_unit, ef.custo_total
+FROM estoque_fechamentos ef
+LEFT JOIN estoque_usadas eu
+    ON eu.codigo = ef.produto
+    AND (
+        CASE
+            WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+            WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+            WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+            WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+            ELSE ef.empresa
+        END
+    ) = eu.empresa
+ORDER BY ef.data_fechamento;
+CREATE INDEX ON estoque_historico_cache (data_fechamento);"""
 
-st.markdown("**Passo 3b** — Após rodar o SQL acima, clique para recriar os demais caches:")
+with st.expander("📋 SQL para rodar no Supabase SQL Editor", expanded=True):
+    st.code(SQL_CACHES, language="sql")
 
-if st.button("🔄 Recriar motor_obsoletos e estoque_historico", type="primary", key="btn_cache"):
-    try:
-        with st.spinner("Apagando motor_obsoletos_cache e estoque_historico_cache antigos..."):
-            supabase.rpc("drop_caches_parcial").execute()
-            st.success("✅ Caches antigos removidos.")
+st.markdown("Após executar o SQL acima, clique para limpar o cache do app:")
 
-        with st.spinner("Recriando motor_obsoletos_cache..."):
-            supabase.rpc("criar_motor_obsoletos_cache").execute()
-            st.success("✅ motor_obsoletos_cache recriado.")
-
-        with st.spinner("Recriando estoque_historico_cache..."):
-            supabase.rpc("criar_estoque_historico_cache").execute()
-            st.success("✅ estoque_historico_cache recriado.")
-
-        st.success("🎉 Dashboards atualizados! Faça Reboot do app para ver os novos dados.")
-        st.cache_data.clear()
-
-    except Exception as e:
-        st.error("Erro ao recriar caches.")
-        st.exception(e)
+if st.button("🔄 Limpar Cache do App", type="primary", key="btn_cache"):
+    st.cache_data.clear()
+    st.success("🎉 Cache limpo! Faça Reboot do app para ver os novos dados.")
 
 st.markdown('</div>', unsafe_allow_html=True)
 st.markdown("---")
