@@ -738,9 +738,7 @@ EMPRESAS_OPCOES = ["Tools", "Maquinas", "Robotica", "Service"]
 TIPOS_OPCOES    = ["Maquina Usada", "Máquina Nova"]
 
 def carregar_usadas():
-    http_client = httpx.Client(verify=False, timeout=120.0)
-    sb = create_client(SUPABASE_URL, SUPABASE_KEY, options=ClientOptions(httpx_client=http_client))
-    resp = sb.table("estoque_usadas").select("id, empresa, codigo, tipo, descricao").order("empresa").execute()
+    resp = supabase.table("estoque_usadas").select("id, empresa, codigo, tipo, descricao").order("empresa").execute()
     return pd.DataFrame(resp.data) if resp.data else pd.DataFrame(columns=["id","empresa","codigo","tipo","descricao"])
 
 try:
