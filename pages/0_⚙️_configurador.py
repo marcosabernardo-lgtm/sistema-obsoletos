@@ -574,6 +574,7 @@ SQL_CACHES = """\
 DROP TABLE IF EXISTS resumo_movimentacoes_cache;
 DROP TABLE IF EXISTS motor_obsoletos_cache;
 DROP TABLE IF EXISTS estoque_historico_cache;
+DROP TABLE IF EXISTS dio_cache;
 
 -- 1/3: resumo de movimentacoes (query mais pesada, pode demorar alguns minutos)
 CREATE TABLE resumo_movimentacoes_cache AS
@@ -681,7 +682,76 @@ LEFT JOIN estoque_usadas eu
         END
     ) = eu.empresa
 ORDER BY ef.data_fechamento;
-CREATE INDEX ON estoque_historico_cache (data_fechamento);"""
+CREATE INDEX ON estoque_historico_cache (data_fechamento);
+
+-- 4/4: DIO (Days Inventory Outstanding)
+CREATE TABLE dio_cache AS
+WITH fechamentos AS (
+    SELECT DISTINCT data_fechamento
+    FROM estoque_fechamentos
+    WHERE data_fechamento >= '2025-12-31'
+),
+consumo_por_fechamento AS (
+    SELECT
+        f.data_fechamento,
+        e.empresa_filial || '|' || es.produto AS id_unico,
+        SUM(es.quantidade)                    AS consumo_12m
+    FROM fechamentos f
+    JOIN entradas_saidas es
+        ON es.digitacao::date >  (f.data_fechamento::date - INTERVAL '12 months')
+       AND es.digitacao::date <= f.data_fechamento::date
+    JOIN estoque_empresas e ON e.id = (es.empresa || ' ' || es.filial)
+    WHERE es.tipo = 'SAIDA'
+      AND es.estoque = 'S'
+      AND es.quantidade > 0
+    GROUP BY f.data_fechamento, e.empresa_filial || '|' || es.produto
+)
+SELECT
+    ef.data_fechamento,
+    CASE
+        WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+        WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+        WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+        WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+        ELSE ef.empresa
+    END || ' / ' || INITCAP(ef.filial)       AS empresa_filial,
+    ef.produto,
+    ef.descricao,
+    ef.saldo_atual,
+    ef.custo_total,
+    ef.vlr_unit,
+    COALESCE(cpf.consumo_12m, 0)             AS consumo_12m,
+    COALESCE(cpf.consumo_12m, 0) / 365.0    AS consumo_diario,
+    rc.ult_movimentacao                      AS ult_mov_dio,
+    CASE
+        WHEN COALESCE(cpf.consumo_12m, 0) = 0 THEN NULL
+        ELSE ef.saldo_atual / (COALESCE(cpf.consumo_12m, 0) / 365.0)
+    END                                      AS dio
+FROM estoque_fechamentos ef
+LEFT JOIN consumo_por_fechamento cpf
+       ON cpf.data_fechamento = ef.data_fechamento
+      AND cpf.id_unico = (
+            CASE
+                WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+                WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+                WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+                WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+                ELSE ef.empresa
+            END || ' / ' || INITCAP(ef.filial) || '|' || ef.produto
+          )
+LEFT JOIN resumo_movimentacoes_cache rc
+       ON rc.data_fechamento = ef.data_fechamento
+      AND rc.id_unico = (
+            CASE
+                WHEN ef.empresa ILIKE '%TOOLS%'      THEN 'Tools'
+                WHEN ef.empresa ILIKE '%MAQUINAS%'   THEN 'Maquinas'
+                WHEN ef.empresa ILIKE '%ALLSERVICE%' THEN 'Service'
+                WHEN ef.empresa ILIKE '%ROBOTICA%'   THEN 'Robotica'
+                ELSE ef.empresa
+            END || ' / ' || INITCAP(ef.filial) || '|' || ef.produto
+          )
+WHERE ef.data_fechamento >= '2025-12-31';
+CREATE INDEX ON dio_cache (data_fechamento);"""
 
 with st.expander("📋 SQL para rodar no Supabase SQL Editor", expanded=True):
     st.code(SQL_CACHES, language="sql")
