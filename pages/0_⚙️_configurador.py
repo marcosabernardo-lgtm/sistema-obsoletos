@@ -576,7 +576,7 @@ DROP TABLE IF EXISTS motor_obsoletos_cache;
 DROP TABLE IF EXISTS estoque_historico_cache;
 DROP TABLE IF EXISTS dio_cache;
 
--- 1/3: resumo de movimentacoes (query mais pesada, pode demorar alguns minutos)
+-- 1/4: resumo de movimentacoes (query mais pesada, pode demorar alguns minutos)
 CREATE TABLE resumo_movimentacoes_cache AS
 WITH fechamentos AS (
     SELECT DISTINCT data_fechamento
@@ -627,7 +627,7 @@ SELECT data_fechamento, id_unico, ult_mov, ult_entrada, ult_saida, ult_movimenta
 FROM agrupado;
 CREATE INDEX ON resumo_movimentacoes_cache (data_fechamento, id_unico);
 
--- 2/3: motor de obsoletos
+-- 2/4: motor de obsoletos
 CREATE TABLE motor_obsoletos_cache AS
 SELECT ef.data_fechamento,
        CASE
@@ -655,7 +655,7 @@ LEFT JOIN resumo_movimentacoes_cache rc
 WHERE ef.data_fechamento >= '2025-12-31';
 CREATE INDEX ON motor_obsoletos_cache (data_fechamento);
 
--- 3/3: historico de estoque
+-- 3/4: historico de estoque
 CREATE TABLE estoque_historico_cache AS
 SELECT
     ef.data_fechamento,
@@ -691,7 +691,8 @@ WITH fechamentos AS (
     FROM estoque_fechamentos
     WHERE data_fechamento >= '2025-12-31'
 ),
-consumo_por_fechamento AS (
+consumo_es AS (
+    -- Consumo via Entradas/Saidas (todas as empresas com saidas de estoque)
     SELECT
         f.data_fechamento,
         e.empresa_filial || '|' || es.produto AS id_unico,
@@ -705,6 +706,35 @@ consumo_por_fechamento AS (
       AND es.estoque = 'S'
       AND es.quantidade > 0
     GROUP BY f.data_fechamento, e.empresa_filial || '|' || es.produto
+),
+consumo_mov AS (
+    -- Consumo via Movimentos internos (Service Filial, Robotica Matriz, Robotica Filial Jaragua)
+    SELECT
+        f.data_fechamento,
+        e.empresa_filial || '|' || m.produto  AS id_unico,
+        SUM(m.quantidade)                     AS consumo_12m
+    FROM fechamentos f
+    JOIN movimentos m
+        ON m.dt_emissao::date >  (f.data_fechamento::date - INTERVAL '12 months')
+       AND m.dt_emissao::date <= f.data_fechamento::date
+    JOIN estoque_empresas e ON e.id = (m.empresa || ' ' || m.filial)
+    WHERE m.tipo_rede LIKE 'RE%'
+      AND m.quantidade > 0
+      AND e.empresa_filial IN (
+          'Service / Filial',
+          'Robotica / Matriz',
+          'Robotica / Filial Jaragua'
+      )
+    GROUP BY f.data_fechamento, e.empresa_filial || '|' || m.produto
+),
+consumo_por_fechamento AS (
+    SELECT data_fechamento, id_unico, SUM(consumo_12m) AS consumo_12m
+    FROM (
+        SELECT * FROM consumo_es
+        UNION ALL
+        SELECT * FROM consumo_mov
+    ) t
+    GROUP BY data_fechamento, id_unico
 )
 SELECT
     ef.data_fechamento,
