@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import os
 import numpy as np
 
 from utils.navbar import render_navbar, render_filtros_topo
@@ -123,27 +122,21 @@ def formatar_dio(dio):
 # CARREGAR BASE
 # -------------------------------------------------
 
-@st.cache_data
-def carregar_base(pasta):
-    arquivos = [os.path.join(pasta, f) for f in os.listdir(pasta) if f.endswith(".parquet")]
-    df_all = pd.concat([pd.read_parquet(a) for a in arquivos], ignore_index=True)
-    df_all["Data Fechamento"] = pd.to_datetime(df_all["Data Fechamento"])
-    return df_all.sort_values("Data Fechamento")
+@st.cache_data(ttl=60, show_spinner="Carregando dados DIO...")
+def carregar_base():
+    from motor.motor_dio import carregar_base_dio
+    return carregar_base_dio()
 
 
-PASTA_DIO = "data/dio"
-
-if not os.path.exists(PASTA_DIO):
-    st.warning("⚠️ Nenhuma base encontrada em **data/dio**. Processe o DIO primeiro no Configurador.")
+try:
+    df_all = carregar_base()
+except Exception as e:
+    st.error(f"Erro ao carregar dados do Supabase: {e}")
     st.stop()
 
-arquivos = [f for f in os.listdir(PASTA_DIO) if f.endswith(".parquet")]
-
-if not arquivos:
-    st.warning("⚠️ Nenhum arquivo parquet encontrado em **data/dio**.")
+if df_all.empty:
+    st.warning("⚠️ Nenhum dado encontrado. Execute o Passo 3 no Configurador para gerar o DIO.")
     st.stop()
-
-df_all = carregar_base(PASTA_DIO)
 
 # -------------------------------------------------
 # FILTROS NO TOPO

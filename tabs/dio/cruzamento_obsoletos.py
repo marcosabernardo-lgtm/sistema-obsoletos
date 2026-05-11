@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import os
 import io
 import numpy as np
 
@@ -17,20 +16,18 @@ def render(df, data_selecionada, empresas_sel, moeda_br):
 
     st.subheader("🔗 Cruzamento DIO × Obsolescência")
 
-    PASTA_OBS = "data/obsoletos"
-
-    if not os.path.exists(PASTA_OBS) or not [f for f in os.listdir(PASTA_OBS) if f.endswith(".parquet")]:
-        st.warning("⚠️ Base de obsoletos não encontrada. Processe os obsoletos primeiro.")
-        return
-
-    @st.cache_data
-    def carregar_obsoletos(pasta):
-        arquivos = [os.path.join(pasta, f) for f in os.listdir(pasta) if f.endswith(".parquet")]
-        df_obs = pd.concat([pd.read_parquet(a) for a in arquivos], ignore_index=True)
+    @st.cache_data(ttl=60, show_spinner="Carregando obsoletos...")
+    def carregar_obsoletos():
+        from motor.motor_obsoletos import executar_motor
+        df_obs, _ = executar_motor()
         df_obs["Data Fechamento"] = pd.to_datetime(df_obs["Data Fechamento"])
         return df_obs
 
-    df_obs_full = carregar_obsoletos(PASTA_OBS)
+    try:
+        df_obs_full = carregar_obsoletos()
+    except Exception as e:
+        st.warning(f"⚠️ Não foi possível carregar a base de obsoletos: {e}")
+        return
     df_obs = df_obs_full[df_obs_full["Data Fechamento"] == data_selecionada].copy()
 
     if empresas_sel:
