@@ -101,18 +101,46 @@ datas_disponiveis = sorted(df_hist["Data Fechamento"].dt.date.unique(), reverse=
 datas_fmt_list    = [d.strftime("%d/%m/%Y") for d in datas_disponiveis]
 datas_map         = {d.strftime("%d/%m/%Y"): d for d in datas_disponiveis}
 
-data_preview      = pd.Timestamp(datas_disponiveis[0])
+data_preview_str  = st.session_state.get("obsoletos_data", datas_fmt_list[0])
+data_preview      = pd.Timestamp(datas_map.get(data_preview_str, datas_disponiveis[0]))
 df_preview        = df_hist[df_hist["Data Fechamento"] == data_preview]
 empresas_disponiveis = sorted(df_preview["Empresa / Filial"].dropna().unique())
+
+ef_ja_sel     = st.session_state.get("obsoletos_empresa_sel", [])
+filial_ja_sel = st.session_state.get("obsoletos_filial_sel",  [])
+contas_ja_sel = st.session_state.get("obsoletos_conta", [])
+
+ef_ativos = [
+    ef for ef in empresas_disponiveis
+    if (not ef_ja_sel     or ef.split(" / ")[0].strip() in ef_ja_sel)
+    and (not filial_ja_sel or ef.split(" / ")[1].strip() in filial_ja_sel)
+] if (ef_ja_sel or filial_ja_sel) else list(empresas_disponiveis)
+
+df_filtrado_opcoes = df_preview[df_preview["Empresa / Filial"].isin(ef_ativos)]
+contas_disponiveis = sorted(df_filtrado_opcoes["Conta"].dropna().unique())
+
+df_tipo_opcoes = df_filtrado_opcoes.copy()
+if contas_ja_sel:
+    df_tipo_opcoes = df_tipo_opcoes[df_tipo_opcoes["Conta"].isin(contas_ja_sel)]
+tipos_disponiveis = sorted(df_tipo_opcoes["Tipo de Estoque"].dropna().unique())
+
+extras = {}
+if contas_disponiveis:
+    extras["Conta"] = contas_disponiveis
+if tipos_disponiveis:
+    extras["Tipo de Estoque"] = tipos_disponiveis
 
 filtros = render_filtros_topo(
     datas=datas_fmt_list,
     empresas=empresas_disponiveis,
+    extras=extras if extras else None,
     key_prefix="obsoletos"
 )
 
 data_selecionada = pd.Timestamp(datas_map[filtros["data"]])
 empresas_sel     = filtros["empresas"]
+contas_sel       = filtros.get("conta", [])
+tipos_sel        = filtros.get("tipo_de_estoque", [])
 
 # -------------------------------------------------
 # BASE FILTRADA (KPIs)
@@ -121,6 +149,18 @@ empresas_sel     = filtros["empresas"]
 df_kpi = df_hist[df_hist["Data Fechamento"] == data_selecionada].copy()
 if empresas_sel:
     df_kpi = df_kpi[df_kpi["Empresa / Filial"].isin(empresas_sel)]
+if contas_sel:
+    df_kpi = df_kpi[df_kpi["Conta"].isin(contas_sel)]
+if tipos_sel:
+    df_kpi = df_kpi[df_kpi["Tipo de Estoque"].isin(tipos_sel)]
+
+df_hist_filtrado = df_hist.copy()
+if empresas_sel:
+    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Empresa / Filial"].isin(empresas_sel)]
+if contas_sel:
+    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Conta"].isin(contas_sel)]
+if tipos_sel:
+    df_hist_filtrado = df_hist_filtrado[df_hist_filtrado["Tipo de Estoque"].isin(tipos_sel)]
 
 df_obsoleto_base = df_kpi[df_kpi["Status Estoque"] == "Obsoleto"].copy()
 
@@ -174,10 +214,10 @@ with tab1:
     render_base_historica(df_para_tabela, moeda_br)
 
 with tab2:
-    render_evolucao(df_hist, moeda_br)
+    render_evolucao(df_hist_filtrado, moeda_br)
 
 with tab3:
-    render_movimentacao(df_hist, moeda_br, data_selecionada)
+    render_movimentacao(df_hist_filtrado, moeda_br, data_selecionada)
 
 with tab4:
     render_proximos(df_kpi, moeda_br)
@@ -186,4 +226,4 @@ with tab5:
     render_top20(df_obsoleto_base, moeda_br)
 
 with tab6:
-    render_graficos(df_obsoleto_base, moeda_br, df_hist)
+    render_graficos(df_obsoleto_base, moeda_br, df_hist_filtrado)
